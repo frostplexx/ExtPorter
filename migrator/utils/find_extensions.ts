@@ -1,7 +1,6 @@
 import { lstatSync, existsSync, readdirSync } from "fs";
 import path from "path";
 import { Extension, isNewTabExtension } from "../types/extension";
-import { unpack_extension } from "./unpack_extension";
 import { ExtFileType } from "../types/ext_file_types";
 import { LazyFile } from "../types/abstract_file";
 import { MMapFile } from "./memory_mapped_file";
@@ -11,9 +10,9 @@ import crypto from "crypto"
 
 
 /**
- * Finds all the extensions given a path. they can be either unpacked or packed
- * @param{string} ext_path to extension(s)
- * @returns{Extension} list if extensions that it found
+ * Finds all unpacked extensions given a path. Can be pointed to a single extension directory or a directory containing multiple extensions.
+ * @param{string} ext_path to extension(s) - must be unpacked (no .crx files)
+ * @returns{Extension} list of extensions that it found
  */
 export function find_extensions(ext_path: string, includes_mv3: boolean = false): Extension[] {
     // Convert to absolute path to avoid relative path issues
@@ -25,30 +24,25 @@ export function find_extensions(ext_path: string, includes_mv3: boolean = false)
         return [];
     }
 
-    // check if path is folder or file
+    // Only work with directories (unpacked extensions)
     if (lstatSync(pth).isDirectory()) {
-        // get manifest.json
+        // Check if this directory contains a manifest.json (single extension)
         const manifestPath = path.join(pth, 'manifest.json');
 
         if (existsSync(manifestPath)) {
-            // logger.info(`Found manifest.json in directory: ${pth}`);
+            // Single unpacked extension directory
             return get_manifest([manifestPath], includes_mv3)
         } else {
-            // logger.info(`No manifest.json in root, searching subdirectories in: ${pth}`);
+            // Directory containing multiple extension directories - search recursively
             return findExtensionsRecursively(pth, includes_mv3);
         }
 
     } else if (lstatSync(pth).isFile()) {
-        if (path.extname(pth).toLowerCase() === '.crx') {
-            // logger.info(`Processing CRX file: ${pth}`);
-            return unpack_extension(pth);
-        } else {
-            logger.warn(null, `Unsupported file type: ${path.extname(pth)} for file: ${pth}`, {
-                "file": pth,
-                "file_type": path.extname(pth),
-            });
-            return [];
-        }
+        logger.error(null, `File paths are not supported. Please provide a directory path to unpacked extension(s): ${pth}`, {
+            "file": pth,
+            "file_type": path.extname(pth),
+        });
+        return [];
     }
 
     return [];
@@ -270,16 +264,14 @@ function findExtensionsRecursively(dirPath: string, includes_mv3: boolean): Exte
                 const manifestPath = path.join(itemPath, 'manifest.json');
 
                 if (existsSync(manifestPath)) {
-                    // logger.debug(`Found extension manifest at: ${itemPath}`);
+                    // Found an unpacked extension directory
                     extensions.push(...get_manifest([manifestPath], includes_mv3));
                 } else {
-                    // Recursively search subdirectories
+                    // Recursively search subdirectories for more extension directories
                     extensions.push(...findExtensionsRecursively(itemPath, includes_mv3));
                 }
-            } else if (lstatSync(itemPath).isFile() && path.extname(itemPath).toLowerCase() === '.crx') {
-                // logger.debug(`Found CRX file during recursive search: ${itemPath}`);
-                extensions.push(...unpack_extension(itemPath));
             }
+            // Note: Files are ignored - only looking for unpacked extension directories
         }
     } catch (error) {
         logger.error(null, `Failed to read directory during recursive search: ${dirPath}`, { error: error, dir_path: dirPath });
