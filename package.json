@@ -10,7 +10,7 @@
         "build": "tsc",
         "start": "node dist/index.js",
         "dev": "yarn run clean; ts-node migrator/index.ts",
-        "clean": "rm -rf ./output/* 2>/dev/null || true; docker exec migrator-mongodb mongosh -u admin -p password --authenticationDatabase admin migrator --eval 'db.dropDatabase()' 2>/dev/null || true",
+        "clean": "rm -rf tmp/output/* 2>/dev/null || true; docker exec migrator-mongodb mongosh -u admin -p password --authenticationDatabase admin migrator --eval 'db.dropDatabase()' 2>/dev/null || true",
         "debug": "yarn run build; node --inspect-brk dist/index.js",
         "test": "jest",
         "test:watch": "jest --watch",

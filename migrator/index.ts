@@ -42,6 +42,47 @@ function forceGarbageCollection(): void {
     }
 }
 
+function checkMemoryThreshold(): boolean {
+    const memUsage = process.memoryUsage();
+    const heapUsedGB = memUsage.heapUsed / 1024 / 1024 / 1024;
+    const rssGB = memUsage.rss / 1024 / 1024 / 1024;
+
+    // Warning at 3GB, critical at 3.5GB
+    if (heapUsedGB > 3.5 || rssGB > 3.5) {
+        logger.error(null, `CRITICAL: Memory usage too high! Heap: ${heapUsedGB.toFixed(2)}GB, RSS: ${rssGB.toFixed(2)}GB`);
+        return false;
+    } else if (heapUsedGB > 3.0 || rssGB > 3.0) {
+        logger.warn(null, `WARNING: High memory usage detected! Heap: ${heapUsedGB.toFixed(2)}GB, RSS: ${rssGB.toFixed(2)}GB`);
+    }
+
+    return true;
+}
+
+function clearExtensionMemory(extension: Extension): void {
+    // Close all file descriptors
+    closeExtensionFiles(extension);
+
+    // Clear file contents and ASTs from memory
+    extension.files.forEach(file => {
+        if (file.cleanContent) {
+            file.cleanContent(); // This exists in LazyFile
+        }
+    });
+
+    // Clear the files array
+    extension.files.length = 0;
+
+    // Clear large manifest data (keep minimal info for logging)
+    const extensionName = extension.name;
+    const extensionId = extension.id;
+
+    // Clear manifest but keep essential fields for potential logging
+    extension.manifest = {
+        name: extensionName,
+        manifest_version: extension.manifest.manifest_version
+    };
+}
+
 /**
  * Set up database, global variables etc
  */
@@ -102,23 +143,29 @@ async function main() {
     ];
 
     let writeIndex = 0;
-    const BATCH_SIZE = parseInt(process.env.MIGRATION_BATCH_SIZE || '50'); // Process extensions in batches
+    const BATCH_SIZE = parseInt(process.env.MIGRATION_BATCH_SIZE || '10'); // Much smaller default batch size to prevent OOM
     const totalExtensions = extensions.length;
 
-    logger.info(null, `Processing ${totalExtensions} extensions in batches of ${BATCH_SIZE}`);
+    logger.info(null, `Processing ${totalExtensions} extensions in batches of ${BATCH_SIZE} (use MIGRATION_BATCH_SIZE to override)`);
 
     // Process extensions in batches to manage memory usage
     for (let batchStart = 0; batchStart < totalExtensions; batchStart += BATCH_SIZE) {
         const batchEnd = Math.min(batchStart + BATCH_SIZE, totalExtensions);
-        const currentBatch = extensions.slice(batchStart, batchEnd);
 
         logger.info(null, `Processing batch ${Math.floor(batchStart/BATCH_SIZE) + 1}/${Math.ceil(totalExtensions/BATCH_SIZE)}: extensions ${batchStart + 1}-${batchEnd}`);
         logMemoryUsage(`batch ${Math.floor(batchStart/BATCH_SIZE) + 1} start`);
 
         // Process each extension in the current batch
-        for (let extension of currentBatch) {
+        for (let i = batchStart; i < batchEnd; i++) {
+            let extension = extensions[i];
 
-        let migrationSuccessful = true;
+            // Check memory usage before processing each extension
+            if (!checkMemoryThreshold()) {
+                logger.error(null, "Memory usage too high, stopping migration to prevent crash");
+                break;
+            }
+
+            let migrationSuccessful = true;
         // Run through migration pipeline (excluding WriteMigrated for now)
         const migrationOnly = migrationModules.slice(0, -1); // All except WriteMigrated
         for (const migrateFunction of migrationOnly) {
@@ -169,12 +216,28 @@ async function main() {
         }
 
 
-            closeExtensionFiles(extension);
+            // CRITICAL: Clear extension from memory after processing
+            clearExtensionMemory(extension);
+
+            // Clear the reference in the extensions array to allow GC
+            extensions[i] = null as any;
+
+            // More aggressive cleanup after each extension
+            if (writeIndex % 5 === 0) { // Force GC every 5 extensions
+                forceGarbageCollection();
+            }
         }
 
         // Clean up memory after each batch
         logMemoryUsage(`batch ${Math.floor(batchStart/BATCH_SIZE) + 1} end`);
         forceGarbageCollection();
+
+        // Check memory health after cleanup
+        if (!checkMemoryThreshold()) {
+            logger.error(null, "Critical memory usage detected after batch cleanup. Stopping migration to prevent crash.");
+            logger.info(null, `Migration stopped after processing ${writeIndex} extensions due to memory constraints.`);
+            break;
+        }
 
         // Flush the migration writer queue after each batch to prevent memory buildup
         await MigrationWriter.shared.flush();
@@ -182,15 +245,10 @@ async function main() {
         logger.info(null, `Completed batch ${Math.floor(batchStart/BATCH_SIZE) + 1}/${Math.ceil(totalExtensions/BATCH_SIZE)}`);
     }
 
-    // Truncate array to remove unused slots
-    extensions.length = writeIndex;
+    logger.info(null, `Successfully migrated ${writeIndex} extensions`);
 
-    logger.info(null, `Successfully migrated ${extensions.length} extensions`);
-
-    // Clean up all file descriptors before finishing
-    extensions.forEach(extension => {
-        closeExtensionFiles(extension);
-    });
+    // Clear the extensions array completely to free memory
+    extensions.length = 0;
 
     const endTime = performance.now();
     const duration = endTime - startTime;
