@@ -11,6 +11,7 @@ export interface AbstractFile {
     filetype: ExtFileType;
     getAST(): ESTree.Node | undefined;
     getContent(): string;
+    getBuffer(): Buffer;
     getSize(): number;
     close(): void;
 }
@@ -87,6 +88,10 @@ export class LazyFile implements AbstractFile {
 
     getContent(): string {
         return this._getMMapFile().getContent();
+    }
+
+    getBuffer(): Buffer {
+        return this._getMMapFile().getBuffer();
     }
 
     cleanContent(): AbstractFile {
