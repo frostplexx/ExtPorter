@@ -196,10 +196,8 @@ export class MigrateManifest implements MigrationModule {
                 }
             }
 
-            // Add Content Security Policy for MV3
-            extension.manifest["content_security_policy"] = {
-                "extension_pages": "script-src 'self'; object-src 'self';"
-            };
+            // Handle Content Security Policy migration from MV2 to MV3
+            MigrateManifest.migrateContentSecurityPolicy(extension);
 
             // logger.debug(extension, JSON.stringify(extension.manifest))
 
@@ -226,6 +224,122 @@ export class MigrateManifest implements MigrationModule {
             .digest('hex')
             .substring(0, 32)
             .replace(/./g, (c: any) => String.fromCharCode(97 + parseInt(c, 16) % 26));
+    }
+
+    /**
+     * Migrates Content Security Policy from MV2 to MV3 format
+     * @param extension The extension to migrate CSP for
+     */
+    private static migrateContentSecurityPolicy(extension: Extension): void {
+        const existingCSP = extension.manifest["content_security_policy"];
+
+        if (typeof existingCSP === "string") {
+            // MV2 format: CSP is a string
+            // Validate and convert to MV3 format
+            try {
+                const validatedCSP = MigrateManifest.validateAndSanitizeCSP(existingCSP);
+                extension.manifest["content_security_policy"] = {
+                    "extension_pages": validatedCSP
+                };
+                logger.debug(extension, "Migrated MV2 CSP to MV3 format", {
+                    original: existingCSP,
+                    migrated: validatedCSP
+                });
+            } catch (error) {
+                logger.warn(extension, "Invalid CSP found, using default safe CSP", {
+                    originalCSP: existingCSP,
+                    error: error instanceof Error ? error.message : String(error)
+                });
+                extension.manifest["content_security_policy"] = {
+                    "extension_pages": "script-src 'self'; object-src 'self';"
+                };
+            }
+        } else if (existingCSP && typeof existingCSP === "object") {
+            // Already MV3 format, validate extension_pages if present
+            if (existingCSP["extension_pages"]) {
+                try {
+                    existingCSP["extension_pages"] = MigrateManifest.validateAndSanitizeCSP(existingCSP["extension_pages"]);
+                    logger.debug(extension, "Validated existing MV3 CSP");
+                } catch (error) {
+                    logger.warn(extension, "Invalid extension_pages CSP found, using default", {
+                        originalCSP: existingCSP["extension_pages"],
+                        error: error instanceof Error ? error.message : String(error)
+                    });
+                    existingCSP["extension_pages"] = "script-src 'self'; object-src 'self';";
+                }
+            } else {
+                // Add missing extension_pages CSP
+                existingCSP["extension_pages"] = "script-src 'self'; object-src 'self';";
+                logger.debug(extension, "Added missing extension_pages CSP to existing MV3 format");
+            }
+        } else {
+            // No existing CSP, add a safe default for MV3
+            extension.manifest["content_security_policy"] = {
+                "extension_pages": "script-src 'self'; object-src 'self';"
+            };
+            logger.debug(extension, "Added default MV3 CSP (no existing CSP found)");
+        }
+    }
+
+    /**
+     * Validates and sanitizes a Content Security Policy string
+     * @param csp The CSP string to validate
+     * @returns A sanitized CSP string
+     * @throws Error if CSP is fundamentally invalid
+     */
+    private static validateAndSanitizeCSP(csp: string): string {
+        // Basic validation: ensure CSP has required directives
+        const normalizedCSP = csp.trim();
+
+        if (!normalizedCSP) {
+            throw new Error("Empty CSP");
+        }
+
+        // Check for dangerous directives that could break MV3
+        const dangerousPatterns = [
+            /eval\(/,
+            /'unsafe-eval'/,
+            /'unsafe-inline'.*script-src/,
+            /data:.*script-src/,
+            /http:\/\/(?!localhost)/,
+            /https:\/\/\*\./
+        ];
+
+        let sanitizedCSP = normalizedCSP;
+
+        // Remove or replace dangerous patterns
+        dangerousPatterns.forEach(pattern => {
+            if (pattern.test(sanitizedCSP)) {
+                logger.debug(null, `Found potentially dangerous CSP pattern: ${pattern}`);
+
+                // Remove unsafe-eval and unsafe-inline for scripts
+                sanitizedCSP = sanitizedCSP
+                    .replace(/'unsafe-eval'/g, '')
+                    .replace(/'unsafe-inline'(?=.*script-src)/g, '')
+                    .replace(/\s+/g, ' ')
+                    .trim();
+            }
+        });
+
+        // Ensure script-src includes 'self' if not present
+        if (!sanitizedCSP.includes("script-src")) {
+            sanitizedCSP += " script-src 'self';";
+        } else if (!sanitizedCSP.includes("script-src 'self'")) {
+            sanitizedCSP = sanitizedCSP.replace(/script-src([^;]+);?/, "script-src 'self' $1;");
+        }
+
+        // Ensure object-src is restrictive if not present
+        if (!sanitizedCSP.includes("object-src")) {
+            sanitizedCSP += " object-src 'self';";
+        }
+
+        // Clean up extra spaces and ensure proper semicolon termination
+        sanitizedCSP = sanitizedCSP.replace(/\s+/g, ' ').trim();
+        if (!sanitizedCSP.endsWith(';')) {
+            sanitizedCSP += ';';
+        }
+
+        return sanitizedCSP;
     }
 
 
