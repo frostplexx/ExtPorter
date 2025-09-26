@@ -1,6 +1,7 @@
 import { Extension } from "../types/extension";
 import { MigrationError, MigrationModule } from "../types/migration_module";
 import { logger } from "../utils/logger";
+import crypto from "crypto";
 
 export class MigrateManifest implements MigrationModule {
 
@@ -91,6 +92,9 @@ export class MigrateManifest implements MigrationModule {
         try {
             // update manfest_version from v2 to v3
             extension.manifest["manifest_version"] = 3
+
+            // Generate MV3 extension ID based on manifest content for consistency
+            extension.mv3_extension_id = MigrateManifest.generateMV3ExtensionId(extension);
 
             // split permissions into permissions and host permissions
             const new_permssions = [];
@@ -206,6 +210,22 @@ export class MigrateManifest implements MigrationModule {
             });
             return new MigrationError(extension, error);
         }
+    }
+
+    /**
+     * Generates a consistent MV3 extension ID based on extension name and original ID
+     * @param extension The extension to generate an ID for
+     * @returns A 32-character lowercase extension ID
+     */
+    private static generateMV3ExtensionId(extension: Extension): string {
+        // Use extension name + original ID to ensure uniqueness and consistency
+        const seedData = `${extension.name}-${extension.id}-mv3`;
+
+        return crypto.createHash('sha256')
+            .update(seedData)
+            .digest('hex')
+            .substring(0, 32)
+            .replace(/./g, (c: any) => String.fromCharCode(97 + parseInt(c, 16) % 26));
     }
 
 
