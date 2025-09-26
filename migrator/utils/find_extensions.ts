@@ -6,7 +6,8 @@ import { ExtFileType } from "../types/ext_file_types";
 import { LazyFile } from "../types/abstract_file";
 import { MMapFile } from "./memory_mapped_file";
 import { logger } from "./logger";
-import fs from "fs";
+import JSON5 from "json5";
+import crypto from "crypto"
 
 
 /**
@@ -16,7 +17,7 @@ import fs from "fs";
  */
 export function find_extensions(ext_path: string, includes_mv3: boolean = false): Extension[] {
     // Convert to absolute path to avoid relative path issues
-    let pth = path.resolve(ext_path);
+    const pth = path.resolve(ext_path);
 
     // Check if path exists first
     if (!existsSync(pth)) {
@@ -27,7 +28,7 @@ export function find_extensions(ext_path: string, includes_mv3: boolean = false)
     // check if path is folder or file
     if (lstatSync(pth).isDirectory()) {
         // get manifest.json
-        let manifestPath = path.join(pth, 'manifest.json');
+        const manifestPath = path.join(pth, 'manifest.json');
 
         if (existsSync(manifestPath)) {
             // logger.info(`Found manifest.json in directory: ${pth}`);
@@ -59,14 +60,15 @@ export function find_extensions(ext_path: string, includes_mv3: boolean = false)
  * @returns{Extension[]} list of extensions
  */
 function get_manifest(manifest_paths: string[], includes_mv3: boolean): Extension[] {
-    var extensions: Extension[] = [];
-    for (let manifestPath of manifest_paths) { // Use 'of' instead of 'in'
+    const extensions: Extension[] = [];
+    for (const manifestPath of manifest_paths) {
         let manifestMMapFile: MMapFile | undefined;
         try {
             // Read manifest using memory mapping
             manifestMMapFile = new MMapFile(manifestPath);
             const manifestContent = manifestMMapFile.getContent();
-            const json = JSON.parse(manifestContent) as any;
+
+            const json = JSON5.parse(manifestContent) as any;
             if (json["manifest_version"] == 2 || includes_mv3) {
                 // logger.info(`Found valid Manifest V2 extension: ${json["name"] || 'Unknown'}`);
                 const extensionDir = path.dirname(manifestPath);
@@ -82,13 +84,13 @@ function get_manifest(manifest_paths: string[], includes_mv3: boolean): Extensio
 
                 const id = getExtensionID(extensionDir) //id gets set in the ChromeTeste class
 
-                if(!id) { 
+                if (!id) {
                     logger.error(undefined, "Error getting extension id while searching", {
                         manifest_path: manifestPath,
                         manifest_content: manifestContent,
                         extension_dir: extensionDir
                     })
-                    return [] 
+                    return []
                 }
 
                 const extension: Extension = {
@@ -122,13 +124,8 @@ function get_manifest(manifest_paths: string[], includes_mv3: boolean): Extensio
  */
 function getExtensionID(manifest_path: string): string | undefined {
     try {
-        // Read the manifest.json to get the extension key or generate ID
-        const manifestPath = path.join(manifest_path, 'manifest.json');
-        const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
-
         // Extension ID is derived from the extension's path or key
         // For unpacked extensions, you can generate it from the path
-        const crypto = require('crypto');
         const extensionId = crypto.createHash('sha256')
             .update(manifest_path)
             .digest('hex')
