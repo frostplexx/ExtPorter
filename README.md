@@ -1,27 +1,218 @@
 # ExtPorter
 
+ExtPorter is a comprehensive framework for automatically migrating
+browser extensions from Manifest V2 to Manifest V3.
+This project was developed as part of a bachelor thesis to address the challenges
+of Chrome extension migration in the face of Google's deprecation of Manifest V2.
+
+## Features
+
+- **Automated MV2 → MV3 Migration**: Converts extension manifests, API calls, and code structure
+- **Extension Testing Framework**: Tests both original and migrated extensions for functionality
+- **Database Integration**: Tracks migration results and statistics with MongoDB
+- **Extension Analysis Tools**: Analyze extensions for security patterns and "interestingness"
+- **Docker Support**: Full containerized development and deployment
+- **Comprehensive Logging**: Detailed migration and testing logs with Winston
+
+## 🏗️ Architecture
+
+ExtPorter consists of several key components:
+
+- **Migrator Core**: Handles the actual MV2 → MV3 transformation
+- **Testing Framework**: Automated testing using Puppeteer
+- **Database Layer**: MongoDB integration for result tracking
+- **Analysis Tools**: Extension security and pattern analysis
+- **Resource Management**: Handles remote resource downloads and file operations
+
+## 📋 Prerequisites
+
+- Node.js (v18+)
+- Docker & Docker Compose
+- MongoDB (via Docker)
+- Git
+
+## 🛠️ Installation
+
+1. **Clone the repository**
+   ```bash
+   git clone https://github.com/frostplexx/ExtPorter.git
+   cd ExtPorter
+   ```
+
+2. **Install dependencies**
+   ```bash
+   yarn install
+   ```
+
+3. **Set up environment**
+   ```bash
+   cp .env.example .env
+   # Edit .env with your configuration
+   ```
+
+4. **Start services**
+   ```bash
+   docker-compose up -d
+   ```
+
+## 🚀 Usage
+
+### Basic Migration
+
+Migrate extensions from a source directory:
+
+```bash
+yarn dev <input_directory> <output_directory>
+```
+
+Example:
+```bash
+yarn dev ./extensions ./output
+```
+
+### Using Docker
+
+**Start all services:**
+```bash
+docker-compose up --build
+```
+
+**Run in detached mode:**
+```bash
+docker-compose up -d
+```
+
+**View logs:**
+```bash
+docker-compose logs migrator-app
+```
+
+### Extension Analysis
+
+Analyze extensions for security patterns and interestingness:
+
+```bash
+python scripts/extension_analyzer.py <extensions_folder> <output.csv>
+```
+
+Example:
+```bash
+python scripts/extension_analyzer.py ./unpacked_extensions analysis_results.csv
+```
+
+## 📊 Extension Analyzer
+
+The extension analyzer script evaluates extensions based on configurable criteria:
+
+- **webRequest API usage** (+25 points per occurrence)
+- **HTML content** (+0.25 points per line)
+- **Local storage usage** (+5 points per occurrence)
+- **Background pages/service workers** (+10 points if present)
+- **Content scripts** (+4 points if present)
+- **Dangerous permissions** (+8 points per permission)
+- **Host permissions** (+3 points per permission)
+- **Crypto/obfuscation patterns** (+15 points per pattern)
+- **Network requests** (+2 points per pattern)
+- **Extension size** (+1 point per 100KB)
+
+Customize scoring by editing the `WEIGHTS` configuration at the top of `scripts/extension_analyzer.py`.
+
+## 🏃‍♂️ Development
+
+### Available Scripts
+
+- `yarn dev` - Run migrator in development mode
+- `yarn build` - Build TypeScript to JavaScript
+- `yarn test` - Run test suite
+- `yarn lint` - Run ESLint
+- `yarn clean` - Clean output directory and database
+- `yarn db:shell` - Connect to MongoDB shell
+- `yarn db:admin` - Open MongoDB admin interface
+
+### Database Management
+
+- **Start database:** `yarn db:up`
+- **Stop database:** `yarn db:down`
+- **View logs:** `yarn db:logs`
+- **Admin interface:** `yarn db:admin` (opens http://localhost:8081)
+
+### Testing
+
+- `yarn test` - Run all tests
+- `yarn test:unit` - Run unit tests only
+- `yarn test:integration` - Run integration tests
+- `yarn test:puppeteer` - Run browser tests
+
+## 📁 Project Structure
+
+```
+ExtPorter/
+├── migrator/           # Core migration logic
+│   ├── modules/       # Migration modules (manifest, API renames, etc.)
+│   ├── types/         # TypeScript type definitions
+│   ├── utils/         # Utility functions
+│   └── features/      # Database and other features
+├── scripts/           # Analysis and utility scripts
+├── tests/            # Test suites
+├── docker-compose.yml # Docker configuration
+└── README.md
+```
+
+## 🔧 Configuration
+
+Key configuration files:
+
+- `.env` - Environment variables
+- `docker-compose.yml` - Docker services
+- `migrator/templates/api_mappings.json` - API migration mappings
+- `scripts/extension_analyzer.py` - Analysis weights and criteria
+
+## 🧠 Memory Management
+
+ExtPorter includes built-in memory management for processing large extension datasets:
+
+- **Batch Processing**: Set `MIGRATION_BATCH_SIZE` (default: 50) to control memory usage
+- **Memory Monitoring**: Automatic memory usage logging at key points
+- **Garbage Collection**: Run with `--expose-gc` flag for optimal memory management
+- **Resource Cleanup**: Automatic file descriptor cleanup and writer queue flushing
+
+## 📝 Migration Process
+
+ExtPorter performs the following migration steps:
+
+1. **Extension Discovery**: Finds and unpacks extensions
+2. **Manifest Migration**: Converts manifest.json from V2 to V3 format
+3. **API Transformation**: Updates deprecated API calls
+4. **Resource Downloading**: Fetches remote resources
+5. **Code Generation**: Writes migrated extension files
+6. **Testing**: Validates both original and migrated versions
+7. **Database Storage**: Saves results and statistics
+
+## 🐛 Known Issues & Limitations
+
+- Parameter structure changes in API calls need manual review
+- Some Content Security Policies may break after migration
+- Memory usage can be high for large extension sets
+- Popup tests occasionally fail due to timing issues
+
+See the [TODO](#todo) section for detailed known issues and planned improvements.
 
 
 # TODO 
 
-- [ ] Improve the comparison between mv2 and mv3
 - [X] dotenv should only be called once and not load for every extension
-- [ ] Make sure it actually tests the mv2 and mv3 versions
-    - [ ] add some checks for that in code too
-    - [ ] make sure the mv3 extension actually hasthe new paths set after the migration
 - [X] Dockerise everything
 - [ ] Write a script that generates some fun statistics from the mongodb
 - [ ] Make it use multiple cores?
 - [X] Better normalize all the logs e.g. everything should have the extension id
-- [ ] Improve logging for mv2 new tab test
 - [X] Sort out new-tab wallpapers in output
 - [X] Add tooling for quickly loading extensions as both mv2 and mv3
 - [X] Return error instead of null in the migrate() function
 - [X] Add downloading of remote resources
-- [ ] Preprocessing of manifest.json files so invalid characters and stuff get removed
+- [X] Preprocessing of manifest.json files so invalid characters and stuff get removed
 - [ ] Handle multiple background scripts
 - [ ] test if remote resources get downloaded correctly
-- [ ] Handle optional permissions
+- [X] Handle optional permissions
 - [ ] compare the DOM
 - [ ]   The migrator only transforms:
   - chrome.tabs.executeScript → chrome.scripting.executeScript
@@ -52,13 +243,14 @@
 
   The migrator handles API namespace changes but doesn't address the more complex parameter restructuring needed for full MV2→MV3 migration.
 
+- [ ] API migration is too aggressive and transforms comments (should preserve comments unchanged)
+- [ ] Variable assignments are incorrectly transformed (e.g., `const action = chrome.browserAction` becomes `const action = chrome.onClicked` instead of `const action = chrome.action`)
+
 # FIXME
 
-- [ ] Some popup tests fail
-- [ ] Icons for extensions dont work anymore?
+- [X] Icons for extensions dont work anymore?
 - [X] On the processing JS error add what the actual error is
-- [ ] Some content secuity policies are broken/invalid after migrating
-- [ ] Some new-tab tests seem to fail randomly
+- [x] Some content secuity policies are broken/invalid after migrating
 - [x] puppeteer sometimes crashes
 - [ ] sometimes the popup doesnt get copied? e.g. with ./output/oiibaihkmlkilofifhdfjlmbkaolchgp/
 ```fish
@@ -96,8 +288,8 @@ CallbackRegistry.ts:127:12)
 ```
 error Command failed with exit code 1.
 - [ ] Sometimes it fails to load extensions
-- [ ] I think the extension id in the mv3 test results is still the mv2 one
-- [ ] The folder name of the mv3 extensions is still the mv2 id
+- [x] I think the extension id in the mv3 test results is still the mv2 one
+- [x] The folder name of the mv3 extensions is still the mv2 id
 - [ ] fix:"error": "ENOENT: no such file or directory, open '/Users/daniel/Developer/github.com/frostplexx/Bachelor_Thesis/research/dataset/abenoopklclfmphonmfbmamkcfpbenin/_metadata/verified_contents.json'"
 - [ ] ./output/ponpakfnkmdgcabfiebpbppmheghigmh/: 
 ^[[O/Users/daniel/Developer/github.com/frostplexx/Bachelor_Thesis/research/migrator/node_modules/puppeteer-core/src/common/CallbackRegistry.ts:127
@@ -116,39 +308,16 @@ ProtocolError: Protocol error (Extensions.loadUnpacked): Could not load javascri
     at runNextTicks (node:internal/process/task_queues:65:5)
 error Command failed with exit code 1.
 info Visit https://yarnpkg.com/en/docs/cli/run for documentation about this command.
-- [ ] fix content security policies
-- [ ] some files dont seem to copied correctly
-- [ ] Extensions can open new browser windows that ignore the headless directive and wont close automatically -> handle
-- [ ] FIX:
-<--- Last few GCs --->
+- [x] fix content security policies
+- [x] some files dont seem to copied correctly
+- [x] FIX: JavaScript heap out of memory - Added batch processing and memory management
 
-[31835:0x148008000]  1414304 ms: Mark-Compact 4036.1 (4131.5) -> 4018.3 (4129.8) MB, pooled: 0 MB, 652.04 / 0.00 ms  (average mu = 0.165, current mu = 0.028) allocation failure; scavenge might not succeed
-[31835:0x148008000]  1414974 ms: Mark-Compact 4041.7 (4138.9) -> 3996.9 (4108.2) MB, pooled: 24 MB, 650.79 / 0.00 ms  (average mu = 0.109, current mu = 0.029) task; scavenge might not succeed
-
-
-<--- JS stacktrace --->
-
-FATAL ERROR: Ineffective mark-compacts near heap limit Allocation failed - JavaScript heap out of memory
------ Native stack trace -----
-
- 1: 0x1003c1118 node::OOMErrorHandler(char const*, v8::OOMDetails const&) [/nix/store/9yqq8szyz3qx8q6xlv1s3arhw4112wc8-nodejs-22.18.0/bin/node]
- 2: 0x1005baa88 v8::internal::V8::FatalProcessOutOfMemory(v8::internal::Isolate*, char const*, v8::OOMDetails const&) [/nix/store/9yqq8szyz3qx8q6xlv1s3arhw4112wc8-nodejs-22.18.0/bin/node]
- 3: 0x100808d1c v8::internal::Heap::stack() [/nix/store/9yqq8szyz3qx8q6xlv1s3arhw4112wc8-nodejs-22.18.0/bin/node]
- 4: 0x1008210e0 v8::internal::Heap::CollectGarbage(v8::internal::AllocationSpace, v8::internal::GarbageCollectionReason, v8::GCCallbackFlags)::$_1::operator()() const [/nix/store/9yqq8szyz3qx8q6xlv1s3arhw4112wc8-nodejs-22.18.0/bin/node]
- 5: 0x100820940 void heap::base::Stack::SetMarkerAndCallbackImpl<v8::internal::Heap::CollectGarbage(v8::internal::AllocationSpace, v8::internal::GarbageCollectionReason, v8::GCCallbackFlags)::$_1>(heap::base::Stack*, void*, void const*) [/nix/store/9yqq8szyz3qx8q6xlv1s3arhw4112wc8-nodejs-22.18.0/bin/node]
- 6: 0x10108a730 PushAllRegistersAndIterateStack [/nix/store/9yqq8szyz3qx8q6xlv1s3arhw4112wc8-nodejs-22.18.0/bin/node]
- 7: 0x1008069d0 v8::internal::Heap::CollectGarbage(v8::internal::AllocationSpace, v8::internal::GarbageCollectionReason, v8::GCCallbackFlags) [/nix/store/9yqq8szyz3qx8q6xlv1s3arhw4112wc8-nodejs-22.18.0/bin/node]
- 8: 0x10086254c v8::internal::MinorGCJob::Task::RunInternal() [/nix/store/9yqq8szyz3qx8q6xlv1s3arhw4112wc8-nodejs-22.18.0/bin/node]
- 9: 0x100449c58 node::PerIsolatePlatformData::RunForegroundTask(std::__1::unique_ptr<v8::Task, std::__1::default_delete<v8::Task>>) [/nix/store/9yqq8szyz3qx8q6xlv1s3arhw4112wc8-nodejs-22.18.0/bin/node]
-10: 0x100448820 node::PerIsolatePlatformData::FlushForegroundTasksInternal() [/nix/store/9yqq8szyz3qx8q6xlv1s3arhw4112wc8-nodejs-22.18.0/bin/node]
-11: 0x103e35188 uv__async_io [/nix/store/7jx6z5yfx9byiafsgzzsnm88wj2r4qgd-libuv-1.51.0/lib/libuv.1.dylib]
-12: 0x103e4ad30 uv__io_poll [/nix/store/7jx6z5yfx9byiafsgzzsnm88wj2r4qgd-libuv-1.51.0/lib/libuv.1.dylib]
-13: 0x103e358ec uv_run [/nix/store/7jx6z5yfx9byiafsgzzsnm88wj2r4qgd-libuv-1.51.0/lib/libuv.1.dylib]
-14: 0x1002c406c node::SpinEventLoopInternal(node::Environment*) [/nix/store/9yqq8szyz3qx8q6xlv1s3arhw4112wc8-nodejs-22.18.0/bin/node]
-15: 0x1004146e4 node::NodeMainInstance::Run() [/nix/store/9yqq8szyz3qx8q6xlv1s3arhw4112wc8-nodejs-22.18.0/bin/node]
-16: 0x100376444 node::Start(int, char**) [/nix/store/9yqq8szyz3qx8q6xlv1s3arhw4112wc8-nodejs-22.18.0/bin/node]
-17: 0x18b665d54 start [/usr/lib/dyld]
-/bin/sh: line 1: 31835 Abort trap: 6           ts-node src/index.ts ../dataset/ ./output/
+**Memory Management Features Added:**
+- Batch processing (configurable via `MIGRATION_BATCH_SIZE` env var, default: 50)
+- Memory usage monitoring and logging
+- Automatic garbage collection after each batch
+- Writer queue flushing between batches
+- Improved file descriptor cleanup
 
 
 
