@@ -22,6 +22,27 @@ export const globals: Globals = {
 }
 
 /**
+ * Memory management utilities
+ */
+function formatMemoryUsage(memoryUsage: NodeJS.MemoryUsage): string {
+    return `RSS: ${Math.round(memoryUsage.rss / 1024 / 1024)}MB, Heap Used: ${Math.round(memoryUsage.heapUsed / 1024 / 1024)}MB, Heap Total: ${Math.round(memoryUsage.heapTotal / 1024 / 1024)}MB`;
+}
+
+function logMemoryUsage(context: string): void {
+    const memUsage = process.memoryUsage();
+    logger.debug(null, `Memory usage [${context}]: ${formatMemoryUsage(memUsage)}`);
+}
+
+function forceGarbageCollection(): void {
+    if (global.gc) {
+        global.gc();
+        logger.debug(null, "Forced garbage collection");
+    } else {
+        logger.debug(null, "Garbage collection not available. Run with --expose-gc flag for better memory management");
+    }
+}
+
+/**
  * Set up database, global variables etc
  */
 async function initialize() {
@@ -42,11 +63,12 @@ async function main() {
 
     let extensions: Extension[] = []
 
-
     const startTime = performance.now();
+    logMemoryUsage("startup");
 
     logger.info(null, `Starting extension search in: ${globals.extensionsPath}`);
     extensions = find_extensions(globals.extensionsPath)
+    logMemoryUsage("after extension discovery");
 
     // Filter out new-tab extensions if setting is enabled
     const filterNewTab = process.env.FILTER_NEW_TAB_EXTENSIONS === 'true';
@@ -80,8 +102,21 @@ async function main() {
     ];
 
     let writeIndex = 0;
-    // loop through each extension
-    for (let extension of extensions) {
+    const BATCH_SIZE = parseInt(process.env.MIGRATION_BATCH_SIZE || '50'); // Process extensions in batches
+    const totalExtensions = extensions.length;
+
+    logger.info(null, `Processing ${totalExtensions} extensions in batches of ${BATCH_SIZE}`);
+
+    // Process extensions in batches to manage memory usage
+    for (let batchStart = 0; batchStart < totalExtensions; batchStart += BATCH_SIZE) {
+        const batchEnd = Math.min(batchStart + BATCH_SIZE, totalExtensions);
+        const currentBatch = extensions.slice(batchStart, batchEnd);
+
+        logger.info(null, `Processing batch ${Math.floor(batchStart/BATCH_SIZE) + 1}/${Math.ceil(totalExtensions/BATCH_SIZE)}: extensions ${batchStart + 1}-${batchEnd}`);
+        logMemoryUsage(`batch ${Math.floor(batchStart/BATCH_SIZE) + 1} start`);
+
+        // Process each extension in the current batch
+        for (let extension of currentBatch) {
 
         let migrationSuccessful = true;
         // Run through migration pipeline (excluding WriteMigrated for now)
@@ -134,9 +169,18 @@ async function main() {
         }
 
 
-        closeExtensionFiles(extension);
-    }
+            closeExtensionFiles(extension);
+        }
 
+        // Clean up memory after each batch
+        logMemoryUsage(`batch ${Math.floor(batchStart/BATCH_SIZE) + 1} end`);
+        forceGarbageCollection();
+
+        // Flush the migration writer queue after each batch to prevent memory buildup
+        await MigrationWriter.shared.flush();
+
+        logger.info(null, `Completed batch ${Math.floor(batchStart/BATCH_SIZE) + 1}/${Math.ceil(totalExtensions/BATCH_SIZE)}`);
+    }
 
     // Truncate array to remove unused slots
     extensions.length = writeIndex;
@@ -151,12 +195,17 @@ async function main() {
     const endTime = performance.now();
     const duration = endTime - startTime;
 
+    // Final memory cleanup
+    logMemoryUsage("before final cleanup");
+    forceGarbageCollection();
+
     // Flush the migration writer queue before finishing
     await MigrationWriter.shared.flush();
 
     // Note: Extensions are now inserted individually during migration to protect against crashes
     // This bulk insertion is kept as a safety net for any extensions that might have been missed
-    logger.info(null, `Migration completed. Took ${duration}`, { extensionCount: extensions.length })
+    logger.info(null, `Migration completed. Took ${duration}`, { extensionCount: extensions.length });
+    logMemoryUsage("migration completed");
 
 
     await teardown()
