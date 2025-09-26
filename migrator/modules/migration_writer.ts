@@ -126,11 +126,13 @@ export class MigrationWriter {
         const isNewTab = extension.isNewTabExtension || false;
         
         let outputPath: string;
+        // Use MV3 ID if available, otherwise fall back to MV2 ID
+        const extensionId = extension.mv3_extension_id || extension.id;
+
         if (useNewTabSubfolder && isNewTab) {
-            outputPath = path.join(globals.outputDir, 'new_tab_extensions', extension.id);
+            outputPath = path.join(globals.outputDir, 'new_tab_extensions', extensionId);
         } else {
-            // FIXME: This uses the mv2 id
-            outputPath = path.join(globals.outputDir, extension.id);
+            outputPath = path.join(globals.outputDir, extensionId);
         }
         
         try {
