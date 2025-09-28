@@ -167,7 +167,7 @@ describe('Migration Pipeline Integration Tests', () => {
       const corruptedExtension: Extension = {
         id: 'corrupted-extension',
         name: 'corrupted-extension',
-        manifest_path: testDir,
+        manifest_v2_path: testDir,
         manifest: null as any, // Corrupted manifest
         files: []
       };

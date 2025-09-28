@@ -35,7 +35,7 @@ describe('RenameAPIS', () => {
     return {
       id: `test-${name}`,
       name: name,
-      manifest_path: extensionDir,
+      manifest_v2_path: extensionDir,
       manifest: {
         name: `Test ${name}`,
         version: '1.0',
@@ -337,7 +337,7 @@ describe('RenameAPIS', () => {
       const badExtension = {
         id: 'bad-extension',
         name: 'bad-extension',
-        manifest_path: '/bad/path',
+        manifest_v2_path: '/bad/path',
         manifest: null as any,
         files: []
       };
@@ -375,7 +375,7 @@ describe('RenameAPIS', () => {
         // Extension metadata should be preserved
         expect(result.id).toBe(extension.id);
         expect(result.name).toBe(extension.name);
-        expect(result.manifest_path).toBe(extension.manifest_path);
+        expect(result.manifest_v2_path).toBe(extension.manifest_v2_path);
       }
 
       extension.files.forEach(file => file.close());

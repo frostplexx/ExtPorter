@@ -10,7 +10,7 @@ describe('MigrateManifest', () => {
     baseExtension = {
       id: 'test-extension-id',
       name: 'Test Extension',
-      manifest_path: '/test/path',
+      manifest_v2_path: '/test/path',
       manifest: {
         name: 'Test Extension',
         version: '1.0',
@@ -355,7 +355,7 @@ describe('MigrateManifest', () => {
         const complexExtension: Extension = {
           id: 'complex-extension',
           name: 'Complex Extension',
-          manifest_path: '/complex/path',
+          manifest_v2_path: '/complex/path',
           manifest: {
             name: 'Complex Extension',
             version: '2.0',
