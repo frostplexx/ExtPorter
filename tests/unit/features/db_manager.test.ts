@@ -69,7 +69,7 @@ describe('Database Manager', () => {
         const sampleExtension: Extension = {
             id: `test-extension-${Date.now()}-${Math.random()}`,
             name: 'Test Extension',
-            manifest_path: '/test/path',
+            manifest_v2_path: '/test/path',
             manifest: {
                 name: 'Test Extension',
                 version: '1.0.0',
@@ -142,7 +142,7 @@ describe('Database Manager', () => {
             const largeExtension: Extension = {
                 id: `large-extension-${Date.now()}-${Math.random()}`,
                 name: 'Large Extension',
-                manifest_path: '/test/path',
+                manifest_v2_path: '/test/path',
                 manifest: {
                     name: 'Large Extension',
                     version: '1.0.0',
@@ -164,7 +164,7 @@ describe('Database Manager', () => {
             const extension: Extension = {
                 id: `stats-extension-${Date.now()}-${Math.random()}`,
                 name: 'Stats Extension',
-                manifest_path: '/stats/path',
+                manifest_v2_path: '/stats/path',
                 manifest: {
                     name: 'Stats Extension',
                     version: '1.0.0',

@@ -36,7 +36,7 @@ describe('Extension types and utilities', () => {
       const extension: Extension = {
         id: 'test-extension',
         name: 'Test Extension',
-        manifest_path: testDir,
+        manifest_v2_path: testDir,
         manifest: {
           name: 'Test Extension',
           version: '1.0',
@@ -57,7 +57,7 @@ describe('Extension types and utilities', () => {
       const extension: Extension = {
         id: 'empty-extension',
         name: 'Empty Extension',
-        manifest_path: testDir,
+        manifest_v2_path: testDir,
         manifest: {
           name: 'Empty Extension',
           version: '1.0',
@@ -81,7 +81,7 @@ describe('Extension types and utilities', () => {
       const extension: Extension = {
         id: 'pre-closed-extension',
         name: 'Pre-closed Extension',
-        manifest_path: testDir,
+        manifest_v2_path: testDir,
         manifest: {
           name: 'Pre-closed Extension',
           version: '1.0',
@@ -106,7 +106,7 @@ describe('Extension types and utilities', () => {
       const extension: Extension = {
         id: 'error-extension',
         name: 'Error Extension',
-        manifest_path: testDir,
+        manifest_v2_path: testDir,
         manifest: {
           name: 'Error Extension',
           version: '1.0',
@@ -126,7 +126,7 @@ describe('Extension types and utilities', () => {
       const extension: Extension = {
         id: 'newtab-extension',
         name: 'New Tab Extension',
-        manifest_path: testDir,
+        manifest_v2_path: testDir,
         manifest: {
           name: 'New Tab Extension',
           version: '1.0',
@@ -145,7 +145,7 @@ describe('Extension types and utilities', () => {
       const extension: Extension = {
         id: 'regular-extension',
         name: 'Regular Extension',
-        manifest_path: testDir,
+        manifest_v2_path: testDir,
         manifest: {
           name: 'Regular Extension',
           version: '1.0',
@@ -161,7 +161,7 @@ describe('Extension types and utilities', () => {
       const extension: Extension = {
         id: 'other-override-extension',
         name: 'Other Override Extension',
-        manifest_path: testDir,
+        manifest_v2_path: testDir,
         manifest: {
           name: 'Other Override Extension',
           version: '1.0',
@@ -180,7 +180,7 @@ describe('Extension types and utilities', () => {
       const extension: Extension = {
         id: 'empty-newtab-extension',
         name: 'Empty New Tab Extension',
-        manifest_path: testDir,
+        manifest_v2_path: testDir,
         manifest: {
           name: 'Empty New Tab Extension',
           version: '1.0',
@@ -199,7 +199,7 @@ describe('Extension types and utilities', () => {
       const extension: Extension = {
         id: 'empty-string-newtab',
         name: 'Empty String New Tab',
-        manifest_path: testDir,
+        manifest_v2_path: testDir,
         manifest: {
           name: 'Empty String New Tab',
           version: '1.0',
@@ -219,7 +219,7 @@ describe('Extension types and utilities', () => {
       const extension: Extension = {
         id: 'null-manifest-extension',
         name: 'Null Manifest Extension',
-        manifest_path: testDir,
+        manifest_v2_path: testDir,
         manifest: null as any,
         files: []
       };
@@ -231,7 +231,7 @@ describe('Extension types and utilities', () => {
       const extension: Extension = {
         id: 'undefined-manifest-extension',
         name: 'Undefined Manifest Extension',
-        manifest_path: testDir,
+        manifest_v2_path: testDir,
         manifest: undefined as any,
         files: []
       };
@@ -250,7 +250,7 @@ describe('Extension types and utilities', () => {
       const extension: Extension = {
         id: 'valid-extension-id',
         name: 'Valid Extension',
-        manifest_path: '/path/to/extension',
+        manifest_v2_path: '/path/to/extension',
         manifest: {
           name: 'Valid Extension',
           version: '2.1.0',
@@ -277,7 +277,7 @@ describe('Extension types and utilities', () => {
       const extension: Extension = {
         id: 'minimal-extension',
         name: 'Minimal Extension',
-        manifest_path: '/minimal/path',
+        manifest_v2_path: '/minimal/path',
         manifest: {
           name: 'Minimal Extension',
           version: '1.0',

@@ -44,7 +44,7 @@ describe('ResourceDownloader', () => {
     return {
       id: `test-${name}`,
       name: name,
-      manifest_path: extensionDir,
+      manifest_v2_path: extensionDir,
       manifest: manifest,
       files: lazyFiles
     };
@@ -395,7 +395,7 @@ describe('ResourceDownloader', () => {
       const badExtension = {
         id: 'bad-extension',
         name: 'bad-extension',
-        manifest_path: '/bad/path',
+        manifest_v2_path: '/bad/path',
         manifest: null as any,
         files: []
       };

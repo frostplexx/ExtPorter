@@ -559,7 +559,7 @@ export function createTestExtension(fixture: TestExtensionFixture, baseDir: stri
   return {
     id: `test-${fixture.name}`,
     name: fixture.name,
-    manifest_path: extensionDir,
+    manifest_v2_path: extensionDir,
     manifest: fixture.manifest,
     files: lazyFiles
   };
