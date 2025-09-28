@@ -262,13 +262,13 @@ export class RenameAPIS implements MigrationModule {
         // Match function calls (e.g., chrome.extension.connect())
         if (node.type === 'CallExpression' && node.callee?.type === 'MemberExpression') {
             const apiPath = RenameAPIS.buildMemberExpressionPath(node.callee);
-            return sourcePattern.includes(apiPath);
+            return sourcePattern === apiPath || sourcePattern.startsWith(apiPath + '(');
         }
 
         // Match property access (e.g., chrome.extension.onConnect)
         if (node.type === 'MemberExpression') {
             const apiPath = RenameAPIS.buildMemberExpressionPath(node);
-            return sourcePattern.includes(apiPath);
+            return sourcePattern === apiPath;
         }
 
         return false;
