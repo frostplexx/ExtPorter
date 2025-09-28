@@ -80,7 +80,7 @@ function get_manifest(manifest_paths: string[], includes_mv3: boolean): Extensio
 
                 if (!id) {
                     logger.error(undefined, "Error getting extension id while searching", {
-                        manifest_path: manifestPath,
+                        manifest_v2_path: manifestPath,
                         manifest_content: manifestContent,
                         extension_dir: extensionDir
                     })
@@ -90,7 +90,7 @@ function get_manifest(manifest_paths: string[], includes_mv3: boolean): Extensio
                 const extension: Extension = {
                     id: id,
                     name: extensionName,
-                    manifest_path: extensionDir,
+                    manifest_v2_path: extensionDir,
                     manifest: json,
                     files: files,
                     isNewTabExtension: isNewTabExtension({ manifest: json } as Extension)
@@ -99,7 +99,7 @@ function get_manifest(manifest_paths: string[], includes_mv3: boolean): Extensio
                 extensions.push(extension)
             }
         } catch (error) {
-            logger.error(null, `Error processing manifest file: ${manifestPath}`, { "error": (error as any).message, "manifest_path": manifestPath });
+            logger.error(null, `Error processing manifest file: ${manifestPath}`, { "error": (error as any).message, "manifest_v2_path": manifestPath });
         } finally {
             // Ensure file descriptor is always closed
             if (manifestMMapFile) {
@@ -129,7 +129,7 @@ function getExtensionID(manifest_path: string): string | undefined {
         return extensionId;
     } catch (error) {
         logger.error(null, `Failed to get extension ID: ${error}`, {
-            "manifest_path": manifest_path,
+            "manifest_v2_path": manifest_path,
             "error": error
         });
         return undefined

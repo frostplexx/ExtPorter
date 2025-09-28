@@ -83,7 +83,7 @@ export class ResourceDownloader extends MigrationModule {
         const extensionCopy: Extension = {
             id: extension.id,
             name: extension.name,
-            manifest_path: extension.manifest_path,
+            manifest_v2_path: extension.manifest_v2_path,
             manifest: { ...extension.manifest },
             files: [...extension.files] // Shallow copy of files array
         };
