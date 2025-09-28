@@ -22,7 +22,9 @@ class ExtensionSearcher {
             manifest: ext.manifest || {},
             files: ext.files || [],
             isNewTabExtension: ext.isNewTabExtension,
-            mv3_extension_id: ext.mv3_extension_id
+            mv3_extension_id: ext.mv3_extension_id,
+            interestingness_score: ext.interestingness_score || 0,
+            interestingness_breakdown: ext.interestingness_breakdown
         }));
     }
 
@@ -30,21 +32,28 @@ class ExtensionSearcher {
         const name = ext.name || ext.manifest?.name || 'Unknown';
         const description = ext.manifest?.description || 'No description';
         const version = ext.manifest?.version || 'Unknown version';
+        const score = ext.interestingness_score || 0;
 
         // Show both MV2 and MV3 IDs
         const mv2Id = `MV2: ${ext.id}`;
         const mv3Id = ext.mv3_extension_id ? ` | MV3: ${ext.mv3_extension_id}` : ' | MV3: none';
+        const scoreInfo = ` | Score: ${score}`;
 
-        // Truncate long descriptions to make room for both IDs
-        const truncatedDesc = description.length > 60
-            ? description.substring(0, 57) + '...'
+        // Truncate long descriptions to make room for score
+        const truncatedDesc = description.length > 50
+            ? description.substring(0, 47) + '...'
             : description;
 
-        return `${mv2Id}${mv3Id} | ${name} | v${version} | ${truncatedDesc}`;
+        return `${mv2Id}${mv3Id}${scoreInfo} | ${name} | v${version} | ${truncatedDesc}`;
     }
 
     async searchWithFzf(extensions: Extension[]) {
-        const fzfInput = extensions
+        // Sort extensions by interestingness score (highest first)
+        const sortedExtensions = extensions.sort((a, b) =>
+            (b.interestingness_score || 0) - (a.interestingness_score || 0)
+        );
+
+        const fzfInput = sortedExtensions
             .map(ext => this.formatExtensionForFzf(ext))
             .join('\n');
 
@@ -56,7 +65,7 @@ class ExtensionSearcher {
             '--preview=echo {}',
             '--preview-window=down:3:wrap',
             '--bind=enter:accept',
-            '--header=Use arrow keys to navigate, Enter to select, Esc to quit'
+            '--header=Sorted by interestingness score (highest first). Use arrow keys to navigate, Enter to select, Esc to quit'
         ], {
             stdio: ['pipe', 'pipe', 'inherit']
         });
@@ -79,7 +88,7 @@ class ExtensionSearcher {
                         const mv2Match = selectedLine.match(/MV2: ([^\s|]+)/);
                         if (mv2Match) {
                             const extensionId = mv2Match[1];
-                            const selectedExtension = extensions.find(ext => ext.id === extensionId);
+                            const selectedExtension = sortedExtensions.find(ext => ext.id === extensionId);
                             if (selectedExtension) {
                                 this.displayExtensionDetails(selectedExtension);
                             }
@@ -126,6 +135,20 @@ class ExtensionSearcher {
 
         if (ext.manifest?.manifest_version) {
             console.log(`Manifest Version: ${ext.manifest.manifest_version}`);
+        }
+
+        // Display interestingness score and breakdown
+        if (ext.interestingness_score !== undefined) {
+            console.log(`\nInterestingness Score: ${ext.interestingness_score}`);
+
+            if (ext.interestingness_breakdown) {
+                console.log('\nScore Breakdown:');
+                Object.entries(ext.interestingness_breakdown).forEach(([key, value]) => {
+                    if (value > 0) {
+                        console.log(`  - ${key.replace(/_/g, ' ')}: ${value}`);
+                    }
+                });
+            }
         }
 
         if (ext.manifest) {

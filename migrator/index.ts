@@ -5,6 +5,7 @@ import { MigrateManifest } from "./modules/manifest";
 import { ResourceDownloader } from "./modules/resource_downloader";
 import { WriteMigrated } from "./modules/write_migrated";
 import { MigrationWriter } from "./modules/migration_writer";
+import { InterestingnessScorer } from "./modules/interestingness_scorer";
 import { Extension, closeExtensionFiles } from "./types/extension";
 import { find_extensions } from "./utils/find_extensions";
 import { logger } from "./utils/logger";
@@ -140,6 +141,7 @@ async function main() {
         MigrateManifest.migrate,
         // ResourceDownloader.migrate,
         RenameAPIS.migrate,
+        InterestingnessScorer.migrate,
         WriteMigrated.migrate
     ];
 

@@ -9,7 +9,23 @@ export interface Extension {
     files: LazyFile[],
     isNewTabExtension?: boolean,
     mv3_extension_id?: string,
-    manifest_v3_path?: string
+    manifest_v3_path?: string,
+    interestingness_score?: number,
+    interestingness_breakdown?: {
+        webRequest: number;
+        html_lines: number;
+        storage_local: number;
+        background_page: number;
+        content_scripts: number;
+        dangerous_permissions: number;
+        host_permissions: number;
+        crypto_patterns: number;
+        network_requests: number;
+        extension_size: number;
+        api_renames: number;
+        manifest_changes: number;
+        file_modifications: number;
+    }
 }
 
 export function closeExtensionFiles(extension: Extension): void {
