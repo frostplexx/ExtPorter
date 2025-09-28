@@ -314,12 +314,12 @@ describe('RenameAPIS', () => {
           // Expected behavior: Comments and strings should remain unchanged
           // Current bug: API migration is too aggressive and transforms comments and breaks variable assignments
 
-          // Comments and strings are incorrectly being transformed (this is a bug)
-          expect(content).not.toContain('// chrome.browserAction.onClicked'); // Bug: comment was transformed
-          expect(content).toContain("'chrome.browserAction was the old API'"); // String correctly preserved
+          // Comments should be preserved exactly as they were in the original
+          expect(content).toContain('// chrome.browserAction.onClicked - this should stay unchanged'); // Comment preserved correctly
+          expect(content).toContain('"chrome.browserAction was the old API"'); // String correctly preserved
 
-          // Variable assignments are broken (const action = chrome.browserAction becomes const action = chrome.onClicked)
-          expect(content).toContain('const action = chrome.onClicked;'); // Bug: incorrect transformation
+          // Variable assignments should be correctly transformed
+          expect(content).toContain('const action = chrome.action;'); // Should be transformed correctly
 
           // Similar names should not be changed (this works correctly)
           expect(content).toContain('chrome.browser_action_custom.doSomething()');

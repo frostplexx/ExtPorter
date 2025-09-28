@@ -59,15 +59,19 @@ export class LazyFile implements AbstractFile {
             try {
                 this._ast = espree.parse(content, {
                     ecmaVersion: 'latest',
-                    sourceType: 'script'
-                }) as ESTree.Program;
+                    sourceType: 'script',
+                    loc: true,
+                    range: true
+                } as any) as ESTree.Program;
             } catch (scriptError) {
                 // Fallback: try parsing as module if script parsing fails
                 try {
                     this._ast = espree.parse(content, {
                         ecmaVersion: 'latest',
-                        sourceType: 'module'
-                    }) as ESTree.Program;
+                        sourceType: 'module',
+                        loc: true,
+                        range: true
+                    } as any) as ESTree.Program;
                 } catch (moduleError) {
                     throw scriptError; // Throw original error
                 }

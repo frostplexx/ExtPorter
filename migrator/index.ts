@@ -2,7 +2,6 @@ import dotenv from 'dotenv';
 import * as path from 'path';
 import { RenameAPIS } from "./modules/api_renames";
 import { MigrateManifest } from "./modules/manifest";
-import { ResourceDownloader } from "./modules/resource_downloader";
 import { WriteMigrated } from "./modules/write_migrated";
 import { MigrationWriter } from "./modules/migration_writer";
 import { InterestingnessScorer } from "./modules/interestingness_scorer";
@@ -32,15 +31,35 @@ function formatMemoryUsage(memoryUsage: NodeJS.MemoryUsage): string {
 
 function logMemoryUsage(context: string): void {
     const memUsage = process.memoryUsage();
-    logger.debug(null, `Memory usage [${context}]: ${formatMemoryUsage(memUsage)}`);
+    const isMonitoringEnabled = process.env.MEMORY_MONITORING === 'true';
+
+    if (isMonitoringEnabled) {
+        logger.info(null, `Memory usage [${context}]: ${formatMemoryUsage(memUsage)}`);
+    } else {
+        logger.debug(null, `Memory usage [${context}]: ${formatMemoryUsage(memUsage)}`);
+    }
 }
 
 function forceGarbageCollection(): void {
+    const isMonitoringEnabled = process.env.MEMORY_MONITORING === 'true';
+
     if (global.gc) {
+        const beforeGC = process.memoryUsage();
         global.gc();
-        logger.debug(null, "Forced garbage collection");
+        const afterGC = process.memoryUsage();
+
+        if (isMonitoringEnabled) {
+            const freedMB = Math.round((beforeGC.heapUsed - afterGC.heapUsed) / 1024 / 1024);
+            logger.info(null, `Forced garbage collection completed, freed ${freedMB}MB`);
+        } else {
+            logger.debug(null, "Forced garbage collection");
+        }
     } else {
-        logger.debug(null, "Garbage collection not available. Run with --expose-gc flag for better memory management");
+        if (isMonitoringEnabled) {
+            logger.warn(null, "Garbage collection not available. Run with --expose-gc flag for better memory management");
+        } else {
+            logger.debug(null, "Garbage collection not available. Run with --expose-gc flag for better memory management");
+        }
     }
 }
 
