@@ -9,6 +9,8 @@ import * as fs from "fs";
 import * as path from "path";
 import { logger } from "../utils/logger";
 import { TwinningMapping } from "../types/twinning_mapping";
+import { BlacklistChecker } from "../utils/blacklist_checker";
+import { FormatPreservingGenerator } from "../utils/format_preserving_generator";
 
 /**
  * Cached API mappings
@@ -76,11 +78,25 @@ export class RenameAPIS implements MigrationModule {
             let hasChanges = false;
             let processedFiles = 0;
             let transformedFiles = 0;
+            let blacklistedFiles = 0;
+
+            const blacklistChecker = BlacklistChecker.getInstance();
 
             const transformedFilesArray = extension.files.map(file => {
                 // skip files that arent js
                 if (file.filetype !== ExtFileType.JS) {
                     return file;
+                }
+
+                // Check if file is blacklisted from transformation
+                const blacklistResult = blacklistChecker.isFileBlacklisted(file.path);
+                if (blacklistResult.isBlacklisted) {
+                    blacklistedFiles++;
+                    logger.debug(extension, "File blacklisted from transformation", {
+                        filePath: file.path,
+                        reason: blacklistResult.reason
+                    });
+                    return file; // Return original file without transformation
                 }
 
                 processedFiles++;
@@ -92,7 +108,7 @@ export class RenameAPIS implements MigrationModule {
                 });
             });
 
-            RenameAPIS.logMigrationResults(startTime, extension, processedFiles, transformedFiles);
+            RenameAPIS.logMigrationResults(startTime, extension, processedFiles, transformedFiles, blacklistedFiles);
 
             // Return original extension if no changes were made
             if (!hasChanges) {
@@ -144,7 +160,12 @@ export class RenameAPIS implements MigrationModule {
             return file;
         }
 
-        const newContent = escodegen.generate(transformedAST);
+        // Generate code with preserved formatting and comments
+        const originalContent = file.getContent();
+        const newContent = FormatPreservingGenerator.generateWithPreservedFormatting(
+            transformedAST,
+            originalContent
+        );
         onTransformed(true);
 
         return RenameAPIS.createTransformedFile(file, newContent);
@@ -364,15 +385,19 @@ export class RenameAPIS implements MigrationModule {
                 // Try as script first (most common)
                 return espree.parse(newContent, {
                     ecmaVersion: 'latest',
-                    sourceType: 'script'
-                }) as ESTree.Program;
+                    sourceType: 'script',
+                    loc: true,
+                    range: true
+                } as any) as ESTree.Program;
             } catch (error) {
                 try {
                     // Fallback to module parsing
                     return espree.parse(newContent, {
                         ecmaVersion: 'latest',
-                        sourceType: 'module'
-                    }) as ESTree.Program;
+                        sourceType: 'module',
+                        loc: true,
+                        range: true
+                    } as any) as ESTree.Program;
                 } catch (moduleError) {
                     logger.error(null, `Parsing Error`, {
                         "path": originalFile.path,
@@ -397,17 +422,27 @@ export class RenameAPIS implements MigrationModule {
         startTime: number,
         extension: Extension | undefined,
         processedFiles: number,
-        transformedFiles: number
+        transformedFiles: number,
+        blacklistedFiles: number = 0
     ): void {
         const duration = Date.now() - startTime;
 
         if (transformedFiles === 0) {
-            logger.info(extension, "No API changes required");
+            if (blacklistedFiles > 0) {
+                logger.info(extension, "No API changes required", {
+                    blacklistedFiles,
+                    processedFiles,
+                    duration
+                });
+            } else {
+                logger.info(extension, "No API changes required");
+            }
         } else {
             logger.info(extension, "API rename migration completed", {
                 transformedFiles,
-                duration,
-                totalFiles: processedFiles
+                processedFiles,
+                blacklistedFiles,
+                duration
             });
         }
     }
