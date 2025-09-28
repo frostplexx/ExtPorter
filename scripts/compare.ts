@@ -1,32 +1,42 @@
-import { Database } from "../features/database/db_manager";
-import { ChromeTester } from "../features/extension_tester/chrome_tester";
-import { Extension } from "../types/extension";
-import { find_extensions } from "../utils/find_extensions";
-
 import dotenv from 'dotenv';
+import { Database } from '../migrator/features/database/db_manager';
+import { find_extensions } from '../migrator/utils/find_extensions';
+import { Extension } from '../migrator/types/extension';
+import { ChromeTester } from '../ext_tester/chrome_tester';
+import { exit } from 'process';
 
 async function main() {
 
     // Load environment variables once at application startup
     dotenv.config();
+
+    if(!process.env.OUTPUT_DIR) {throw new Error("OUTPUT_DIR not set")}
+
+
     await Database.shared.init()
 
     const args = process.argv.slice(2);
 
-    const migrated_ext_path = args[0];
+    const ext_id = args[0];
 
-    var migrated_parsed_ext = find_extensions(migrated_ext_path, true)[0]
+    if(!ext_id) {
+        console.log("Usage: yarn srcipts:comapre <extension id of migrated extension>")
+        exit(1);
+    }
+    const migrated_ext_path = `${process.env.OUTPUT_DIR}/${ext_id}`;
+
+    const migrated_parsed_ext = find_extensions(migrated_ext_path, true)[0]
 
     if (!migrated_parsed_ext) {
         console.log(`Could not find migrated extension in ${migrated_ext_path}`);
         return
     }
-    var parts = migrated_parsed_ext.manifest_path.split("/")
+    const parts = migrated_parsed_ext.manifest_v2_path.split("/")
     console.log(`Loading MV2 extension "${migrated_parsed_ext.name}" (${parts[parts.length - 1]})`);
 
 
     const test = await Database.shared.findExtension({
-        "id": parts[parts.length - 1]
+        "mv3_extension_id": ext_id
     })
 
     if (test) {
@@ -34,7 +44,7 @@ async function main() {
         const mv2_extension: Extension = {
             id: test.id,
             name: test.name,
-            manifest_path: test.manifest_path,
+            manifest_v2_path: test.manifest_v2_path,
             manifest: test.manifest,
             files: test.files || [],
             isNewTabExtension: test.isNewTabExtension,
