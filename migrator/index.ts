@@ -1,4 +1,5 @@
 import dotenv from 'dotenv';
+import * as path from 'path';
 import { RenameAPIS } from "./modules/api_renames";
 import { MigrateManifest } from "./modules/manifest";
 import { ResourceDownloader } from "./modules/resource_downloader";
@@ -137,7 +138,7 @@ async function main() {
     // Migration modules (WriteMigrated should be last to queue completed migrations)
     const migrationModules = [
         MigrateManifest.migrate,
-        ResourceDownloader.migrate,
+        // ResourceDownloader.migrate,
         RenameAPIS.migrate,
         WriteMigrated.migrate
     ];
@@ -183,15 +184,30 @@ async function main() {
         // Write the migrated extension to disk
         if (migrationSuccessful) {
             logger.info(extension, `Writing migrated extension: ${extension.name}`);
-            const written = WriteMigrated.migrate(extension);
-            if (written && !(written instanceof MigrationError)) {
-                extension = written;
+
+            // Instead of using async queue, write synchronously to avoid memory clearing issues
+            try {
+                // Set the manifest_path for the MV3 extension
+                const useNewTabSubfolder = process.env.NEW_TAB_SUBFOLDER === 'true';
+                const isNewTab = extension.isNewTabExtension || false;
+                const extensionId = extension.mv3_extension_id || extension.id;
+
+                let outputPath: string;
+                if (useNewTabSubfolder && isNewTab) {
+                    outputPath = path.join(globals.outputDir, 'new_tab_extensions', extensionId);
+                } else {
+                    outputPath = path.join(globals.outputDir, extensionId);
+                }
+
+                // Write extension synchronously to ensure it completes before memory cleanup
+                await MigrationWriter.shared.writeExtensionSync(extension, outputPath);
 
                 // Insert migrated extension to database immediately after successful migration
                 try {
                     // Create a lightweight copy for database insertion
                     const dbExtension: Extension = {
                         ...extension,
+                        manifest_v3_path: path.join(outputPath, 'manifest.json'), // Set the MV3 manifest path
                         files: [] // Remove files to reduce database size - the important data is in manifest and mv3_extension_id
                     };
 
@@ -203,15 +219,11 @@ async function main() {
                         error: dbError instanceof Error ? dbError.message : String(dbError)
                     });
                 }
-            } else {
+            } catch (writeError) {
                 migrationSuccessful = false;
-                if (written instanceof MigrationError) {
-                    logger.error(extension, `Migration error while writing extension: ${extension.name}`, {
-                        error: written.error instanceof Error ? written.error.message : String(written.error)
-                    });
-                } else {
-                    logger.error(extension, `Failed to write migrated extension: ${extension.name}`);
-                }
+                logger.error(extension, `Failed to write migrated extension: ${extension.name}`, {
+                    error: writeError instanceof Error ? writeError.message : String(writeError)
+                });
             }
         }
 

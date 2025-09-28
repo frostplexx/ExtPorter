@@ -6,7 +6,7 @@ import { logger, LogLevel } from "../../utils/logger";
 
 export enum Collections {
     EXTENSIONS = "extensions",
-    MIGRATED_EXT = "migrated_ext",
+    // MIGRATED_EXT = "extensions",
     LOGS = "logs",
     TESTS_MV2 = "tests_mv2",
     TESTS_MV3 = "tests_mv3"
@@ -36,9 +36,10 @@ export class Database {
     }
 
 
-    private async insertOne(collectionName: Collections, document: any) {
+    private async upsertOne(collectionName: Collections, document: any, uniqueField: string = 'id') {
         if (!this.database) throw new Error("Database not initialized");
-        return await this.database.collection(collectionName).insertOne(document);
+        const filter = { [uniqueField]: document[uniqueField] };
+        return await this.database.collection(collectionName).replaceOne(filter, document, { upsert: true });
     }
 
     /**
@@ -111,20 +112,21 @@ export class Database {
         }
     }
 
-    private async insertMany(collectionName: Collections, documents: any[]) {
+    private async upsertMany(collectionName: Collections, documents: any[], uniqueField: string = 'id') {
         if (!this.database) throw new Error("Database not initialized");
         if (documents.length === 0) return;
 
-        // Insert documents one by one with size validation
+        // Upsert documents one by one with size validation
         const results = [];
 
         for (let i = 0; i < documents.length; i++) {
             try {
                 const sanitizedDoc = this.sanitizeDocumentSize(documents[i]);
-                const result = await this.database.collection(collectionName).insertOne(sanitizedDoc);
+                const filter = { [uniqueField]: sanitizedDoc[uniqueField] };
+                const result = await this.database.collection(collectionName).replaceOne(filter, sanitizedDoc, { upsert: true });
                 results.push(result);
             } catch (error) {
-                logger.error(null, `Failed to insert document ${i} into ${collectionName}:`, error);
+                logger.error(null, `Failed to upsert document ${i} into ${collectionName}:`, error);
             }
         }
 
@@ -164,21 +166,21 @@ export class Database {
     }
 
     async insertMigratedExtensions(extension: Extension[]) {
-        return await this.insertMany(Collections.MIGRATED_EXT, extension)
+        return await this.upsertMany(Collections.EXTENSIONS, extension)
     }
 
     async insertMigratedExtension(extension: Extension) {
-        logger.debug(null, `Attempting to insert migrated extension: ${extension.name} (ID: ${extension.id}, MV3_ID: ${extension.mv3_extension_id})`);
+        logger.debug(null, `Attempting to upsert migrated extension: ${extension.name} (ID: ${extension.id}, MV3_ID: ${extension.mv3_extension_id})`);
         const sanitizedExtension = this.sanitizeDocumentSize(extension);
-        const result = await this.insertOne(Collections.MIGRATED_EXT, sanitizedExtension);
-        logger.debug(null, `Successfully inserted extension ${extension.name} to database with result:`, result.insertedId);
+        const result = await this.upsertOne(Collections.EXTENSIONS, sanitizedExtension);
+        logger.debug(null, `Successfully upserted extension ${extension.name} to database with result:`, result.upsertedId || result.modifiedCount);
         return result;
     }
 
 
     async insertFoundExtensions(extensions: Extension[]) {
         try {
-            return await this.insertMany(Collections.EXTENSIONS, extensions)
+            return await this.upsertMany(Collections.EXTENSIONS, extensions)
         } catch (e) {
             logger.error(null, `${e}`)
         }
@@ -190,7 +192,7 @@ export class Database {
         "meta": any,
         "time": number,
     }) {
-        return this.insertOne(Collections.LOGS, log)
+        return this.upsertOne(Collections.LOGS, log, 'time')
     }
 
     async insertManyLogs(logs: {
@@ -200,7 +202,7 @@ export class Database {
         "time": number,
     }[]) {
         if (logs.length === 0) return;
-        return this.insertMany(Collections.LOGS, logs)
+        return this.upsertMany(Collections.LOGS, logs, 'time')
     }
 
 }

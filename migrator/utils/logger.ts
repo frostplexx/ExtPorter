@@ -115,7 +115,7 @@ function formatLog(extension: Extension | null = null, message: string, loglevel
         "loglevel": loglevel,
         "extension": extension != null ? {
             "id": extension.id,
-            "path": extension.manifest_path,
+            "path": extension.manifest_v2_path,
             "name": extension.name,
             "isNewTabExtension": extension.isNewTabExtension || false,
         } : '',

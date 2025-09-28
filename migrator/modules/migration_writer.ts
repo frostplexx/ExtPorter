@@ -285,4 +285,27 @@ export class MigrationWriter {
             isProcessing: this.isProcessing
         };
     }
+
+    /**
+     * Synchronously write an extension to disk to avoid memory clearing issues
+     * @param extension The extension to write
+     * @param outputPath The path to write the extension to
+     */
+    public async writeExtensionSync(extension: Extension, outputPath: string): Promise<void> {
+        try {
+            await fs.mkdir(outputPath, { recursive: true });
+
+            await Promise.all([
+                this.writeManifest(extension, outputPath),
+                this.writeFiles(extension, outputPath)
+            ]);
+
+        } catch (error) {
+            logger.error(extension, "Failed to create output directory or write extension synchronously", {
+                outputPath,
+                error: error instanceof Error ? error.message : String(error)
+            });
+            throw error;
+        }
+    }
 }

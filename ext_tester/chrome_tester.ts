@@ -1,9 +1,7 @@
-import puppeteer, { Browser, BrowserContext, Page } from "puppeteer";
-import { Extension } from "../../types/extension";
+import puppeteer, { Browser, Page } from "puppeteer";
+import { Extension } from "../migrator/types/extension";
 import { execSync } from "child_process";
-import { logger } from "../../utils/logger";
-import { testExtension } from "./test_ext";
-import { BrowserLog, ExTestResult, SerializedConsoleMessage, SerializedHTTPResponse, SerializedHTTPRequest } from "../../types/ex_test_result";
+import { logger } from "../migrator/utils/logger";
 
 /**
  * Singelton that contains all the functions for interacting with chrome through puppeteer
@@ -13,21 +11,21 @@ export class ChromeTester {
     public static shared = new ChromeTester()
 
     private current_extension: Extension | null = null
-    private currentLogs: BrowserLog = {
-        console: [],
-        pageerrors: [],
-        responses: [],
-        requestfailed: [],
-        timestamp: ""
-    }
+    // private currentLogs: BrowserLog = {
+    //     console: [],
+    //     pageerrors: [],
+    //     responses: [],
+    //     requestfailed: [],
+    //     timestamp: ""
+    // }
 
     constructor() { }
 
     // fetches the path of the chrome binary
     private getChromePath(): string {
         if (process.env.IN_NIX_SHELL) {
-            var bin_path = execSync(`which google-chrome-stable`).toString();
-            bin_path = bin_path.replace("/bin/google-chrome-stable", "/Applications/Google\ Chrome.app/Contents/MacOS/Google Chrome").replace("\n", "")
+            let bin_path = execSync(`which google-chrome-stable`).toString();
+            bin_path = bin_path.replace("/bin/google-chrome-stable", "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome").replace("\n", "")
             logger.debug(null, bin_path);
             return bin_path
         } else {
@@ -40,7 +38,7 @@ export class ChromeTester {
     async navigateTo(url: string){
         if (!this.browser) { return }
             // Create a new page to test the new tab override
-            let page = await this.browser.newPage();
+            const page = await this.browser.newPage();
             // Navigate to chrome://newtab to trigger the extension's new tab page
             await page.goto(url);
 
@@ -113,7 +111,7 @@ export class ChromeTester {
         this.current_extension = extension;
 
         // Reset logs for new extension test
-        this.resetLogs();
+        // this.resetLogs();
 
         let lastError: Error | null = null;
 
@@ -130,7 +128,7 @@ export class ChromeTester {
                     pipe: true,
                     devtools: true,
                     executablePath: this.getChromePath(),
-                    enableExtensions: [this.current_extension.manifest_path],
+                    enableExtensions: [this.current_extension.manifest_v2_path],
                     args: [
                         '--no-first-run',
                         '--disable-default-apps',
@@ -185,46 +183,46 @@ export class ChromeTester {
     }
 
 
-    async testExtension(): Promise<ExTestResult> {
-        if (this.browser && this.current_extension) {
-
-            try {
-                const result = await testExtension(this.current_extension, this.browser);
-
-                logger.info(this.current_extension, `Extension tests completed for: ${this.current_extension.name}`, {
-                    success: result.success,
-                    testsRun: result.testsRun.length,
-                    duration: result.duration
-                });
-
-                return result;
-            } catch (error) {
-                const errorMessage = error instanceof Error ? error.message : String(error);
-                logger.error(this.current_extension, `Error running tests for: ${this.current_extension.name}`, { error: errorMessage });
-
-                return {
-                    success: false,
-                    extensionId: this.current_extension.id,
-                    extensionName: this.current_extension.name,
-                    testsRun: [],
-                    errors: [errorMessage],
-                    duration: 0
-                };
-            }
-        } else {
-            const errorMessage = "Browser or extension not initialized";
-            logger.error(this.current_extension, errorMessage);
-
-            return {
-                success: false,
-                extensionId: this.current_extension?.id || "unknown",
-                extensionName: this.current_extension?.name || "unknown",
-                testsRun: [],
-                errors: [errorMessage],
-                duration: 0
-            };
-        }
-    }
+    // async testExtension(): Promise<ExTestResult> {
+    //     if (this.browser && this.current_extension) {
+    //
+    //         try {
+    //             const result = await testExtension(this.current_extension, this.browser);
+    //
+    //             logger.info(this.current_extension, `Extension tests completed for: ${this.current_extension.name}`, {
+    //                 success: result.success,
+    //                 testsRun: result.testsRun.length,
+    //                 duration: result.duration
+    //             });
+    //
+    //             return result;
+    //         } catch (error) {
+    //             const errorMessage = error instanceof Error ? error.message : String(error);
+    //             logger.error(this.current_extension, `Error running tests for: ${this.current_extension.name}`, { error: errorMessage });
+    //
+    //             return {
+    //                 success: false,
+    //                 extensionId: this.current_extension.id,
+    //                 extensionName: this.current_extension.name,
+    //                 testsRun: [],
+    //                 errors: [errorMessage],
+    //                 duration: 0
+    //             };
+    //         }
+    //     } else {
+    //         const errorMessage = "Browser or extension not initialized";
+    //         logger.error(this.current_extension, errorMessage);
+    //
+    //         return {
+    //             success: false,
+    //             extensionId: this.current_extension?.id || "unknown",
+    //             extensionName: this.current_extension?.name || "unknown",
+    //             testsRun: [],
+    //             errors: [errorMessage],
+    //             duration: 0
+    //         };
+    //     }
+    // }
 
 
     /**
@@ -252,89 +250,89 @@ export class ChromeTester {
     /**
      * Resets the current log collection
      */
-    resetLogs(): void {
-        this.currentLogs = {
-            console: [],
-            pageerrors: [],
-            responses: [],
-            requestfailed: [],
-            timestamp: new Date().toISOString()
-        };
-    }
+    // resetLogs(): void {
+    //     this.currentLogs = {
+    //         console: [],
+    //         pageerrors: [],
+    //         responses: [],
+    //         requestfailed: [],
+    //         timestamp: new Date().toISOString()
+    //     };
+    // }
 
     /**
      * Initializes continuous log collection for a page
      * @param{Page} page you want to collect logs for
      */
-    setupLogCollection(page: Page): void {
-        logger.debug(this.current_extension, `Setting up log collection for page: ${page.url()}`, { page: page.url() });
-
-        page
-            .on('console', message => {
-                const logMessage = `${message.type().toUpperCase()}: ${message.text()}`;
-                logger.debug(this.current_extension, `[BROWSER CONSOLE] ${logMessage}`);
-
-                const serializedMessage: SerializedConsoleMessage = {
-                    type: message.type(),
-                    text: message.text(),
-                    timestamp: new Date().toISOString()
-                };
-                this.currentLogs.console.push(serializedMessage);
-            })
-            .on('pageerror', ({ message }) => {
-                logger.debug(this.current_extension, `[PAGE ERROR] ${message}`);
-                this.currentLogs.pageerrors.push(message);
-            })
-            .on('response', response => {
-                logger.debug(this.current_extension, `[RESPONSE] ${response.status()} ${response.url()}`);
-
-                const serializedResponse: SerializedHTTPResponse = {
-                    url: response.url(),
-                    status: response.status(),
-                    statusText: response.statusText(),
-                    timestamp: new Date().toISOString()
-                };
-                this.currentLogs.responses.push(serializedResponse);
-            })
-            .on('requestfailed', request => {
-                const errorText = request.failure()?.errorText || 'Unknown error';
-                logger.debug(this.current_extension, `[REQUEST FAILED] ${errorText} - ${request.url()}`);
-
-                const serializedRequest: SerializedHTTPRequest = {
-                    url: request.url(),
-                    method: request.method(),
-                    errorText: errorText,
-                    timestamp: new Date().toISOString()
-                };
-                this.currentLogs.requestfailed.push(serializedRequest);
-            })
-            .on('load', () => {
-                logger.debug(this.current_extension, `[PAGE LOADED] ${page.url()}`);
-            })
-            .on('domcontentloaded', () => {
-                logger.debug(this.current_extension, `[DOM LOADED] ${page.url()}`);
-            });
-    }
+    // setupLogCollection(page: Page): void {
+    //     logger.debug(this.current_extension, `Setting up log collection for page: ${page.url()}`, { page: page.url() });
+    //
+    //     page
+    //         .on('console', message => {
+    //             const logMessage = `${message.type().toUpperCase()}: ${message.text()}`;
+    //             logger.debug(this.current_extension, `[BROWSER CONSOLE] ${logMessage}`);
+    //
+    //             const serializedMessage: SerializedConsoleMessage = {
+    //                 type: message.type(),
+    //                 text: message.text(),
+    //                 timestamp: new Date().toISOString()
+    //             };
+    //             this.currentLogs.console.push(serializedMessage);
+    //         })
+    //         .on('pageerror', ({ message }) => {
+    //             logger.debug(this.current_extension, `[PAGE ERROR] ${message}`);
+    //             this.currentLogs.pageerrors.push(message);
+    //         })
+    //         .on('response', response => {
+    //             logger.debug(this.current_extension, `[RESPONSE] ${response.status()} ${response.url()}`);
+    //
+    //             const serializedResponse: SerializedHTTPResponse = {
+    //                 url: response.url(),
+    //                 status: response.status(),
+    //                 statusText: response.statusText(),
+    //                 timestamp: new Date().toISOString()
+    //             };
+    //             this.currentLogs.responses.push(serializedResponse);
+    //         })
+    //         .on('requestfailed', request => {
+    //             const errorText = request.failure()?.errorText || 'Unknown error';
+    //             logger.debug(this.current_extension, `[REQUEST FAILED] ${errorText} - ${request.url()}`);
+    //
+    //             const serializedRequest: SerializedHTTPRequest = {
+    //                 url: request.url(),
+    //                 method: request.method(),
+    //                 errorText: errorText,
+    //                 timestamp: new Date().toISOString()
+    //             };
+    //             this.currentLogs.requestfailed.push(serializedRequest);
+    //         })
+    //         .on('load', () => {
+    //             logger.debug(this.current_extension, `[PAGE LOADED] ${page.url()}`);
+    //         })
+    //         .on('domcontentloaded', () => {
+    //             logger.debug(this.current_extension, `[DOM LOADED] ${page.url()}`);
+    //         });
+    // }
 
     /**
      * Returns all collected logs since setupLogCollection was called
      * @returns{BrowserLog} all collected browser logs
      */
-    getCollectedLogs(): BrowserLog {
-        return {
-            ...this.currentLogs,
-            timestamp: this.currentLogs.timestamp || new Date().toISOString()
-        };
-    }
-
+    // getCollectedLogs(): BrowserLog {
+    //     return {
+    //         ...this.currentLogs,
+    //         timestamp: this.currentLogs.timestamp || new Date().toISOString()
+    //     };
+    // }
+    //
     /**
      * Legacy method for backward compatibility - now uses continuous collection
      * @param{Page} page you want the logs for
      * @returns{Promise<BrowserLog>} browser logs
      */
-    async collectBrowserLogs(page: Page): Promise<BrowserLog> {
-        return this.getCollectedLogs();
-    }
+    // async collectBrowserLogs(page: Page): Promise<BrowserLog> {
+    //     return this.getCollectedLogs();
+    // }
 
 
 }

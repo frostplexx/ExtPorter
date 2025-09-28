@@ -4,11 +4,12 @@ import { LazyFile } from "./abstract_file";
 export interface Extension {
     id: string,
     name: string,
-    manifest_path: string,
+    manifest_v2_path: string,
     manifest: any,
     files: LazyFile[],
     isNewTabExtension?: boolean,
-    mv3_extension_id?: string
+    mv3_extension_id?: string,
+    manifest_v3_path?: string
 }
 
 export function closeExtensionFiles(extension: Extension): void {
