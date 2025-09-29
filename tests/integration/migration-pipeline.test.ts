@@ -91,7 +91,7 @@ describe('Migration Pipeline Integration Tests', () => {
           expect(resourceResult.files.length).toBeGreaterThan(extension.files.length);
 
           // Check that remote resources directory was created
-          const remoteResourcesDir = path.join(testDir, extension.name, 'remote_resources');
+          const remoteResourcesDir = path.join(testDir, extension.mv3_extension_id!, 'remote_resources');
           expect(fs.existsSync(remoteResourcesDir)).toBe(true);
 
           // Verify that content was updated to use local resources

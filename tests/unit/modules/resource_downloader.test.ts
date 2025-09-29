@@ -43,6 +43,7 @@ describe('ResourceDownloader', () => {
 
     return {
       id: `test-${name}`,
+      mv3_extension_id: `test-${name}`, 
       name: name,
       manifest_v2_path: extensionDir,
       manifest: manifest,
@@ -81,9 +82,9 @@ describe('ResourceDownloader', () => {
         {
           name: 'content.js',
           content: `
-            const fontUrl = 'https://fonts.googleapis.com/css2?family=Roboto:wght@400&display=swap';
-            const apiUrl = 'https://api.googleapis.com/some-service';
-            fetch(fontUrl);
+            const bootstrapJs = 'https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js';
+            const jqueryUrl = 'https://code.jquery.com/jquery-3.7.1.min.js';
+            fetch(bootstrapJs);
           `,
           type: ExtFileType.JS
         }
@@ -94,7 +95,7 @@ describe('ResourceDownloader', () => {
       expect(result).not.toBeInstanceOf(MigrationError);
       if (!(result instanceof MigrationError)) {
         // Check that remote resources directory was created
-        const remoteResourcesDir = path.join(testDir, extension.name, 'remote_resources');
+        const remoteResourcesDir = path.join(testDir, extension.mv3_extension_id!, 'remote_resources');
         expect(fs.existsSync(remoteResourcesDir)).toBe(true);
 
         // Check that files were added
@@ -106,7 +107,7 @@ describe('ResourceDownloader', () => {
         if (contentFile) {
           const content = contentFile.getContent();
           expect(content).toContain('remote_resources/');
-          expect(content).not.toContain('https://fonts.googleapis.com/');
+          expect(content).not.toContain('https://cdn.jsdelivr.net/');
         }
       }
 
@@ -125,10 +126,10 @@ describe('ResourceDownloader', () => {
         {
           name: 'style.css',
           content: `
-            @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500&display=swap');
+            @import url('https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css');
 
             body {
-              background-image: url('https://cdn.jsdelivr.net/gh/user/repo/image.png');
+              background-image: url('https://kit.fontawesome.com/55bb5526ef.js');
               font-family: 'Inter', sans-serif;
             }
           `,
@@ -145,8 +146,8 @@ describe('ResourceDownloader', () => {
         if (contentFile) {
           const content = contentFile.getContent();
           expect(content).toContain('remote_resources/');
-          expect(content).not.toContain('https://fonts.googleapis.com/');
           expect(content).not.toContain('https://cdn.jsdelivr.net/');
+          expect(content).not.toContain('https://kit.fontawesome.com/');
         }
       }
 
@@ -168,11 +169,11 @@ describe('ResourceDownloader', () => {
             <!DOCTYPE html>
             <html>
             <head>
-              <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
-              <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400&display=swap" rel="stylesheet">
+              <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css">
+              <script src="https://kit.fontawesome.com/55bb5526ef.js" crossorigin="anonymous"></script>
             </head>
             <body>
-              <script migrator="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+              <script migrator="https://code.jquery.com/jquery-3.7.1.min.js"></script>
             </body>
             </html>
           `,
@@ -189,8 +190,8 @@ describe('ResourceDownloader', () => {
         if (contentFile) {
           const content = contentFile.getContent();
           expect(content).toContain('remote_resources/');
-          expect(content).not.toContain('https://stackpath.bootstrapcdn.com/');
-          expect(content).not.toContain('https://code.jquery.com/');
+          expect(content).not.toContain('https://cdn.jsdelivr.net/');
+          expect(content).not.toContain('https://kit.fontawesome.com/');
         }
       }
 
@@ -206,8 +207,8 @@ describe('ResourceDownloader', () => {
         version: '1.0',
         manifest_version: 2,
         web_accessible_resources: [
-          'https://fonts.googleapis.com/css?family=Open+Sans:400,700',
-          'https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css'
+          'https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css',
+          'https://code.jquery.com/jquery-3.7.1.min.js'
         ]
       }, []);
 
@@ -221,7 +222,7 @@ describe('ResourceDownloader', () => {
         if (Array.isArray(webAccessibleResources)) {
           const resourceStrings = webAccessibleResources.join(' ');
           expect(resourceStrings).toContain('remote_resources/');
-          expect(resourceStrings).not.toContain('https://fonts.googleapis.com/');
+          expect(resourceStrings).not.toContain('https://cdn.jsdelivr.net/');
         }
       }
 
@@ -240,10 +241,10 @@ describe('ResourceDownloader', () => {
         {
           name: 'content.js',
           content: `
-            const font1 = 'https://fonts.googleapis.com/css2?family=Roboto:wght@400';
-            const font2 = 'https://fonts.googleapis.com/css2?family=Inter:wght@500';
-            const api = 'https://api.googleapis.com/service';
-            const cdn = 'https://cdn.jsdelivr.net/npm/library@1.0.0/dist/lib.min.js';
+            const bootstrap = 'https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css';
+            const jquery = 'https://code.jquery.com/jquery-3.7.1.min.js';
+            const fontawesome = 'https://kit.fontawesome.com/55bb5526ef.js';
+            const bootstrapJs = 'https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js';
           `,
           type: ExtFileType.JS
         }
@@ -262,9 +263,9 @@ describe('ResourceDownloader', () => {
         expect(contentFile).toBeDefined();
         if (contentFile) {
           const content = contentFile.getContent();
-          expect(content).not.toContain('https://fonts.googleapis.com/');
-          expect(content).not.toContain('https://api.googleapis.com/');
           expect(content).not.toContain('https://cdn.jsdelivr.net/');
+          expect(content).not.toContain('https://code.jquery.com/');
+          expect(content).not.toContain('https://kit.fontawesome.com/');
 
           // Count occurrences of remote_resources
           const matches = content.match(/remote_resources\//g);
@@ -342,7 +343,7 @@ describe('ResourceDownloader', () => {
 
       expect(result).not.toBeInstanceOf(MigrationError);
       if (!(result instanceof MigrationError)) {
-        const remoteResourcesDir = path.join(testDir, extension.name, 'remote_resources');
+        const remoteResourcesDir = path.join(testDir, extension.mv3_extension_id!, 'remote_resources');
 
         // Check that remote resources directory exists
         expect(fs.existsSync(remoteResourcesDir)).toBe(true);

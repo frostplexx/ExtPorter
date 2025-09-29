@@ -11,6 +11,7 @@ import { logger } from "./utils/logger";
 import { Globals } from "./types/globals";
 import { Database } from "./features/database/db_manager";
 import { MigrationError } from './types/migration_module';
+import { ResourceDownloader } from './modules/resource_downloader';
 
 // Load environment variables once at application startup
 dotenv.config();
@@ -158,7 +159,7 @@ async function main() {
     // Migration modules (WriteMigrated should be last to queue completed migrations)
     const migrationModules = [
         MigrateManifest.migrate,
-        // ResourceDownloader.migrate,
+        ResourceDownloader.migrate,
         RenameAPIS.migrate,
         InterestingnessScorer.migrate,
         WriteMigrated.migrate

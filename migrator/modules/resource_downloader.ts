@@ -8,6 +8,7 @@ import { globals } from "../index";
 import * as fs from "fs-extra";
 import * as path from "path";
 import * as crypto from "crypto";
+import { execSync } from "child_process";
 
 export interface RemoteResource {
     url: string;
@@ -77,12 +78,13 @@ export class ResourceDownloader extends MigrationModule {
             return extension;
         }
 
-        logger.info(extension, `Found ${remoteResources.length} remote resources to download`);
+        logger.info(extension, `Found ${remoteResources.length} remote resources to download: ${remoteResources.map(r => r.url).join(', ')}`);
 
         // Create a copy of the extension to avoid mutating the original
         const extensionCopy: Extension = {
             id: extension.id,
             name: extension.name,
+            mv3_extension_id: extension.mv3_extension_id,
             manifest_v2_path: extension.manifest_v2_path,
             manifest: { ...extension.manifest },
             files: [...extension.files] // Shallow copy of files array
@@ -226,9 +228,7 @@ export class ResourceDownloader extends MigrationModule {
             return {
                 success: false,
                 url: resource.url,
-                localPath: resource.localPath,
-                contentType: this.inferContentType(resource.url),
-                size: 0
+                error: "Extension mv3_extension_id is required"
             };
          }
         const outputPath = path.join(globals.outputDir, extension.mv3_extension_id, resource.localPath);
@@ -236,40 +236,65 @@ export class ResourceDownloader extends MigrationModule {
         // Ensure directory exists
         fs.ensureDirSync(path.dirname(outputPath));
 
-        // For now, we'll create a simple implementation that works synchronously
-        // In a production environment, you might want to use a library like 'node-fetch' or 'axios'
         try {
-            // Create a simple placeholder implementation
-            const placeholderContent = this.generatePlaceholderContent(resource.url);
-            fs.writeFileSync(outputPath, placeholderContent);
+            const downloadedData = this.downloadFileSync(resource.url);
 
-            logger.debug(extension, `Created placeholder for: ${resource.url} -> ${resource.localPath}`);
+            fs.writeFileSync(outputPath, downloadedData.content);
+
+            logger.debug(extension, `Downloaded: ${resource.url} -> ${resource.localPath}`);
 
             return {
                 success: true,
                 url: resource.url,
                 localPath: resource.localPath,
-                contentType: this.inferContentType(resource.url),
-                size: placeholderContent.length
+                contentType: downloadedData.contentType || this.inferContentType(resource.url),
+                size: downloadedData.content.length
             };
         } catch (error) {
-            throw new Error(`Failed to create resource placeholder: ${error instanceof Error ? error.message : String(error)}`);
+            logger.warn(extension, `Failed to download resource: ${resource.url}`, { error });
+            return {
+                success: false,
+                url: resource.url,
+                error: error instanceof Error ? error.message : String(error)
+            };
         }
     }
 
-    private generatePlaceholderContent(url: string): string {
-        const parsedUrl = new URL(url);
-        const fileExt = path.extname(parsedUrl.pathname).toLowerCase();
+    private downloadFileSync(url: string): { content: Buffer, contentType?: string } {
+        try {
+            // Use curl for synchronous download with timeout and size limits
+            const tempFile = path.join(require('os').tmpdir(), `download_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`);
 
-        switch (fileExt) {
-            case '.css':
-                return `/* Downloaded from: ${url} */\n/* TODO: Implement actual download and replace this placeholder */\n\n/* Original resource would be loaded here */`;
-            case '.js':
-                return `/* Downloaded from: ${url} */\n/* TODO: Implement actual download and replace this placeholder */\n\n// Original resource would be loaded here\nconsole.warn('Placeholder resource loaded from: ${url}');`;
-            case '.json':
-                return `{\n  "_comment": "Downloaded from: ${url}",\n  "_todo": "Implement actual download and replace this placeholder"\n}`;
-            default:
-                return `Downloaded from: ${url}\nTODO: Implement actual download and replace this placeholder`;
+            const curlCommand = [
+                'curl',
+                '-s', // Silent mode
+                '-L', // Follow redirects
+                '-f', // Fail on HTTP errors
+                `--max-time ${Math.ceil(ResourceDownloader.TIMEOUT_MS / 1000)}`, // Timeout in seconds
+                `--max-filesize ${ResourceDownloader.MAX_FILE_SIZE}`, // Max file size
+                '-H', `"User-Agent: ${ResourceDownloader.USER_AGENT}"`,
+                '-H', '"Accept: */*"',
+                '-o', tempFile, // Output to temp file
+                `"${url}"`
+            ].join(' ');
+
+            execSync(curlCommand, {
+                stdio: 'pipe',
+                timeout: ResourceDownloader.TIMEOUT_MS + 5000 // Extra 5s buffer
+            });
+
+            // Read the downloaded content
+            const content = fs.readFileSync(tempFile);
+
+            // Clean up temp file
+            fs.unlinkSync(tempFile);
+
+            // Try to determine content type from URL
+            const contentType = this.inferContentType(url);
+
+            return { content, contentType };
+        } catch (error) {
+            throw new Error(`Failed to download ${url}: ${error instanceof Error ? error.message : String(error)}`);
         }
     }
 
@@ -313,7 +338,7 @@ export class ResourceDownloader extends MigrationModule {
         }
 
         // Create a LazyFile for the downloaded resource and add it to the extension
-        const absolutePath = path.join(globals.outputDir, extension.name, localPath);
+        const absolutePath = path.join(globals.outputDir, extension.mv3_extension_id!, localPath);
         const downloadedFile = new LazyFile(localPath, absolutePath, fileType);
 
         extension.files.push(downloadedFile);
