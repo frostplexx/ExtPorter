@@ -222,7 +222,16 @@ export class ResourceDownloader extends MigrationModule {
     }
 
     private downloadResourceSync(extension: Extension, resource: RemoteResource): DownloadResult {
-        const outputPath = path.join(globals.outputDir, extension.id, resource.localPath);
+        if (!extension.mv3_extension_id){
+            return {
+                success: false,
+                url: resource.url,
+                localPath: resource.localPath,
+                contentType: this.inferContentType(resource.url),
+                size: 0
+            };
+         }
+        const outputPath = path.join(globals.outputDir, extension.mv3_extension_id, resource.localPath);
 
         // Ensure directory exists
         fs.ensureDirSync(path.dirname(outputPath));
