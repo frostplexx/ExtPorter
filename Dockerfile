@@ -1,5 +1,5 @@
 # Use Node.js with Chrome pre-installed for Puppeteer
-FROM ghcr.io/puppeteer/puppeteer:23.11.1
+FROM ghcr.io/puppeteer/puppeteer:24.22.3
 
 # Set working directory
 WORKDIR /app
