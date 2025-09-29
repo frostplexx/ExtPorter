@@ -383,5 +383,86 @@ describe('RenameAPIS', () => {
         result.files.forEach(file => file.close());
       }
     });
+
+    it('should correctly transform variable assignments (GitHub issue #11)', () => {
+      const extension = createTestExtension('variable-assignments', [{
+        name: 'issue11.js',
+        content: `
+          // Test case for GitHub issue #11: Variable assignments are incorrectly transformed
+          const action = chrome.browserAction;
+          const pageAction = chrome.pageAction;
+          let browserApi = chrome.browserAction;
+          var pageApi = chrome.pageAction;
+
+          // Also test with method calls to ensure they don't interfere
+          chrome.browserAction.onClicked.addListener(() => {});
+          chrome.pageAction.show(123);
+
+          // Multiple assignments in one statement
+          const a = chrome.browserAction, b = chrome.pageAction;
+
+          // Object property assignments
+          const config = {
+            browserAction: chrome.browserAction,
+            pageAction: chrome.pageAction,
+            handlers: {
+              onClicked: chrome.browserAction.onClicked
+            }
+          };
+
+          // Function return values
+          function getBrowserAction() {
+            return chrome.browserAction;
+          }
+
+          function getPageAction() {
+            return chrome.pageAction;
+          }
+        `
+      }]);
+
+      const result = RenameAPIS.migrate(extension);
+
+      expect(result).not.toBeInstanceOf(MigrationError);
+      if (!(result instanceof MigrationError)) {
+        const file = result.files.find(f => f.path === 'issue11.js');
+        expect(file).toBeDefined();
+
+        if (file) {
+          const content = file.getContent();
+
+          // Variable assignments should be correctly transformed
+          expect(content).toContain('const action = chrome.action;');
+          expect(content).toContain('const pageAction = chrome.action;');
+          expect(content).toContain('let browserApi = chrome.action;');
+          expect(content).toContain('var pageApi = chrome.action;');
+
+          // Multiple assignments should be correctly transformed
+          expect(content).toContain('const a = chrome.action, b = chrome.action;');
+
+          // Object properties should be correctly transformed
+          expect(content).toContain('browserAction: chrome.action,');
+          expect(content).toContain('pageAction: chrome.action,');
+          expect(content).toContain('onClicked: chrome.action.onClicked');
+
+          // Function returns should be correctly transformed
+          expect(content).toContain('return chrome.action;');
+
+          // Method calls should be correctly transformed
+          expect(content).toContain('chrome.action.onClicked.addListener');
+          expect(content).toContain('chrome.action.show(123);');
+
+          // Ensure no incorrect transformations occurred
+          expect(content).not.toContain('chrome.onClicked'); // Should not have this bug
+          expect(content).not.toContain('chrome.browserAction'); // Should all be transformed
+          expect(content).not.toContain('chrome.pageAction'); // Should all be transformed
+        }
+      }
+
+      extension.files.forEach(file => file.close());
+      if (!(result instanceof MigrationError)) {
+        result.files.forEach(file => file.close());
+      }
+    });
   });
 });
