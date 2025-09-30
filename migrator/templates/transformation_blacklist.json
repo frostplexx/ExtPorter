@@ -112,6 +112,51 @@
       "case_sensitive": false
     },
     {
+      "pattern": "webpack.*\\.js$",
+      "reason": "Webpack runtime files should not be transformed",
+      "case_sensitive": false
+    },
+    {
+      "pattern": ".*webpack.*\\.js$",
+      "reason": "Webpack-related files should not be transformed",
+      "case_sensitive": false
+    },
+    {
+      "pattern": "chunk.*\\.js$",
+      "reason": "Webpack chunk files should not be transformed",
+      "case_sensitive": false
+    },
+    {
+      "pattern": ".*\\.chunk\\.js$",
+      "reason": "Webpack chunk files should not be transformed",
+      "case_sensitive": false
+    },
+    {
+      "pattern": "runtime.*\\.js$",
+      "reason": "Webpack runtime files should not be transformed",
+      "case_sensitive": false
+    },
+    {
+      "pattern": ".*\\.runtime\\.js$",
+      "reason": "Webpack runtime files should not be transformed",
+      "case_sensitive": false
+    },
+    {
+      "pattern": "vendor.*\\.js$",
+      "reason": "Vendor bundle files should not be transformed",
+      "case_sensitive": false
+    },
+    {
+      "pattern": "app\\.[a-f0-9]+\\.js$",
+      "reason": "Webpack hashed bundle files should not be transformed",
+      "case_sensitive": false
+    },
+    {
+      "pattern": "main\\.[a-f0-9]+\\.js$",
+      "reason": "Webpack hashed main files should not be transformed",
+      "case_sensitive": false
+    },
+    {
       "pattern": "worker.*\\.js$",
       "reason": "Web worker files may contain sensitive timing code",
       "case_sensitive": false

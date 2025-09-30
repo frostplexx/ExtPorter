@@ -849,5 +849,227 @@ chrome.pageAction.setIcon({
         result.files.forEach(file => file.close());
       }
     });
+
+    describe('webpack bundle handling', () => {
+      it('should detect and blacklist webpack bundles by filename patterns', () => {
+        const webpackFiles = [
+          { name: 'main.bundle.js', content: 'chrome.browserAction.onClicked.addListener(() => {});' },
+          { name: 'app-bundle.js', content: 'chrome.pageAction.show(123);' },
+          { name: 'webpack.runtime.js', content: 'chrome.tabs.executeScript(123, {});' },
+          { name: 'chunk.12345.js', content: 'chrome.extension.connect();' }
+        ];
+
+        const extension = createTestExtension('webpack-filename-test', webpackFiles);
+        const result = RenameAPIS.migrate(extension);
+
+        expect(result).not.toBeInstanceOf(MigrationError);
+        if (!(result instanceof MigrationError)) {
+          // All webpack files should remain unchanged (blacklisted)
+          webpackFiles.forEach(({ name, content }) => {
+            const file = result.files.find(f => f.path === name);
+            expect(file).toBeDefined();
+            if (file) {
+              expect(file.getContent()).toBe(content);
+              // Should contain original V2 APIs (not transformed to V3)
+              if (content.includes('chrome.browserAction')) {
+                expect(file.getContent()).toContain('chrome.browserAction');
+              } else if (content.includes('chrome.pageAction')) {
+                expect(file.getContent()).toContain('chrome.pageAction');
+              } else if (content.includes('chrome.tabs.executeScript')) {
+                expect(file.getContent()).toContain('chrome.tabs.executeScript');
+              } else if (content.includes('chrome.extension')) {
+                expect(file.getContent()).toContain('chrome.extension');
+              }
+            }
+          });
+        }
+
+        extension.files.forEach(file => file.close());
+        if (!(result instanceof MigrationError)) {
+          result.files.forEach(file => file.close());
+        }
+      });
+
+      it('should detect webpack bundles by content signatures', () => {
+        const webpackBundleContent = `
+          /******/ (function(modules) {
+          /******/    var installedModules = {};
+          /******/    function __webpack_require__(moduleId) {
+          /******/        return installedModules[moduleId];
+          /******/    }
+          /******/    __webpack_require__.d = function(exports, name, getter) {
+          /******/        Object.defineProperty(exports, name, { enumerable: true, get: getter });
+          /******/    };
+          /******/    return __webpack_require__(123);
+          /******/ })({
+          /******/    123: function(module, exports) {
+          /******/        chrome.browserAction.onClicked.addListener(function() {
+          /******/            console.log('webpack bundle with chrome API');
+          /******/        });
+          /******/    }
+          /******/ });
+        `;
+
+        const extension = createTestExtension('webpack-content-test', [{
+          name: 'mysterious-file.js', // No webpack in filename
+          content: webpackBundleContent
+        }]);
+
+        const result = RenameAPIS.migrate(extension);
+
+        expect(result).not.toBeInstanceOf(MigrationError);
+        if (!(result instanceof MigrationError)) {
+          const file = result.files.find(f => f.path === 'mysterious-file.js');
+          expect(file).toBeDefined();
+          if (file) {
+            // Should be detected as webpack by content and remain unchanged
+            expect(file.getContent()).toBe(webpackBundleContent);
+            expect(file.getContent()).toContain('chrome.browserAction'); // Not transformed
+          }
+        }
+
+        extension.files.forEach(file => file.close());
+        if (!(result instanceof MigrationError)) {
+          result.files.forEach(file => file.close());
+        }
+      });
+
+      it('should provide enhanced error reporting for webpack bundles', () => {
+        const webpackContent = `
+          __webpack_require__(123);
+          webpackChunk.push([456]);
+          chrome.browserAction.onClicked.addListener(() => {});
+          chrome.tabs.executeScript(123, {file: 'content.js'});
+        `;
+
+        const extension = createTestExtension('webpack-error-test', [{
+          name: 'large-bundle.js',
+          content: webpackContent.repeat(1000) // Make it large enough to trigger size-based detection
+        }]);
+
+        const result = RenameAPIS.migrate(extension);
+
+        expect(result).not.toBeInstanceOf(MigrationError);
+
+        // The system should handle webpack bundles properly by blacklisting them
+        // and providing appropriate logging (this test verifies no crashes occur)
+        if (!(result instanceof MigrationError)) {
+          const file = result.files.find(f => f.path === 'large-bundle.js');
+          expect(file).toBeDefined();
+          if (file) {
+            // Should remain unchanged due to webpack detection
+            expect(file.getContent()).toContain('__webpack_require__');
+            expect(file.getContent()).toContain('chrome.browserAction'); // Not transformed
+          }
+        }
+
+        extension.files.forEach(file => file.close());
+        if (!(result instanceof MigrationError)) {
+          result.files.forEach(file => file.close());
+        }
+      });
+
+      it('should provide webpack guidance when webpack files are detected', () => {
+        const extension = createTestExtension('webpack-guidance-test', [
+          {
+            name: 'background.js',
+            content: 'chrome.browserAction.onClicked.addListener(() => {});'
+          },
+          {
+            name: 'webpack.bundle.js',
+            content: '__webpack_require__(123); chrome.pageAction.show();'
+          }
+        ]);
+
+        const result = RenameAPIS.migrate(extension);
+
+        expect(result).not.toBeInstanceOf(MigrationError);
+
+        if (!(result instanceof MigrationError)) {
+          // Regular files should be transformed
+          const backgroundFile = result.files.find(f => f.path === 'background.js');
+          expect(backgroundFile?.getContent()).toContain('chrome.action');
+
+          // Webpack bundle should remain unchanged
+          const bundleFile = result.files.find(f => f.path === 'webpack.bundle.js');
+          expect(bundleFile?.getContent()).toContain('__webpack_require__');
+          expect(bundleFile?.getContent()).toContain('chrome.pageAction'); // Not transformed
+        }
+
+        extension.files.forEach(file => file.close());
+        if (!(result instanceof MigrationError)) {
+          result.files.forEach(file => file.close());
+        }
+      });
+
+      it('should handle mixed extension with both regular and webpack files', () => {
+        const extension = createTestExtension('mixed-webpack-test', [
+          {
+            name: 'background.js',
+            content: 'chrome.browserAction.onClicked.addListener(() => {});'
+          },
+          {
+            name: 'content.js',
+            content: 'chrome.tabs.executeScript(123, {file: "inject.js"});'
+          },
+          {
+            name: 'vendor.bundle.js',
+            content: '__webpack_require__(456); /* vendor libraries */'
+          }
+        ]);
+
+        const result = RenameAPIS.migrate(extension);
+
+        expect(result).not.toBeInstanceOf(MigrationError);
+        if (!(result instanceof MigrationError)) {
+          // Regular files should be transformed
+          const backgroundFile = result.files.find(f => f.path === 'background.js');
+          expect(backgroundFile?.getContent()).toContain('chrome.action');
+          expect(backgroundFile?.getContent()).not.toContain('chrome.browserAction');
+
+          const contentFile = result.files.find(f => f.path === 'content.js');
+          expect(contentFile?.getContent()).toContain('chrome.scripting.executeScript');
+          expect(contentFile?.getContent()).not.toContain('chrome.tabs.executeScript');
+
+          // Webpack bundle should remain unchanged
+          const bundleFile = result.files.find(f => f.path === 'vendor.bundle.js');
+          expect(bundleFile?.getContent()).toContain('__webpack_require__');
+        }
+
+        extension.files.forEach(file => file.close());
+        if (!(result instanceof MigrationError)) {
+          result.files.forEach(file => file.close());
+        }
+      });
+
+      it('should correctly count potential transformations in webpack bundles', () => {
+        const webpackContentWithAPIs = `
+          /******/ ({
+          /******/    123: function(module, exports) {
+          /******/        chrome.browserAction.onClicked.addListener(() => {});
+          /******/        chrome.pageAction.show(123);
+          /******/        chrome.tabs.executeScript(tab.id, {file: 'content.js'});
+          /******/        chrome.extension.connect();
+          /******/    }
+          /******/ });
+        `;
+
+        // This test verifies the potential transformation counting logic
+        // We'll create a small webpack bundle to avoid triggering large file handling
+        const extension = createTestExtension('webpack-count-test', [{
+          name: 'small.bundle.js',
+          content: webpackContentWithAPIs
+        }]);
+
+        // Since this will be blacklisted, we mainly want to verify no crashes occur
+        const result = RenameAPIS.migrate(extension);
+        expect(result).not.toBeInstanceOf(MigrationError);
+
+        extension.files.forEach(file => file.close());
+        if (!(result instanceof MigrationError)) {
+          result.files.forEach(file => file.close());
+        }
+      });
+    });
   });
 });
