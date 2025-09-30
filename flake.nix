@@ -24,18 +24,10 @@
             # Python
             python312
             uv
-            # LaTeX - minimal setup for vimtex
-            texlive.combined.scheme-full
-            # (texlive.combine {
-            #   inherit (texlive) scheme-medium libertine inconsolata;
-            # })
-            biber
-            skim
             # Node.js
             nodejs_24
             yarn
             # Development tools
-            just
             fish
             fx
             jq 
@@ -49,6 +41,10 @@
 
           shellHook = ''
             export IN_NIX_SHELL=1
+            export NODE_OPTIONS="--max-old-space-size=8192 --max-semi-space-size=512 --expose-gc"
+            # Alternative heap size options (comment out above and uncomment one below to use):
+            # NODE_OPTIONS=--max-old-space-size=4096 --expose-gc     # 4GB heap
+            # NODE_OPTIONS=--max-old-space-size=16384 --expose-gc    # 16GB heap
           '';
         };
       });
