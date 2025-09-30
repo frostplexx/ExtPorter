@@ -175,8 +175,8 @@ async function main() {
     for (let batchStart = 0; batchStart < totalExtensions; batchStart += BATCH_SIZE) {
         const batchEnd = Math.min(batchStart + BATCH_SIZE, totalExtensions);
 
-        logger.info(null, `Processing batch ${Math.floor(batchStart/BATCH_SIZE) + 1}/${Math.ceil(totalExtensions/BATCH_SIZE)}: extensions ${batchStart + 1}-${batchEnd}`);
-        logMemoryUsage(`batch ${Math.floor(batchStart/BATCH_SIZE) + 1} start`);
+        logger.info(null, `Processing batch ${Math.floor(batchStart / BATCH_SIZE) + 1}/${Math.ceil(totalExtensions / BATCH_SIZE)}: extensions ${batchStart + 1}-${batchEnd}`);
+        logMemoryUsage(`batch ${Math.floor(batchStart / BATCH_SIZE) + 1} start`);
 
         // Process each extension in the current batch
         for (let i = batchStart; i < batchEnd; i++) {
@@ -189,65 +189,65 @@ async function main() {
             }
 
             let migrationSuccessful = true;
-        // Run through migration pipeline (excluding WriteMigrated for now)
-        const migrationOnly = migrationModules.slice(0, -1); // All except WriteMigrated
-        for (const migrateFunction of migrationOnly) {
-            // logger.info(extension, `Applying migration function: ${migrateFunction.name}`);
-            const migrated = migrateFunction(extension); // call migrate function of each module. 
-            if (migrated && !(migrated instanceof MigrationError)) {
-                // if not null assign migrated extension to current one
-                extension = migrated;
-            } else {
-                migrationSuccessful = false;
-                break;
-            }
-        }
-
-        // Write the migrated extension to disk
-        if (migrationSuccessful) {
-            logger.info(extension, `Writing migrated extension: ${extension.name}`);
-
-            // Instead of using async queue, write synchronously to avoid memory clearing issues
-            try {
-                // Set the manifest_path for the MV3 extension
-                const useNewTabSubfolder = process.env.NEW_TAB_SUBFOLDER === 'true';
-                const isNewTab = extension.isNewTabExtension || false;
-                const extensionId = extension.mv3_extension_id || extension.id;
-
-                let outputPath: string;
-                if (useNewTabSubfolder && isNewTab) {
-                    outputPath = path.join(globals.outputDir, 'new_tab_extensions', extensionId);
+            // Run through migration pipeline (excluding WriteMigrated for now)
+            const migrationOnly = migrationModules.slice(0, -1); // All except WriteMigrated
+            for (const migrateFunction of migrationOnly) {
+                // logger.info(extension, `Applying migration function: ${migrateFunction.name}`);
+                const migrated = migrateFunction(extension); // call migrate function of each module. 
+                if (migrated && !(migrated instanceof MigrationError)) {
+                    // if not null assign migrated extension to current one
+                    extension = migrated;
                 } else {
-                    outputPath = path.join(globals.outputDir, extensionId);
+                    migrationSuccessful = false;
+                    break;
                 }
+            }
 
-                // Write extension synchronously to ensure it completes before memory cleanup
-                await MigrationWriter.shared.writeExtensionSync(extension, outputPath);
+            // Write the migrated extension to disk
+            if (migrationSuccessful) {
+                logger.info(extension, `Writing migrated extension: ${extension.name}`);
 
-                // Insert migrated extension to database immediately after successful migration
+                // Instead of using async queue, write synchronously to avoid memory clearing issues
                 try {
-                    // Create a lightweight copy for database insertion
-                    const dbExtension: Extension = {
-                        ...extension,
-                        manifest_v3_path: path.join(outputPath, 'manifest.json'), // Set the MV3 manifest path
-                        files: [] // Remove files to reduce database size - the important data is in manifest and mv3_extension_id
-                    };
+                    // Set the manifest_path for the MV3 extension
+                    const useNewTabSubfolder = process.env.NEW_TAB_SUBFOLDER === 'true';
+                    const isNewTab = extension.isNewTabExtension || false;
+                    const extensionId = extension.mv3_extension_id || extension.id;
 
-                    await Database.shared.insertMigratedExtension(dbExtension);
-                    logger.info(extension, `Successfully inserted migrated extension to database`);
-                    writeIndex++;
-                } catch (dbError) {
-                    logger.error(extension, `Failed to insert migrated extension to database`, {
-                        error: dbError instanceof Error ? dbError.message : String(dbError)
+                    let outputPath: string;
+                    if (useNewTabSubfolder && isNewTab) {
+                        outputPath = path.join(globals.outputDir, 'new_tab_extensions', extensionId);
+                    } else {
+                        outputPath = path.join(globals.outputDir, extensionId);
+                    }
+
+                    // Write extension synchronously to ensure it completes before memory cleanup
+                    await MigrationWriter.shared.writeExtensionSync(extension, outputPath);
+
+                    // Insert migrated extension to database immediately after successful migration
+                    try {
+                        // Create a lightweight copy for database insertion
+                        const dbExtension: Extension = {
+                            ...extension,
+                            manifest_v3_path: path.join(outputPath, 'manifest.json'), // Set the MV3 manifest path
+                            files: [] // Remove files to reduce database size - the important data is in manifest and mv3_extension_id
+                        };
+
+                        await Database.shared.insertMigratedExtension(dbExtension);
+                        logger.info(extension, `Successfully inserted migrated extension to database`);
+                        writeIndex++;
+                    } catch (dbError) {
+                        logger.error(extension, `Failed to insert migrated extension to database`, {
+                            error: dbError instanceof Error ? dbError.message : String(dbError)
+                        });
+                    }
+                } catch (writeError) {
+                    migrationSuccessful = false;
+                    logger.error(extension, `Failed to write migrated extension: ${extension.name}`, {
+                        error: writeError instanceof Error ? writeError.message : String(writeError)
                     });
                 }
-            } catch (writeError) {
-                migrationSuccessful = false;
-                logger.error(extension, `Failed to write migrated extension: ${extension.name}`, {
-                    error: writeError instanceof Error ? writeError.message : String(writeError)
-                });
             }
-        }
 
 
             // CRITICAL: Clear extension from memory after processing
@@ -263,7 +263,7 @@ async function main() {
         }
 
         // Clean up memory after each batch
-        logMemoryUsage(`batch ${Math.floor(batchStart/BATCH_SIZE) + 1} end`);
+        logMemoryUsage(`batch ${Math.floor(batchStart / BATCH_SIZE) + 1} end`);
         forceGarbageCollection();
 
         // Check memory health after cleanup
@@ -276,7 +276,7 @@ async function main() {
         // Flush the migration writer queue after each batch to prevent memory buildup
         await MigrationWriter.shared.flush();
 
-        logger.info(null, `Completed batch ${Math.floor(batchStart/BATCH_SIZE) + 1}/${Math.ceil(totalExtensions/BATCH_SIZE)}`);
+        logger.info(null, `Completed batch ${Math.floor(batchStart / BATCH_SIZE) + 1}/${Math.ceil(totalExtensions / BATCH_SIZE)}`);
     }
 
     logger.info(null, `Successfully migrated ${writeIndex} extensions`);
