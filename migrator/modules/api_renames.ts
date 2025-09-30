@@ -143,7 +143,51 @@ export class RenameAPIS implements MigrationModule {
 
         const ast = file.getAST();
         if (!ast) {
-            logger.error(null, "No AST available", { "path": file.path });
+            // Enhanced error reporting for AST parsing failures
+            const fileSize = file.getSize();
+            const fileSizeKB = Math.round(fileSize / 1024);
+
+            // Check if this could be a large file issue
+            const isLargeFile = fileSize > 100000; // >100KB
+
+            // Count potential API transformations that would have been applied
+            const content = file.getContent();
+            const potentialTransformations = RenameAPIS.countPotentialTransformations(content, mappings);
+
+            if (isLargeFile && potentialTransformations > 0) {
+                // This is a critical issue - large file with APIs that need transformation
+                logger.error(null, "AST parsing failed for large file with API transformations needed", {
+                    path: file.path,
+                    fileSizeKB: fileSizeKB,
+                    potentialTransformations: potentialTransformations,
+                    issue: "Large files (>100KB) cannot be parsed for API transformations"
+                });
+
+                // Log user-visible warning
+                console.warn(`⚠️  WARNING: API transformations skipped for ${file.path}`);
+                console.warn(`   File size: ${fileSizeKB}KB (>100KB limit for AST parsing)`);
+                console.warn(`   ${potentialTransformations} potential API transformations were not applied`);
+                console.warn(`   This may cause runtime errors in Manifest V3`);
+            } else if (potentialTransformations > 0) {
+                // Smaller file that failed to parse
+                logger.error(null, "AST parsing failed for file with API transformations needed", {
+                    path: file.path,
+                    fileSizeKB: fileSizeKB,
+                    potentialTransformations: potentialTransformations,
+                    issue: "JavaScript syntax error or unsupported language features"
+                });
+
+                console.warn(`⚠️  WARNING: API transformations skipped for ${file.path}`);
+                console.warn(`   File could not be parsed (${fileSizeKB}KB)`);
+                console.warn(`   ${potentialTransformations} potential API transformations were not applied`);
+            } else {
+                // File failed to parse but no APIs detected
+                logger.debug(null, "AST parsing failed but no API transformations needed", {
+                    path: file.path,
+                    fileSizeKB: fileSizeKB
+                });
+            }
+
             onTransformed(false);
             return file;
         }
@@ -622,6 +666,40 @@ export class RenameAPIS implements MigrationModule {
                 duration
             });
         }
+    }
+
+    /**
+     * Counts potential API transformations in file content using regex patterns.
+     * Used to detect how many transformations would have been applied if AST parsing succeeded.
+     *
+     * @param content File content to analyze
+     * @param mappings API transformation mappings
+     * @returns Number of potential transformations
+     */
+    private static countPotentialTransformations(content: string, mappings: TwinningMapping): number {
+        let count = 0;
+
+        for (const mapping of mappings.mappings) {
+            // Extract API pattern from source mapping (remove return/semicolon)
+            const sourcePattern = mapping.source.body.replace(/^return\s+/, '').replace(/;$/, '');
+
+            // Create regex pattern to match API usage
+            // Handle both function calls and property access
+            const apiBase = sourcePattern.replace(/\([^)]*\)$/, ''); // Remove function call parens
+            const escapedApi = apiBase.replace(/\./g, '\\.'); // Escape dots for regex
+
+            // Match both property access and function calls
+            const functionCallPattern = new RegExp(`\\b${escapedApi}\\s*\\(`, 'g');
+            const propertyAccessPattern = new RegExp(`\\b${escapedApi}(?!\\w)`, 'g');
+
+            const functionMatches = content.match(functionCallPattern) || [];
+            const propertyMatches = content.match(propertyAccessPattern) || [];
+
+            // Avoid double counting - if we have function calls, don't count property access
+            count += functionMatches.length > 0 ? functionMatches.length : propertyMatches.length;
+        }
+
+        return count;
     }
 
     /**
