@@ -4,6 +4,8 @@ import { find_extensions } from '../migrator/utils/find_extensions';
 import { Extension } from '../migrator/types/extension';
 import { ChromeTester } from '../ext_tester/chrome_tester';
 import { exit } from 'process';
+import * as fs from 'fs';
+import * as path from 'path';
 
 async function main() {
 
@@ -17,68 +19,106 @@ async function main() {
 
     const args = process.argv.slice(2);
 
-    const ext_id = args[0];
+    const extensionId = args[0];
 
-    if(!ext_id) {
-        console.log("Usage: yarn srcipts:comapre <extension id of migrated extension>")
+    if(!extensionId) {
+        console.log("Usage: yarn scripts:compare <extension id (MV2 or MV3)>");
+        console.log("Example: yarn scripts:compare abcdef123456");
         exit(1);
     }
-    const migrated_ext_path = `${process.env.OUTPUT_DIR}/${ext_id}`;
 
-    const migrated_parsed_ext = find_extensions(migrated_ext_path, true)[0]
+    console.log(`Looking for extension with ID: ${extensionId}`);
+
+    // Try to find the extension in the database - first by MV2 ID, then by MV3 ID
+    let dbExtension = await Database.shared.findExtension({ "id": extensionId });
+
+    // If not found by MV2 ID, try MV3 ID
+    if (!dbExtension) {
+        dbExtension = await Database.shared.findExtension({ "mv3_extension_id": extensionId });
+    }
+
+    if (!dbExtension) {
+        console.log(`Extension with ID ${extensionId} not found in database`);
+        exit(1);
+    }
+
+    // Convert database document back to Extension
+    const mv2_extension: Extension = {
+        id: dbExtension.id,
+        name: dbExtension.name,
+        manifest_v2_path: dbExtension.manifest_v2_path,
+        manifest: dbExtension.manifest,
+        files: dbExtension.files || [],
+        isNewTabExtension: dbExtension.isNewTabExtension,
+        mv3_extension_id: dbExtension.mv3_extension_id,
+        manifest_v3_path: dbExtension.manifest_v3_path
+    };
+
+    console.log(`Found extension: ${mv2_extension.name} (MV2: ${mv2_extension.id}, MV3: ${mv2_extension.mv3_extension_id})`);
+
+    // Determine MV3 extension path from database or fallback
+    let mv3ExtensionPath: string | null = null;
+
+    if (mv2_extension.manifest_v3_path) {
+        const mv3Path = path.dirname(mv2_extension.manifest_v3_path);
+        if (fs.existsSync(mv3Path)) {
+            mv3ExtensionPath = mv3Path;
+            console.log(`Found MV3 extension at: ${mv3Path}`);
+        } else {
+            console.log(`MV3 extension directory not found at: ${mv3Path}`);
+        }
+    }
+
+    // Fallback to OUTPUT_DIR construction if manifest_v3_path not available or doesn't exist
+    if (!mv3ExtensionPath && mv2_extension.mv3_extension_id) {
+        const fallbackPath = `${process.env.OUTPUT_DIR}/${mv2_extension.mv3_extension_id}`;
+        if (fs.existsSync(fallbackPath)) {
+            mv3ExtensionPath = fallbackPath;
+            console.log(`Found MV3 extension at: ${fallbackPath} (fallback)`);
+        } else {
+            console.log(`MV3 extension directory not found at: ${fallbackPath}`);
+        }
+    }
+
+    if (!mv3ExtensionPath) {
+        console.log("No MV3 extension directory found");
+        exit(1);
+    }
+
+    // Parse the MV3 extension from the discovered path
+    const migrated_parsed_ext = find_extensions(mv3ExtensionPath, true)[0];
 
     if (!migrated_parsed_ext) {
-        console.log(`Could not find migrated extension in ${migrated_ext_path}`);
-        return
+        console.log(`Could not parse migrated extension in ${mv3ExtensionPath}`);
+        exit(1);
     }
-    const parts = migrated_parsed_ext.manifest_v2_path.split("/")
-    console.log(`Loading MV2 extension "${migrated_parsed_ext.name}" (${parts[parts.length - 1]})`);
 
+    console.log(`Loaded MV3 extension: ${migrated_parsed_ext.name}`);
 
-    const test = await Database.shared.findExtension({
-        "mv3_extension_id": ext_id
-    })
+    console.log("MV3 browser will be red");
+    console.log("MV2 browser will be blue");
 
-    if (test) {
-        // Convert database document back to Extension
-        const mv2_extension: Extension = {
-            id: test.id,
-            name: test.name,
-            manifest_v2_path: test.manifest_v2_path,
-            manifest: test.manifest,
-            files: test.files || [],
-            isNewTabExtension: test.isNewTabExtension,
-            mv3_extension_id: test.mv3_extension_id
-        };
+    // Launch both browsers simultaneously by creating separate instances
+    const mv3Tester = new ChromeTester();
+    const mv2Tester = new ChromeTester();
 
-        console.log(`Found MV2 extension: ${mv2_extension.name}`);
+    // Launch both in parallel
+    await Promise.all([
+        (async () => {
+            console.log("Starting MV3 browser (red)...");
+            await mv3Tester.initBrowser(migrated_parsed_ext, 3, true);
+            await mv3Tester.injectColor("red");
+            await mv3Tester.navigateTo("https://www.nytimes.com/");
+        })(),
+        (async () => {
+            console.log("Starting MV2 browser (blue)...");
+            await mv2Tester.initBrowser(mv2_extension, 3, true);
+            await mv2Tester.injectColor("blue");
+            await mv2Tester.navigateTo("https://www.nytimes.com/");
+        })()
+    ]);
 
-
-        console.log("MV3 browser will be red")
-        console.log("MV2 browser will be blue")
-
-        // Launch both browsers simultaneously by creating separate instances
-        
-        const mv3Tester = new ChromeTester();
-        const mv2Tester = new ChromeTester();
-        
-        // Launch both in parallel
-        await Promise.all([
-            (async () => {
-                console.log("Starting MV3 browser (red)...");
-                await mv3Tester.initBrowser(migrated_parsed_ext, 3, true);
-                await mv3Tester.injectColor("red");
-                await mv3Tester.navigateTo("https://www.nytimes.com/");
-            })(),
-            (async () => {
-                console.log("Starting MV2 browser (blue)...");
-                await mv2Tester.initBrowser(mv2_extension, 3, true);
-                await mv2Tester.injectColor("blue");
-                await mv2Tester.navigateTo("https://www.nytimes.com/");
-            })()
-        ]);
-
-    }
+    await Database.shared.close();
 
 }
 
