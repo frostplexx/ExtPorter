@@ -25,14 +25,14 @@ export class MigrationWriter {
         });
         
         process.on('SIGINT', async () => {
-            logger.info(null, "Received SIGINT, flushing queues");
+            console.log("Received SIGINT, flushing queues");
             await this.flush();
             await logger.flush();
             process.exit(0);
         });
-        
+
         process.on('SIGTERM', async () => {
-            logger.info(null, "Received SIGTERM, flushing queues");
+            console.log("Received SIGTERM, flushing queues");
             await this.flush();
             await logger.flush();
             process.exit(0);

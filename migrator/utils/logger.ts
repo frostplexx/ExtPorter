@@ -163,6 +163,14 @@ let batchTimer: NodeJS.Timeout | null = null;
 async function flushLogBatch() {
     if (logBatch.length === 0) return;
 
+    // Check if database is shutting down
+    if ((Database.shared as any).isShuttingDown) {
+        console.error(`[SHUTDOWN VIOLATION] Logger attempted to flush ${logBatch.length} logs after database shutdown`);
+        console.error(`[SHUTDOWN VIOLATION] Stack trace:`, new Error().stack);
+        logBatch = []; // Clear the batch to prevent retries
+        return;
+    }
+
     const logsToFlush = [...logBatch];
     logBatch = [];
 
@@ -212,6 +220,13 @@ async function flushLogBatch() {
  */
 function addLogToBatch(level: LogLevel, extension: Extension | null = null, message: string, meta?: any) {
     if (shouldLog(level)) {
+        // Check if database is shutting down
+        if ((Database.shared as any).isShuttingDown) {
+            console.error(`[SHUTDOWN VIOLATION] Logger attempted to add log after database shutdown: "${message.substring(0, 100)}..."`);
+            console.error(`[SHUTDOWN VIOLATION] Stack trace:`, new Error().stack);
+            return;
+        }
+
         const logEntry = formatLog(extension, message, level, meta);
         logBatch.push(logEntry);
 
