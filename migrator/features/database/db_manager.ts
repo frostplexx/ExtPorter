@@ -15,10 +15,10 @@ export enum Collections {
 export class Database {
     client: MongoClient | null = null;
     database: Db | null = null;
+    private isShuttingDown: boolean = false;
     public static shared = new Database()
 
     private constructor() { }
-
 
     async init() {
         if (!process.env.MONGODB_URI) { throw Error("Could not find MONGODB_URI in environment") }
@@ -37,6 +37,11 @@ export class Database {
 
 
     private async upsertOne(collectionName: Collections, document: any, uniqueField: string = 'id') {
+        if (this.isShuttingDown) {
+            console.error(`[SHUTDOWN VIOLATION] Attempted upsertOne to ${collectionName} after shutdown`);
+            console.error(`[SHUTDOWN VIOLATION] Stack trace:`, new Error().stack);
+            return;
+        }
         if (!this.database) throw new Error("Database not initialized");
         const filter = { [uniqueField]: document[uniqueField] };
         return await this.database.collection(collectionName).replaceOne(filter, document, { upsert: true });
@@ -113,6 +118,11 @@ export class Database {
     }
 
     private async upsertMany(collectionName: Collections, documents: any[], uniqueField: string = 'id') {
+        if (this.isShuttingDown) {
+            console.error(`[SHUTDOWN VIOLATION] Attempted upsertMany to ${collectionName} (${documents.length} docs) after shutdown`);
+            console.error(`[SHUTDOWN VIOLATION] Stack trace:`, new Error().stack);
+            return;
+        }
         if (!this.database) throw new Error("Database not initialized");
         if (documents.length === 0) return;
 
@@ -158,7 +168,14 @@ export class Database {
 
     async close() {
         if (this.client) {
-            await this.client.close();
+            logger.debug(null, "Initiating graceful database shutdown...");
+            this.isShuttingDown = true;
+
+            // Give a moment for any queued operations to see the shutdown flag
+            await new Promise(resolve => setTimeout(resolve, 100));
+
+            logger.debug(null, "Closing database connection...");
+            await this.client.close(false);
             logger.debug(null, "Database connection closed");
             this.client = null;
             this.database = null;
@@ -173,7 +190,9 @@ export class Database {
         logger.debug(null, `Attempting to upsert migrated extension: ${extension.name} (ID: ${extension.id}, MV3_ID: ${extension.mv3_extension_id})`);
         const sanitizedExtension = this.sanitizeDocumentSize(extension);
         const result = await this.upsertOne(Collections.EXTENSIONS, sanitizedExtension);
-        logger.debug(null, `Successfully upserted extension ${extension.name} to database with result:`, result.upsertedId || result.modifiedCount);
+        if (result) {
+            logger.debug(null, `Successfully upserted extension ${extension.name} to database with result:`, result.upsertedId || result.modifiedCount);
+        }
         return result;
     }
 
@@ -192,6 +211,11 @@ export class Database {
         "meta": any,
         "time": number,
     }) {
+        if (this.isShuttingDown) {
+            console.error(`[SHUTDOWN VIOLATION] Attempted insertLog after shutdown: "${log.message.substring(0, 100)}..."`);
+            console.error(`[SHUTDOWN VIOLATION] Stack trace:`, new Error().stack);
+            return;
+        }
         return this.upsertOne(Collections.LOGS, log, 'time')
     }
 
@@ -201,6 +225,11 @@ export class Database {
         "meta": any,
         "time": number,
     }[]) {
+        if (this.isShuttingDown) {
+            console.error(`[SHUTDOWN VIOLATION] Attempted insertManyLogs after shutdown (${logs.length} logs)`);
+            console.error(`[SHUTDOWN VIOLATION] Stack trace:`, new Error().stack);
+            return;
+        }
         if (logs.length === 0) return;
         return this.upsertMany(Collections.LOGS, logs, 'time')
     }

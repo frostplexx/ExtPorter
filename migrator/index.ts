@@ -319,16 +319,16 @@ async function teardown() {
 
 // Handle uncaught exceptions to prevent crashes
 process.on('uncaughtException', (error) => {
-    logger.error(null, 'Uncaught Exception:', error);
+    console.error('[UNCAUGHT EXCEPTION]', error);
     // Don't exit - continue processing
 });
 
 process.on('unhandledRejection', (reason, promise) => {
-    logger.error(null, 'Unhandled Rejection at:', { promise, reason });
+    console.error('[UNHANDLED REJECTION]', { promise, reason });
     // Don't exit - continue processing
 });
 
 main().catch(error => {
-    logger.error(null, 'Main function failed:', error);
+    console.error('[MAIN FAILED]', error);
     process.exit(1);
 });
