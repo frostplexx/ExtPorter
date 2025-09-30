@@ -195,7 +195,7 @@ export class RenameAPIS implements MigrationModule {
             // try each mapping until one matches (first-match wins)
             for (const mapping of mappings.mappings) {
                 if (RenameAPIS.nodeMatchesSourcePattern(node, mapping.source)) {
-                    RenameAPIS.applyTargetTransformation(node, mapping.target);
+                    RenameAPIS.applyTargetTransformation(node, mapping.target, mapping.source);
                     transformationCount++;
                     break; // Only apply first matching transformation per node
                 }
@@ -276,23 +276,200 @@ export class RenameAPIS implements MigrationModule {
 
     /**
      * Applies a target transformation to an AST node.
-     * 
+     *
      * Modifies the node in-place to change the API path according to
      * the target pattern (e.g., chrome.extension -> chrome.runtime).
-     * 
+     * Also handles parameter restructuring for APIs that require it.
+     *
      * @param node AST node to transform
      * @param target Target pattern from mapping
+     * @param source Source pattern from mapping (needed for parameter transformation)
      */
-    private static applyTargetTransformation(node: any, target: any): void {
+    private static applyTargetTransformation(node: any, target: any, source?: any): void {
         const targetPattern = target.body.replace(/^return\s+/, '').replace(/;$/, '');
 
         if (node.type === 'CallExpression' && node.callee?.type === 'MemberExpression') {
             // Transform function call member expression
             RenameAPIS.updateMemberExpressionPath(node.callee, targetPattern);
+
+            // Handle parameter transformation if needed
+            if (source && RenameAPIS.isParameterTransformationRequired(source, target)) {
+                RenameAPIS.transformParameters(node, source, target);
+            }
         } else if (node.type === 'MemberExpression') {
             // Transform property access member expression
             RenameAPIS.updateMemberExpressionPath(node, targetPattern);
         }
+    }
+
+    /**
+     * Checks if parameter transformation is required based on source and target mappings.
+     *
+     * @param source Source mapping definition
+     * @param target Target mapping definition
+     * @returns True if parameters need to be restructured
+     */
+    private static isParameterTransformationRequired(source: any, target: any): boolean {
+        // Check if parameter counts or structures differ
+        const sourceFormals = source.formals || [];
+        const targetFormals = target.formals || [];
+
+        return sourceFormals.length !== targetFormals.length ||
+               JSON.stringify(sourceFormals) !== JSON.stringify(targetFormals);
+    }
+
+    /**
+     * Transforms function call parameters according to mapping rules.
+     * Currently handles the chrome.tabs.executeScript -> chrome.scripting.executeScript transformation.
+     *
+     * @param callNode CallExpression AST node
+     * @param source Source mapping definition
+     * @param target Target mapping definition
+     */
+    private static transformParameters(callNode: any, source: any, target: any): void {
+        const apiPath = RenameAPIS.buildMemberExpressionPath(callNode.callee);
+
+        // Handle chrome.tabs.executeScript transformation specifically
+        if (apiPath === 'chrome.scripting.executeScript') {
+            RenameAPIS.transformExecuteScriptParameters(callNode);
+        }
+
+        // Future parameter transformations can be added here
+        // else if (apiPath === 'chrome.other.api') {
+        //     RenameAPIS.transformOtherApiParameters(callNode);
+        // }
+    }
+
+    /**
+     * Transforms chrome.tabs.executeScript parameters to chrome.scripting.executeScript format.
+     *
+     * MV2: chrome.tabs.executeScript(tabId, details, callback?)
+     *      chrome.tabs.executeScript(details, callback?) // current tab
+     * MV3: chrome.scripting.executeScript(injection, callback?)
+     *
+     * Where injection = { target: { tabId }, ...details }
+     *
+     * @param callNode CallExpression AST node for executeScript call
+     */
+    private static transformExecuteScriptParameters(callNode: any): void {
+        const args = callNode.arguments;
+        if (!args || args.length === 0) return;
+
+        // Case 1: executeScript(tabId, details, callback?)
+        // Detect: first arg is not an object (likely number/variable for tabId) and not null literal
+        if (args.length >= 2 && args[0].type !== 'ObjectExpression' &&
+            !(args[0].type === 'Literal' && args[0].value === null)) {
+            const tabIdArg = args[0];
+            const detailsArg = args[1];
+            const callbackArg = args[2]; // Optional
+
+            // Create injection object: { target: { tabId }, ...details }
+            const injectionObject = RenameAPIS.createInjectionObject(tabIdArg, detailsArg);
+
+            // Update arguments: [injection, callback?]
+            callNode.arguments = [injectionObject];
+            if (callbackArg) {
+                callNode.arguments.push(callbackArg);
+            }
+        }
+        // Case 2: executeScript(details, callback?) - no tabId means current tab
+        // Detect: first arg is an object (details), optional second arg is callback
+        else if (args.length >= 1 && args[0].type === 'ObjectExpression') {
+            const detailsArg = args[0];
+            const callbackArg = args[1]; // Optional
+
+            // Check if details already has target property (already MV3 format)
+            const hasTargetProperty = detailsArg.properties?.some((prop: any) =>
+                prop.key?.name === 'target' || prop.key?.value === 'target'
+            );
+
+            if (!hasTargetProperty) {
+                // Create injection object: { target: {}, ...details }
+                const injectionObject = RenameAPIS.createInjectionObject(null, detailsArg);
+
+                // Update arguments: [injection, callback?]
+                callNode.arguments = [injectionObject];
+                if (callbackArg) {
+                    callNode.arguments.push(callbackArg);
+                }
+            }
+            // If target property already exists, no transformation needed
+        }
+        // Case 3: executeScript(null, details, callback?) - explicit null tabId
+        else if (args.length >= 2 && args[0].type === 'Literal' && args[0].value === null) {
+            const detailsArg = args[1];
+            const callbackArg = args[2]; // Optional
+
+            // Treat null tabId as current tab
+            const injectionObject = RenameAPIS.createInjectionObject(null, detailsArg);
+
+            // Update arguments: [injection, callback?]
+            callNode.arguments = [injectionObject];
+            if (callbackArg) {
+                callNode.arguments.push(callbackArg);
+            }
+        }
+    }
+
+    /**
+     * Creates an injection object for chrome.scripting.executeScript.
+     *
+     * @param tabIdArg AST node for tabId (null for current tab)
+     * @param detailsArg AST node for execution details
+     * @returns ObjectExpression AST node for injection parameter
+     */
+    private static createInjectionObject(tabIdArg: any, detailsArg: any): any {
+        const injectionObject = {
+            type: 'ObjectExpression',
+            properties: [] as any[]
+        };
+
+        // Add target property
+        const targetProperty = {
+            type: 'Property',
+            method: false,
+            shorthand: false,
+            computed: false,
+            key: {
+                type: 'Identifier',
+                name: 'target'
+            },
+            value: {
+                type: 'ObjectExpression',
+                properties: [] as any[]
+            }
+        };
+
+        // Add tabId to target if provided
+        if (tabIdArg !== null) {
+            targetProperty.value.properties.push({
+                type: 'Property',
+                method: false,
+                shorthand: false,
+                computed: false,
+                key: {
+                    type: 'Identifier',
+                    name: 'tabId'
+                },
+                value: tabIdArg
+            });
+        }
+
+        injectionObject.properties.push(targetProperty);
+
+        // Add details properties
+        if (detailsArg && detailsArg.type === 'ObjectExpression' && detailsArg.properties) {
+            injectionObject.properties.push(...detailsArg.properties);
+        } else if (detailsArg) {
+            // If details is not an object literal, we can't spread it
+            // Log a warning and keep the original structure
+            logger.warn(null, "executeScript details parameter is not an object literal, skipping transformation", {
+                detailsType: detailsArg.type
+            });
+            return detailsArg; // Return original details as fallback
+        }
+
+        return injectionObject;
     }
 
     /**
