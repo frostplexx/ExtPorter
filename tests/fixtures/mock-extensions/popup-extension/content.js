@@ -6,7 +6,7 @@ const contentState = {
     isInjected: true,
     startTime: Date.now(),
     interactions: 0,
-    elementsModified: 0
+    elementsModified: 0,
 };
 
 // Initialize content script
@@ -30,7 +30,7 @@ function initializeContentScript() {
     chrome.runtime.sendMessage({
         action: 'updateActivity',
         source: 'content-script',
-        url: window.location.href
+        url: window.location.href,
     });
 
     console.log('✅ Content script initialization complete');
@@ -185,7 +185,8 @@ function performTestHighlight() {
     let highlightCount = 0;
 
     elements.forEach((element, index) => {
-        if (index < 20) { // Limit to first 20 elements
+        if (index < 20) {
+            // Limit to first 20 elements
             element.style.outline = '2px solid #ff6b6b';
             element.style.outlineOffset = '2px';
             highlightCount++;
@@ -226,11 +227,13 @@ function setupPageObservers() {
         mutations.forEach((mutation) => {
             if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
                 // Filter out our own modifications
-                const externalChanges = Array.from(mutation.addedNodes).filter(node => {
-                    return node.nodeType === Node.ELEMENT_NODE &&
-                           !node.id?.startsWith('popup-test') &&
-                           !node.id?.startsWith('extension-info') &&
-                           !node.id?.startsWith('indicator');
+                const externalChanges = Array.from(mutation.addedNodes).filter((node) => {
+                    return (
+                        node.nodeType === Node.ELEMENT_NODE &&
+                        !node.id?.startsWith('popup-test') &&
+                        !node.id?.startsWith('extension-info') &&
+                        !node.id?.startsWith('indicator')
+                    );
                 });
 
                 if (externalChanges.length > 0) {
@@ -242,7 +245,7 @@ function setupPageObservers() {
 
     observer.observe(document.body, {
         childList: true,
-        subtree: true
+        subtree: true,
     });
 
     // Observe scroll events
@@ -268,8 +271,8 @@ function setupMessageListeners() {
                     state: {
                         ...contentState,
                         url: window.location.href,
-                        title: document.title
-                    }
+                        title: document.title,
+                    },
                 });
                 break;
 
@@ -305,7 +308,7 @@ function performContentTest(testType, sendResponse) {
             const elementCount = document.querySelectorAll('*').length;
             sendResponse({
                 success: true,
-                result: { elementCount, testType }
+                result: { elementCount, testType },
             });
             break;
 
@@ -318,8 +321,8 @@ function performContentTest(testType, sendResponse) {
                     elementCount: document.querySelectorAll('*').length,
                     links: document.querySelectorAll('a').length,
                     images: document.querySelectorAll('img').length,
-                    testType
-                }
+                    testType,
+                },
             });
             break;
 
@@ -352,7 +355,7 @@ function performContentTest(testType, sendResponse) {
 
             sendResponse({
                 success: true,
-                result: { elementId: 'content-test-element', testType }
+                result: { elementId: 'content-test-element', testType },
             });
             break;
 
@@ -360,7 +363,7 @@ function performContentTest(testType, sendResponse) {
             sendResponse({
                 success: false,
                 error: 'Unknown test type',
-                testType
+                testType,
             });
     }
 }
@@ -377,7 +380,7 @@ window.contentTestExtension = {
     state: () => contentState,
     updateStatus: updateIndicatorStatus,
     performTest: performContentTest,
-    highlightElements: performTestHighlight
+    highlightElements: performTestHighlight,
 };
 
 console.log('✅ Content script setup complete');

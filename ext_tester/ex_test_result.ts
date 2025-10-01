@@ -1,4 +1,4 @@
-import { ConsoleMessage, HTTPRequest, HTTPResponse } from "puppeteer";
+import { ConsoleMessage, HTTPRequest, HTTPResponse } from 'puppeteer';
 
 export interface ExTestResult {
     success: boolean;
@@ -15,15 +15,15 @@ export interface TestResult {
     error?: string;
     duration: number;
     details?: any;
-    logs: BrowserLog
+    logs: BrowserLog;
 }
 
 export interface BrowserLog {
-    console: SerializedConsoleMessage[],
-    pageerrors: string[]
-    responses: SerializedHTTPResponse[]
-    requestfailed: SerializedHTTPRequest[]
-    timestamp: string
+    console: SerializedConsoleMessage[];
+    pageerrors: string[];
+    responses: SerializedHTTPResponse[];
+    requestfailed: SerializedHTTPRequest[];
+    timestamp: string;
 }
 
 export interface SerializedConsoleMessage {

@@ -11,12 +11,6 @@
         "skipLibCheck": true,
         "forceConsistentCasingInFileNames": true
     },
-    "include": [
-        "migrator",
-        "scripts",
-        "tests"
-    ],
-    "exclude": [
-        "node_modules"
-    ]
+    "include": ["migrator", "scripts", "tests"],
+    "exclude": ["node_modules"]
 }

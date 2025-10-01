@@ -21,48 +21,36 @@
         {
             "source": {
                 "returnType": "Port",
-                "formals": [
-                    { "type": "string", "name": "application" }
-                ],
+                "formals": [{ "type": "string", "name": "application" }],
                 "body": "return chrome.extension.connectNative(application);"
             },
             "target": {
                 "returnType": "Port",
-                "formals": [
-                    { "type": "string", "name": "application" }
-                ],
+                "formals": [{ "type": "string", "name": "application" }],
                 "body": "return chrome.runtime.connectNative(application);"
             }
         },
         {
             "source": {
                 "returnType": "Array",
-                "formals": [
-                    { "type": "number", "name": "windowId" }
-                ],
+                "formals": [{ "type": "number", "name": "windowId" }],
                 "body": "return chrome.extension.getExtensionTabs(windowId);"
             },
             "target": {
                 "returnType": "Array",
-                "formals": [
-                    { "type": "number", "name": "windowId" }
-                ],
+                "formals": [{ "type": "number", "name": "windowId" }],
                 "body": "return chrome.extension.getViews({windowId: windowId});"
             }
         },
         {
             "source": {
                 "returnType": "string",
-                "formals": [
-                    { "type": "string", "name": "path" }
-                ],
+                "formals": [{ "type": "string", "name": "path" }],
                 "body": "return chrome.extension.getURL(path);"
             },
             "target": {
                 "returnType": "string",
-                "formals": [
-                    { "type": "string", "name": "path" }
-                ],
+                "formals": [{ "type": "string", "name": "path" }],
                 "body": "return chrome.runtime.getURL(path);"
             }
         },
@@ -291,9 +279,7 @@
             },
             "target": {
                 "returnType": "void",
-                "formals": [
-                    { "type": "object", "name": "injection" }
-                ],
+                "formals": [{ "type": "object", "name": "injection" }],
                 "body": "chrome.scripting.executeScript(injection);"
             }
         },
@@ -324,80 +310,60 @@
         {
             "source": {
                 "returnType": "void",
-                "formals": [
-                    { "type": "object", "name": "details" }
-                ],
+                "formals": [{ "type": "object", "name": "details" }],
                 "body": "chrome.browserAction.setTitle(details);"
             },
             "target": {
                 "returnType": "void",
-                "formals": [
-                    { "type": "object", "name": "details" }
-                ],
+                "formals": [{ "type": "object", "name": "details" }],
                 "body": "chrome.action.setTitle(details);"
             }
         },
         {
             "source": {
                 "returnType": "void",
-                "formals": [
-                    { "type": "object", "name": "details" }
-                ],
+                "formals": [{ "type": "object", "name": "details" }],
                 "body": "chrome.browserAction.setBadgeText(details);"
             },
             "target": {
                 "returnType": "void",
-                "formals": [
-                    { "type": "object", "name": "details" }
-                ],
+                "formals": [{ "type": "object", "name": "details" }],
                 "body": "chrome.action.setBadgeText(details);"
             }
         },
         {
             "source": {
                 "returnType": "void",
-                "formals": [
-                    { "type": "number", "name": "tabId" }
-                ],
+                "formals": [{ "type": "number", "name": "tabId" }],
                 "body": "chrome.pageAction.show(tabId);"
             },
             "target": {
                 "returnType": "void",
-                "formals": [
-                    { "type": "number", "name": "tabId" }
-                ],
+                "formals": [{ "type": "number", "name": "tabId" }],
                 "body": "chrome.action.show(tabId);"
             }
         },
         {
             "source": {
                 "returnType": "void",
-                "formals": [
-                    { "type": "number", "name": "tabId" }
-                ],
+                "formals": [{ "type": "number", "name": "tabId" }],
                 "body": "chrome.pageAction.hide(tabId);"
             },
             "target": {
                 "returnType": "void",
-                "formals": [
-                    { "type": "number", "name": "tabId" }
-                ],
+                "formals": [{ "type": "number", "name": "tabId" }],
                 "body": "chrome.action.hide(tabId);"
             }
         },
         {
             "source": {
                 "returnType": "void",
-                "formals": [
-                    { "type": "object", "name": "details" }
-                ],
+                "formals": [{ "type": "object", "name": "details" }],
                 "body": "chrome.pageAction.setTitle(details);"
             },
             "target": {
                 "returnType": "void",
-                "formals": [
-                    { "type": "object", "name": "details" }
-                ],
+                "formals": [{ "type": "object", "name": "details" }],
                 "body": "chrome.action.setTitle(details);"
             }
         },
