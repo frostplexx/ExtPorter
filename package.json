@@ -29,6 +29,7 @@
         "scripts:inspect": "ts-node scripts/inspect.ts",
         "scripts:run_ext": "scripts/chrome-temp-extension.bash",
         "lint": "eslint migrator --ext .ts",
+        "format": "nix run nixpkgs#prettier -- --write \"**/*.{ts,tsx,js,jsx,json,css,md}\"",
         "lint:fix": "eslint migrator --ext .ts --fix"
     },
     "dependencies": {
