@@ -24,28 +24,28 @@ of Chrome extension migration in the face of Google's deprecation of Manifest V2
 
 1. **Clone the repository**
 
-   ```bash
-   git clone https://github.com/frostplexx/ExtPorter.git
-   cd ExtPorter
-   ```
+    ```bash
+    git clone https://github.com/frostplexx/ExtPorter.git
+    cd ExtPorter
+    ```
 
 2. **Install dependencies**
 
-   ```bash
-   yarn install
-   ```
+    ```bash
+    yarn install
+    ```
 
 3. **Set up environment**
 
-   ```bash
-   cp .env.example .env
-   # Edit .env with your configuration
-   ```
+    ```bash
+    cp .env.example .env
+    # Edit .env with your configuration
+    ```
 
 4. **Start services**
-   ```bash
-   docker-compose up -d
-   ```
+    ```bash
+    docker-compose up -d
+    ```
 
 ## Usage
 

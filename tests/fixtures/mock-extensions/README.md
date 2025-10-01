@@ -83,26 +83,26 @@ npm run test:coverage
 The included Puppeteer tests (`../../puppeteer/extension-testing.test.ts`) validate:
 
 1. **Extension Loading**
-   - Verify extensions load without errors
-   - Check required permissions are available
-   - Validate manifest parsing
+    - Verify extensions load without errors
+    - Check required permissions are available
+    - Validate manifest parsing
 
 2. **Popup Extension Tests**
-   - Content script injection and floating indicator
-   - Modal popup functionality
-   - Element highlighting features
-   - Extension API availability
+    - Content script injection and floating indicator
+    - Modal popup functionality
+    - Element highlighting features
+    - Extension API availability
 
 3. **New Tab Extension Tests**
-   - New tab override functionality
-   - Widget presence and interaction
-   - Settings panel operation
-   - Chrome API integration (bookmarks, storage)
+    - New tab override functionality
+    - Widget presence and interaction
+    - Settings panel operation
+    - Chrome API integration (bookmarks, storage)
 
 4. **Integration Tests**
-   - Extension communication patterns
-   - Data persistence across sessions
-   - Error handling and recovery
+    - Extension communication patterns
+    - Data persistence across sessions
+    - Error handling and recovery
 
 ### Test Data and IDs
 
@@ -175,10 +175,7 @@ Extensions are loaded using Puppeteer's `--load-extension` flag:
 
 ```javascript
 const browser = await puppeteer.launch({
-  args: [
-    "--load-extension=path/to/extension",
-    "--disable-extensions-except=path/to/extension",
-  ],
+    args: ['--load-extension=path/to/extension', '--disable-extensions-except=path/to/extension'],
 });
 ```
 

@@ -1,5 +1,5 @@
-import { throws } from "assert";
-import { Extension } from "./extension";
+import { throws } from 'assert';
+import { Extension } from './extension';
 
 /**
  * Abstract base class for migration modules that transform extensions.
@@ -11,29 +11,29 @@ import { Extension } from "./extension";
  * @abstract
  */
 export abstract class MigrationModule {
-  /**
-   * Migrates an extension by applying transformation logic.
-   *
-   * This method should be overridden by subclasses to implement specific
-   * migration behavior. The default implementation throws an error to ensure
-   * subclasses provide their own implementation.
-   *
-   * @param {Extension} extension - The extension object to migrate
-   * @returns {Extension} The migrated extension object or {null} of the migration fails
-   * @throws {Error} When called directly on the base class without being overridden
-   * @static
-   */
-  public static migrate(extension: Extension): Extension | MigrationError {
-    throw new Error("Method must be implemented by subclass");
-  }
+    /**
+     * Migrates an extension by applying transformation logic.
+     *
+     * This method should be overridden by subclasses to implement specific
+     * migration behavior. The default implementation throws an error to ensure
+     * subclasses provide their own implementation.
+     *
+     * @param {Extension} extension - The extension object to migrate
+     * @returns {Extension} The migrated extension object or {null} of the migration fails
+     * @throws {Error} When called directly on the base class without being overridden
+     * @static
+     */
+    public static migrate(extension: Extension): Extension | MigrationError {
+        throw new Error('Method must be implemented by subclass');
+    }
 }
 
 export class MigrationError {
-  extension: Extension;
-  error: any;
+    extension: Extension;
+    error: any;
 
-  constructor(extension: Extension, error: any) {
-    this.extension = extension;
-    this.error = error;
-  }
+    constructor(extension: Extension, error: any) {
+        this.extension = extension;
+        this.error = error;
+    }
 }
