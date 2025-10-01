@@ -782,26 +782,12 @@ chrome.pageAction.setIcon({
           const pageActionStillPresent = (migratedContent.match(/chrome\.pageAction/g) || []).length;
           const executeScriptStillPresent = (migratedContent.match(/chrome\.tabs\.executeScript/g) || []).length;
 
-          console.log(`Debug API transformation counts:
-            - chrome.action calls found: ${actionCallsAfter}
-            - chrome.scripting.executeScript calls found: ${scriptingCallsAfter}
-            - chrome.browserAction still present: ${browserActionStillPresent}
-            - chrome.pageAction still present: ${pageActionStillPresent}
-            - chrome.tabs.executeScript still present: ${executeScriptStillPresent}`);
 
           // Check if we have ANY transformations (API calls were processed)
           const hasAnyTransformations = actionCallsAfter > 0 || scriptingCallsAfter > 0;
           const hasOldAPIsRemaining = browserActionStillPresent > 0 || pageActionStillPresent > 0 || executeScriptStillPresent > 0;
 
           if (!hasAnyTransformations && hasOldAPIsRemaining) {
-            console.log('⚠️  No API transformations applied - this suggests the file was processed but transformations failed');
-            console.log('First 500 characters of migrated content:', migratedContent.substring(0, 500));
-
-            // The key finding: FILE IS NOT TRUNCATED - all content is preserved
-            // This proves that ExtPorter does NOT cut off long files
-            console.log('✅ MAIN FINDING: File is NOT truncated - all segments preserved');
-            console.log('✅ The issue is API transformation failure, not file truncation');
-
             // Update our verifications to focus on the main question: truncation
             // We'll adjust expectations since API transformation might fail for very large files
           } else if (hasAnyTransformations) {
@@ -833,14 +819,6 @@ chrome.pageAction.setIcon({
           // VERIFICATION 7: Verify that padding content is preserved
           expect(migratedContent).toContain('Large string data');
 
-          console.log(`✅ Large file test results:
-            - Original size: ${fileSizeBytes} bytes (${(fileSizeBytes/1024).toFixed(1)} KB)
-            - Migrated size: ${migratedSizeBytes} bytes (${(migratedSizeBytes/1024).toFixed(1)} KB)
-            - Size difference: ${sizeDifference} bytes
-            - API transformations: ${browserActionCallsBefore + pageActionCallsBefore} → ${actionCallsAfter} action calls
-            - ExecuteScript transformations: ${executeScriptCallsBefore} → ${scriptingCallsAfter} scripting calls
-            - Comments preserved: ${commentCount}
-            - All ${numberOfSegments} segments verified: ✓`);
         }
       }
 
