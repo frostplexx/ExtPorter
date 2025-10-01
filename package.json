@@ -47,8 +47,7 @@
         "mongodb": "^6.19.0",
         "puppeteer": "^24.19.0",
         "ts-node-dev": "^2.0.0",
-        "types": "^0.1.1",
-        "winston": "^3.17.0"
+        "types": "^0.1.1"
     },
     "devDependencies": {
         "@eslint/js": "^9.36.0",
