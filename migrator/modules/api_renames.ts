@@ -164,10 +164,10 @@ export class RenameAPIS implements MigrationModule {
                 });
 
                 // Log user-visible warning
-                console.warn(`⚠️  WARNING: API transformations skipped for ${file.path}`);
-                console.warn(`   File size: ${fileSizeKB}KB (>100KB limit for AST parsing)`);
-                console.warn(`   ${potentialTransformations} potential API transformations were not applied`);
-                console.warn(`   This may cause runtime errors in Manifest V3`);
+                // console.warn(`⚠️  WARNING: API transformations skipped for ${file.path}`);
+                // console.warn(`   File size: ${fileSizeKB}KB (>100KB limit for AST parsing)`);
+                // console.warn(`   ${potentialTransformations} potential API transformations were not applied`);
+                // console.warn(`   This may cause runtime errors in Manifest V3`);
             } else if (potentialTransformations > 0) {
                 // Smaller file that failed to parse
                 logger.error(null, "AST parsing failed for file with API transformations needed", {
@@ -177,9 +177,9 @@ export class RenameAPIS implements MigrationModule {
                     issue: "JavaScript syntax error or unsupported language features"
                 });
 
-                console.warn(`⚠️  WARNING: API transformations skipped for ${file.path}`);
-                console.warn(`   File could not be parsed (${fileSizeKB}KB)`);
-                console.warn(`   ${potentialTransformations} potential API transformations were not applied`);
+                // console.warn(`⚠️  WARNING: API transformations skipped for ${file.path}`);
+                // console.warn(`   File could not be parsed (${fileSizeKB}KB)`);
+                // console.warn(`   ${potentialTransformations} potential API transformations were not applied`);
             } else {
                 // File failed to parse but no APIs detected
                 logger.debug(null, "AST parsing failed but no API transformations needed", {

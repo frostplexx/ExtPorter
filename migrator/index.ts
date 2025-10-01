@@ -12,6 +12,7 @@ import { Globals } from "./types/globals";
 import { Database } from "./features/database/db_manager";
 import { MigrationError } from './types/migration_module';
 import { ResourceDownloader } from './modules/resource_downloader';
+import { BridgeInjector } from './modules/bridge_injector';
 
 // Load environment variables once at application startup
 dotenv.config();
@@ -161,6 +162,7 @@ async function main() {
         MigrateManifest.migrate,
         ResourceDownloader.migrate,
         RenameAPIS.migrate,
+        BridgeInjector.migrate,
         InterestingnessScorer.migrate,
         WriteMigrated.migrate
     ];
