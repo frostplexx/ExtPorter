@@ -1,5 +1,5 @@
-import { throws } from "assert";
-import { Extension } from "./extension";
+import { throws } from 'assert';
+import { Extension } from './extension';
 
 /**
  * Abstract base class for migration modules that transform extensions.
@@ -24,18 +24,16 @@ export abstract class MigrationModule {
      * @static
      */
     public static migrate(extension: Extension): Extension | MigrationError {
-        throw new Error("Method must be implemented by subclass");
+        throw new Error('Method must be implemented by subclass');
     }
 }
-
 
 export class MigrationError {
     extension: Extension;
     error: any;
 
-    constructor(extension: Extension, error: any){
-        this.extension = extension
-        this.error = error
+    constructor(extension: Extension, error: any) {
+        this.extension = extension;
+        this.error = error;
     }
-
 }

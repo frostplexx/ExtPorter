@@ -1,169 +1,169 @@
 {
-  "description": "File patterns that should be excluded from transformation and copied 1:1",
-  "blacklist_patterns": [
-    {
-      "pattern": "jquery.*\\.js$",
-      "reason": "jQuery library files should not be transformed",
-      "case_sensitive": false
-    },
-    {
-      "pattern": "core-js.*\\.js$",
-      "reason": "Core-JS polyfill library should not be transformed",
-      "case_sensitive": false
-    },
-    {
-      "pattern": "lodash.*\\.js$",
-      "reason": "Lodash utility library should not be transformed",
-      "case_sensitive": false
-    },
-    {
-      "pattern": "underscore.*\\.js$",
-      "reason": "Underscore.js library should not be transformed",
-      "case_sensitive": false
-    },
-    {
-      "pattern": "moment.*\\.js$",
-      "reason": "Moment.js date library should not be transformed",
-      "case_sensitive": false
-    },
-    {
-      "pattern": "react.*\\.js$",
-      "reason": "React library files should not be transformed",
-      "case_sensitive": false
-    },
-    {
-      "pattern": "vue.*\\.js$",
-      "reason": "Vue.js library files should not be transformed",
-      "case_sensitive": false
-    },
-    {
-      "pattern": "angular.*\\.js$",
-      "reason": "Angular library files should not be transformed",
-      "case_sensitive": false
-    },
-    {
-      "pattern": "bootstrap.*\\.js$",
-      "reason": "Bootstrap JavaScript should not be transformed",
-      "case_sensitive": false
-    },
-    {
-      "pattern": "d3.*\\.js$",
-      "reason": "D3.js library should not be transformed",
-      "case_sensitive": false
-    },
-    {
-      "pattern": "three.*\\.js$",
-      "reason": "Three.js library should not be transformed",
-      "case_sensitive": false
-    },
-    {
-      "pattern": "babel.*\\.js$",
-      "reason": "Babel runtime/polyfill should not be transformed",
-      "case_sensitive": false
-    },
-    {
-      "pattern": "polyfill.*\\.js$",
-      "reason": "Polyfill libraries should not be transformed",
-      "case_sensitive": false
-    },
-    {
-      "pattern": ".*\\.min\\.js$",
-      "reason": "Minified JavaScript files should not be transformed",
-      "case_sensitive": false
-    },
-    {
-      "pattern": "vendor/.*\\.js$",
-      "reason": "Files in vendor directories should not be transformed",
-      "case_sensitive": false
-    },
-    {
-      "pattern": "lib/.*\\.js$",
-      "reason": "Files in lib directories should not be transformed",
-      "case_sensitive": false
-    },
-    {
-      "pattern": "libs/.*\\.js$",
-      "reason": "Files in libs directories should not be transformed",
-      "case_sensitive": false
-    },
-    {
-      "pattern": "node_modules/.*\\.js$",
-      "reason": "Node modules should not be transformed",
-      "case_sensitive": false
-    },
-    {
-      "pattern": "dist/.*\\.js$",
-      "reason": "Distribution files should not be transformed",
-      "case_sensitive": false
-    },
-    {
-      "pattern": "build/.*\\.js$",
-      "reason": "Build output files should not be transformed",
-      "case_sensitive": false
-    },
-    {
-      "pattern": ".*-bundle\\.js$",
-      "reason": "Bundled files should not be transformed",
-      "case_sensitive": false
-    },
-    {
-      "pattern": ".*\\.bundle\\.js$",
-      "reason": "Bundled files should not be transformed",
-      "case_sensitive": false
-    },
-    {
-      "pattern": "worker.*\\.js$",
-      "reason": "Web worker files may contain sensitive timing code",
-      "case_sensitive": false
-    },
-    {
-      "pattern": "webworker.*\\.js$",
-      "reason": "Web worker files may contain sensitive timing code",
-      "case_sensitive": false
-    },
-    {
-      "pattern": "sw\\.js$",
-      "reason": "Service worker files may contain sensitive code",
-      "case_sensitive": false
-    },
-    {
-      "pattern": "serviceworker\\.js$",
-      "reason": "Service worker files may contain sensitive code",
-      "case_sensitive": false
-    },
-    {
-      "pattern": "chart.*\\.js$",
-      "reason": "Chart library files should not be transformed",
-      "case_sensitive": false
-    },
-    {
-      "pattern": "highcharts.*\\.js$",
-      "reason": "Highcharts library should not be transformed",
-      "case_sensitive": false
-    },
-    {
-      "pattern": "plotly.*\\.js$",
-      "reason": "Plotly library should not be transformed",
-      "case_sensitive": false
-    },
-    {
-      "pattern": "ace.*\\.js$",
-      "reason": "Ace editor library should not be transformed",
-      "case_sensitive": false
-    },
-    {
-      "pattern": "codemirror.*\\.js$",
-      "reason": "CodeMirror editor library should not be transformed",
-      "case_sensitive": false
-    },
-    {
-      "pattern": "monaco.*\\.js$",
-      "reason": "Monaco editor library should not be transformed",
-      "case_sensitive": false
+    "description": "File patterns that should be excluded from transformation and copied 1:1",
+    "blacklist_patterns": [
+        {
+            "pattern": "jquery.*\\.js$",
+            "reason": "jQuery library files should not be transformed",
+            "case_sensitive": false
+        },
+        {
+            "pattern": "core-js.*\\.js$",
+            "reason": "Core-JS polyfill library should not be transformed",
+            "case_sensitive": false
+        },
+        {
+            "pattern": "lodash.*\\.js$",
+            "reason": "Lodash utility library should not be transformed",
+            "case_sensitive": false
+        },
+        {
+            "pattern": "underscore.*\\.js$",
+            "reason": "Underscore.js library should not be transformed",
+            "case_sensitive": false
+        },
+        {
+            "pattern": "moment.*\\.js$",
+            "reason": "Moment.js date library should not be transformed",
+            "case_sensitive": false
+        },
+        {
+            "pattern": "react.*\\.js$",
+            "reason": "React library files should not be transformed",
+            "case_sensitive": false
+        },
+        {
+            "pattern": "vue.*\\.js$",
+            "reason": "Vue.js library files should not be transformed",
+            "case_sensitive": false
+        },
+        {
+            "pattern": "angular.*\\.js$",
+            "reason": "Angular library files should not be transformed",
+            "case_sensitive": false
+        },
+        {
+            "pattern": "bootstrap.*\\.js$",
+            "reason": "Bootstrap JavaScript should not be transformed",
+            "case_sensitive": false
+        },
+        {
+            "pattern": "d3.*\\.js$",
+            "reason": "D3.js library should not be transformed",
+            "case_sensitive": false
+        },
+        {
+            "pattern": "three.*\\.js$",
+            "reason": "Three.js library should not be transformed",
+            "case_sensitive": false
+        },
+        {
+            "pattern": "babel.*\\.js$",
+            "reason": "Babel runtime/polyfill should not be transformed",
+            "case_sensitive": false
+        },
+        {
+            "pattern": "polyfill.*\\.js$",
+            "reason": "Polyfill libraries should not be transformed",
+            "case_sensitive": false
+        },
+        {
+            "pattern": ".*\\.min\\.js$",
+            "reason": "Minified JavaScript files should not be transformed",
+            "case_sensitive": false
+        },
+        {
+            "pattern": "vendor/.*\\.js$",
+            "reason": "Files in vendor directories should not be transformed",
+            "case_sensitive": false
+        },
+        {
+            "pattern": "lib/.*\\.js$",
+            "reason": "Files in lib directories should not be transformed",
+            "case_sensitive": false
+        },
+        {
+            "pattern": "libs/.*\\.js$",
+            "reason": "Files in libs directories should not be transformed",
+            "case_sensitive": false
+        },
+        {
+            "pattern": "node_modules/.*\\.js$",
+            "reason": "Node modules should not be transformed",
+            "case_sensitive": false
+        },
+        {
+            "pattern": "dist/.*\\.js$",
+            "reason": "Distribution files should not be transformed",
+            "case_sensitive": false
+        },
+        {
+            "pattern": "build/.*\\.js$",
+            "reason": "Build output files should not be transformed",
+            "case_sensitive": false
+        },
+        {
+            "pattern": ".*-bundle\\.js$",
+            "reason": "Bundled files should not be transformed",
+            "case_sensitive": false
+        },
+        {
+            "pattern": ".*\\.bundle\\.js$",
+            "reason": "Bundled files should not be transformed",
+            "case_sensitive": false
+        },
+        {
+            "pattern": "worker.*\\.js$",
+            "reason": "Web worker files may contain sensitive timing code",
+            "case_sensitive": false
+        },
+        {
+            "pattern": "webworker.*\\.js$",
+            "reason": "Web worker files may contain sensitive timing code",
+            "case_sensitive": false
+        },
+        {
+            "pattern": "sw\\.js$",
+            "reason": "Service worker files may contain sensitive code",
+            "case_sensitive": false
+        },
+        {
+            "pattern": "serviceworker\\.js$",
+            "reason": "Service worker files may contain sensitive code",
+            "case_sensitive": false
+        },
+        {
+            "pattern": "chart.*\\.js$",
+            "reason": "Chart library files should not be transformed",
+            "case_sensitive": false
+        },
+        {
+            "pattern": "highcharts.*\\.js$",
+            "reason": "Highcharts library should not be transformed",
+            "case_sensitive": false
+        },
+        {
+            "pattern": "plotly.*\\.js$",
+            "reason": "Plotly library should not be transformed",
+            "case_sensitive": false
+        },
+        {
+            "pattern": "ace.*\\.js$",
+            "reason": "Ace editor library should not be transformed",
+            "case_sensitive": false
+        },
+        {
+            "pattern": "codemirror.*\\.js$",
+            "reason": "CodeMirror editor library should not be transformed",
+            "case_sensitive": false
+        },
+        {
+            "pattern": "monaco.*\\.js$",
+            "reason": "Monaco editor library should not be transformed",
+            "case_sensitive": false
+        }
+    ],
+    "settings": {
+        "log_blacklisted_files": true,
+        "count_blacklisted_in_stats": true
     }
-  ],
-  "settings": {
-    "log_blacklisted_files": true,
-    "count_blacklisted_in_stats": true
-  }
 }

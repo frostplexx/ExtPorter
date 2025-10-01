@@ -6,7 +6,7 @@ const extensionState = {
     isActive: true,
     tabStates: new Map(),
     injectionCount: 0,
-    lastActivity: Date.now()
+    lastActivity: Date.now(),
 };
 
 // Initialize extension
@@ -19,15 +19,15 @@ chrome.runtime.onInstalled.addListener((details) => {
         settings: {
             autoInject: false,
             debugMode: false,
-            notifications: true
-        }
+            notifications: true,
+        },
     });
 
     // Create context menu for testing
     chrome.contextMenus.create({
         id: 'popup-test-inject',
         title: 'Inject Test Content',
-        contexts: ['page']
+        contexts: ['page'],
     });
 
     console.log('✅ Extension initialization complete');
@@ -38,8 +38,10 @@ chrome.browserAction.onClicked.addListener((tab) => {
     console.log('🔘 Browser action clicked for tab:', tab.id);
 
     // Inject test content when icon is clicked
-    chrome.tabs.executeScript(tab.id, {
-        code: `
+    chrome.tabs.executeScript(
+        tab.id,
+        {
+            code: `
             console.log('🎯 Background script injection test');
 
             const testElement = document.createElement('div');
@@ -66,15 +68,17 @@ chrome.browserAction.onClicked.addListener((tab) => {
             }, 3000);
 
             'BACKGROUND_INJECTION_SUCCESS';
-        `
-    }, (result) => {
-        if (chrome.runtime.lastError) {
-            console.error('❌ Background injection failed:', chrome.runtime.lastError);
-        } else {
-            console.log('✅ Background injection successful:', result);
-            extensionState.injectionCount++;
+        `,
+        },
+        (result) => {
+            if (chrome.runtime.lastError) {
+                console.error('❌ Background injection failed:', chrome.runtime.lastError);
+            } else {
+                console.log('✅ Background injection successful:', result);
+                extensionState.injectionCount++;
+            }
         }
-    });
+    );
 });
 
 // Handle context menu clicks
@@ -111,7 +115,7 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
                 }, 4000);
 
                 'CONTEXT_INJECTION_SUCCESS';
-            `
+            `,
         });
     }
 });
@@ -128,8 +132,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                     isActive: extensionState.isActive,
                     injectionCount: extensionState.injectionCount,
                     lastActivity: extensionState.lastActivity,
-                    tabCount: extensionState.tabStates.size
-                }
+                    tabCount: extensionState.tabStates.size,
+                },
             });
             break;
 
@@ -143,7 +147,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             sendResponse({
                 success: true,
                 message: 'Background script responding',
-                timestamp: Date.now()
+                timestamp: Date.now(),
             });
             break;
 
@@ -166,29 +170,37 @@ function handleTabAction(action, tab, sendResponse) {
 
     switch (action) {
         case 'highlight':
-            chrome.tabs.executeScript(tab.id, {
-                code: `
+            chrome.tabs.executeScript(
+                tab.id,
+                {
+                    code: `
                     document.querySelectorAll('*').forEach((el, index) => {
                         if (index < 10) { // Limit to first 10 elements
                             el.style.outline = '2px solid #ff6b6b';
                         }
                     });
                     'HIGHLIGHT_COMPLETE';
-                `
-            }, (result) => {
-                sendResponse({ success: true, result });
-            });
+                `,
+                },
+                (result) => {
+                    sendResponse({ success: true, result });
+                }
+            );
             break;
 
         case 'scroll':
-            chrome.tabs.executeScript(tab.id, {
-                code: `
+            chrome.tabs.executeScript(
+                tab.id,
+                {
+                    code: `
                     window.scrollTo({ top: 0, behavior: 'smooth' });
                     'SCROLL_COMPLETE';
-                `
-            }, (result) => {
-                sendResponse({ success: true, result });
-            });
+                `,
+                },
+                (result) => {
+                    sendResponse({ success: true, result });
+                }
+            );
             break;
 
         default:
@@ -204,7 +216,7 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
         // Update tab state
         extensionState.tabStates.set(tabId, {
             url: tab.url,
-            lastUpdate: Date.now()
+            lastUpdate: Date.now(),
         });
 
         // Auto-inject if enabled
@@ -240,7 +252,7 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
                         }, 2000);
 
                         'AUTO_INJECTION_SUCCESS';
-                    `
+                    `,
                 });
             }
         });
@@ -258,7 +270,7 @@ setInterval(() => {
     extensionState.lastActivity = Date.now();
 
     // Clean up old tab states (older than 1 hour)
-    const cutoff = Date.now() - (60 * 60 * 1000);
+    const cutoff = Date.now() - 60 * 60 * 1000;
     for (const [tabId, state] of extensionState.tabStates.entries()) {
         if (state.lastUpdate < cutoff) {
             extensionState.tabStates.delete(tabId);
@@ -274,7 +286,7 @@ if (typeof globalThis !== 'undefined') {
         performTest: (testName) => {
             console.log('🧪 Running background test:', testName);
             return { testName, timestamp: Date.now(), success: true };
-        }
+        },
     };
 }
 

@@ -1,6 +1,6 @@
-import * as escodegen from "escodegen";
-import * as ESTree from "estree";
-import { logger } from "./logger";
+import * as escodegen from 'escodegen';
+import * as ESTree from 'estree';
+import { logger } from './logger';
 
 /**
  * Comment categories for intelligent placement
@@ -119,7 +119,7 @@ export class FormatPreservingGenerator {
             indentSize,
             newlineStyle: crlfCount > lfCount ? '\r\n' : '\n',
             usesTrailingCommas: trailingCommas > 0,
-            quotStyle: singleQuotes > doubleQuotes ? 'single' : 'double'
+            quotStyle: singleQuotes > doubleQuotes ? 'single' : 'double',
         };
     }
 
@@ -135,7 +135,8 @@ export class FormatPreservingGenerator {
         }
 
         // Skip expensive analysis for very large files
-        if (originalSource.length > 100000) { // 100KB limit
+        if (originalSource.length > 100000) {
+            // 100KB limit
             return this.extractCommentsSimple(originalSource);
         }
 
@@ -162,10 +163,19 @@ export class FormatPreservingGenerator {
             const afterCommentOnLine = sourceLine.substring(column - 1 + commentText.length);
 
             // Determine comment category
-            const category = this.categorizeComment(commentText, beforeCommentOnLine, lineNumber, lines.length);
+            const category = this.categorizeComment(
+                commentText,
+                beforeCommentOnLine,
+                lineNumber,
+                lines.length
+            );
 
             // Get surrounding code context
-            const context = this.getCodeContext(lines, lineNumber - 1, commentText.startsWith('//'));
+            const context = this.getCodeContext(
+                lines,
+                lineNumber - 1,
+                commentText.startsWith('//')
+            );
 
             if (commentText.startsWith('//')) {
                 // Single line comment
@@ -181,7 +191,7 @@ export class FormatPreservingGenerator {
                     context: context,
                     indentation: beforeCommentOnLine.match(/^\s*/)?.[0] || '',
                     isStandalone: beforeCommentOnLine.trim() === '',
-                    hasCodeAfter: afterCommentOnLine.trim() !== ''
+                    hasCodeAfter: afterCommentOnLine.trim() !== '',
                 });
             } else {
                 // Block comment
@@ -201,7 +211,7 @@ export class FormatPreservingGenerator {
                     indentation: beforeCommentOnLine.match(/^\s*/)?.[0] || '',
                     isStandalone: beforeCommentOnLine.trim() === '',
                     hasCodeAfter: afterCommentOnLine.trim() !== '',
-                    isMultiline: isMultiline
+                    isMultiline: isMultiline,
                 });
             }
         }
@@ -233,10 +243,15 @@ export class FormatPreservingGenerator {
                     startIndex: 0, // Not calculated for performance
                     endIndex: 0,
                     category: 'standalone', // Simplified categorization
-                    context: { beforeLines: [], afterLines: [], nearestFunction: null, nearestVariable: null },
+                    context: {
+                        beforeLines: [],
+                        afterLines: [],
+                        nearestFunction: null,
+                        nearestVariable: null,
+                    },
                     indentation: this.whitespaceRegex.exec(line.substring(0, column))?.[0] || '',
                     isStandalone: line.substring(0, column).trim() === '',
-                    hasCodeAfter: false
+                    hasCodeAfter: false,
                 });
             }
         }
@@ -271,7 +286,11 @@ export class FormatPreservingGenerator {
     /**
      * Get surrounding code context for better comment placement
      */
-    private static getCodeContext(lines: string[], lineIndex: number, isSingleLine: boolean): CodeContext {
+    private static getCodeContext(
+        lines: string[],
+        lineIndex: number,
+        isSingleLine: boolean
+    ): CodeContext {
         const maxContextLines = 3;
         const beforeLines: string[] = [];
         const afterLines: string[] = [];
@@ -297,7 +316,7 @@ export class FormatPreservingGenerator {
             beforeLines,
             afterLines,
             nearestFunction: this.findNearestFunction(lines, lineIndex),
-            nearestVariable: this.findNearestVariable(lines, lineIndex)
+            nearestVariable: this.findNearestVariable(lines, lineIndex),
         };
     }
 
@@ -308,7 +327,9 @@ export class FormatPreservingGenerator {
         // Look backwards for function declarations
         for (let i = lineIndex; i >= 0; i--) {
             const line = lines[i];
-            const functionMatch = line.match(/function\s+(\w+)|(\w+)\s*:\s*function|(\w+)\s*=\s*function/);
+            const functionMatch = line.match(
+                /function\s+(\w+)|(\w+)\s*:\s*function|(\w+)\s*=\s*function/
+            );
             if (functionMatch) {
                 return functionMatch[1] || functionMatch[2] || functionMatch[3];
             }
@@ -342,13 +363,12 @@ export class FormatPreservingGenerator {
         const generatedLines = generatedCode.split('\n');
         const result: string[] = [];
 
-
         // Group comments by category for different handling strategies
         const commentsByCategory = {
-            header: comments.filter(c => c.category === 'header'),
-            footer: comments.filter(c => c.category === 'footer'),
-            inline: comments.filter(c => c.category === 'inline'),
-            standalone: comments.filter(c => c.category === 'standalone')
+            header: comments.filter((c) => c.category === 'header'),
+            footer: comments.filter((c) => c.category === 'footer'),
+            inline: comments.filter((c) => c.category === 'inline'),
+            standalone: comments.filter((c) => c.category === 'standalone'),
         };
 
         // Track which comments have been used to prevent duplicates
@@ -372,7 +392,7 @@ export class FormatPreservingGenerator {
 
             // Add any standalone comments that should appear before this line
             const standaloneBefore = this.findCommentsForLine(
-                commentsByCategory.standalone.filter(c => !usedComments.has(c)),
+                commentsByCategory.standalone.filter((c) => !usedComments.has(c)),
                 line,
                 i,
                 generatedLines,
@@ -391,7 +411,7 @@ export class FormatPreservingGenerator {
 
             // Add any inline comments that should appear after this line
             const inlineAfter = this.findCommentsForLine(
-                commentsByCategory.inline.filter(c => !usedComments.has(c)),
+                commentsByCategory.inline.filter((c) => !usedComments.has(c)),
                 line,
                 i,
                 generatedLines,
@@ -413,7 +433,7 @@ export class FormatPreservingGenerator {
         }
 
         // 3. Add footer comments at the end
-        const unusedFooterComments = commentsByCategory.footer.filter(c => !usedComments.has(c));
+        const unusedFooterComments = commentsByCategory.footer.filter((c) => !usedComments.has(c));
         if (unusedFooterComments.length > 0) {
             result.push(''); // Blank line before footer comments
             for (const comment of unusedFooterComments) {
@@ -436,10 +456,11 @@ export class FormatPreservingGenerator {
         const indentation = overrideIndentation || comment.indentation;
         const lines: string[] = [];
 
-
         if (comment.type === 'line') {
             // Extract the actual comment text without the // prefix since comment.text includes it
-            const cleanText = comment.text.startsWith('//') ? comment.text.substring(2).trim() : comment.text;
+            const cleanText = comment.text.startsWith('//')
+                ? comment.text.substring(2).trim()
+                : comment.text;
             lines.push(`${indentation}// ${cleanText}`);
         } else {
             // Block comment - extract content without /* */ wrapper
@@ -450,7 +471,7 @@ export class FormatPreservingGenerator {
 
             if (comment.isMultiline) {
                 lines.push(`${indentation}/*`);
-                cleanText.split('\n').forEach(line => {
+                cleanText.split('\n').forEach((line) => {
                     lines.push(`${indentation} * ${line.trim()}`);
                 });
                 lines.push(`${indentation} */`);
@@ -516,12 +537,14 @@ export class FormatPreservingGenerator {
         // Strategy 2: Simple placement for standalone comments
         if (comment.category === 'standalone' && position === 'before') {
             // Place before function declarations, variable declarations, or logical blocks
-            return codeLine.includes('function') ||
+            return (
+                codeLine.includes('function') ||
                 codeLine.includes('var ') ||
                 codeLine.includes('const ') ||
                 codeLine.includes('let ') ||
                 codeLine.trim().endsWith('{') ||
-                lineIndex === 0;
+                lineIndex === 0
+            );
         }
 
         return false;
@@ -535,7 +558,7 @@ export class FormatPreservingGenerator {
         const keywords1: string[] = pattern1.match(/\b\w+\b/g) || [];
         const keywords2: string[] = pattern2.match(/\b\w+\b/g) || [];
 
-        const commonKeywords = keywords1.filter(word => keywords2.includes(word));
+        const commonKeywords = keywords1.filter((word) => keywords2.includes(word));
         const totalKeywords = new Set([...keywords1, ...keywords2]).size;
 
         return totalKeywords > 0 ? commonKeywords.length / totalKeywords : 0;
@@ -560,7 +583,7 @@ export class FormatPreservingGenerator {
             format: {
                 indent: {
                     style: formatting.indentStyle,
-                    adjustMultilineComment: true
+                    adjustMultilineComment: true,
                 },
                 newline: formatting.newlineStyle,
                 space: ' ',
@@ -570,17 +593,16 @@ export class FormatPreservingGenerator {
                 parentheses: true,
                 semicolons: true,
                 safeConcatenation: true,
-                preserveBlankLines: false
-            }
+                preserveBlankLines: false,
+            },
         });
-
 
         // Inject comments back into the generated code
         let result: string;
         try {
             result = this.injectComments(generated, comments);
         } catch (error) {
-            logger.error(null, error as any)
+            logger.error(null, error as any);
             result = generated; // Fall back to original generated code
         }
 
@@ -596,7 +618,7 @@ export class FormatPreservingGenerator {
             format: {
                 indent: {
                     style: '    ', // 4 spaces
-                    adjustMultilineComment: true
+                    adjustMultilineComment: true,
                 },
                 newline: '\n',
                 space: ' ',
@@ -605,8 +627,8 @@ export class FormatPreservingGenerator {
                 compact: false,
                 parentheses: true,
                 semicolons: true,
-                safeConcatenation: true
-            }
+                safeConcatenation: true,
+            },
         });
     }
 

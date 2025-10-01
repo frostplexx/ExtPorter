@@ -13,10 +13,10 @@ dotenv.config();
 
 async function main() {
     if (!process.env.OUTPUT_DIR) {
-        throw new Error("OUTPUT_DIR not set");
+        throw new Error('OUTPUT_DIR not set');
     }
     if (!process.env.INPUT_DIR) {
-        throw new Error("INPUT_DIR not set");
+        throw new Error('INPUT_DIR not set');
     }
 
     await Database.shared.init();
@@ -25,19 +25,21 @@ async function main() {
     const extensionId = args[0];
 
     if (!extensionId) {
-        console.log("Usage: yarn scripts:inspect <extension id (mv2 or mv3)>");
-        console.log("Example: yarn scripts:inspect abcdef123456");
+        console.log('Usage: yarn scripts:inspect <extension id (mv2 or mv3)>');
+        console.log('Example: yarn scripts:inspect abcdef123456');
         exit(1);
     }
 
     console.log(`Looking for extension with ID: ${extensionId}`);
 
     // Try to find the extension in the database
-    let dbExtension = await Database.shared.findExtension({ "id": extensionId });
+    let dbExtension = await Database.shared.findExtension({ id: extensionId });
 
     // If not found by MV2 ID, try MV3 ID
     if (!dbExtension) {
-        dbExtension = await Database.shared.findExtension({ "mv3_extension_id": extensionId });
+        dbExtension = await Database.shared.findExtension({
+            mv3_extension_id: extensionId,
+        });
     }
 
     if (!dbExtension) {
@@ -52,7 +54,7 @@ async function main() {
         manifest: dbExtension.manifest,
         files: dbExtension.files || [],
         isNewTabExtension: dbExtension.isNewTabExtension,
-        mv3_extension_id: dbExtension.mv3_extension_id
+        mv3_extension_id: dbExtension.mv3_extension_id,
     };
 
     console.log(`Found extension: ${mv2Extension.name} (MV2: ${mv2Extension.id})`);
@@ -77,7 +79,7 @@ async function main() {
             console.log(`MV2 extension directory not found at: ${mv2Path}`);
         }
     } else {
-        console.log("No manifest_v2_path found for MV2 extension");
+        console.log('No manifest_v2_path found for MV2 extension');
     }
 
     // Get MV3 extension directory from manifest_v3_path or fallback to OUTPUT_DIR
@@ -102,11 +104,11 @@ async function main() {
             console.log(`MV3 extension directory not found at: ${mv3Path}`);
         }
     } else {
-        console.log("No MV3 version available for this extension");
+        console.log('No MV3 version available for this extension');
     }
 
     if (!mv2ExtensionPath && !mv3ExtensionPath) {
-        console.log("No extension files found in either INPUT_DIR or OUTPUT_DIR");
+        console.log('No extension files found in either INPUT_DIR or OUTPUT_DIR');
         exit(1);
     }
 
@@ -122,12 +124,28 @@ async function openInKitty(mv2Path: string | null, mv3Path: string | null, exten
     try {
         if (mv2Path && mv3Path) {
             // Both versions available - create split view
-            console.log(`Opening Kitty with MV2 (${extension.id}) on left and MV3 (${extension.mv3_extension_id}) on right`);
+            console.log(
+                `Opening Kitty with MV2 (${extension.id}) on left and MV3 (${extension.mv3_extension_id}) on right`
+            );
 
             // Step 1: Create new tab with MV2
-            const newTab = spawn('kitten', ['@', 'launch', '--type=tab', '--tab-title', `${extensionName} (MV2 ↔ MV3)`, '--cwd', mv2Path, '--title', `MV2: ${extension.id}`], {
-                stdio: 'pipe'
-            });
+            const newTab = spawn(
+                'kitten',
+                [
+                    '@',
+                    'launch',
+                    '--type=tab',
+                    '--tab-title',
+                    `${extensionName} (MV2 ↔ MV3)`,
+                    '--cwd',
+                    mv2Path,
+                    '--title',
+                    `MV2: ${extension.id}`,
+                ],
+                {
+                    stdio: 'pipe',
+                }
+            );
 
             let tabOutput = '';
             newTab.stdout.on('data', (data) => {
@@ -146,55 +164,98 @@ async function openInKitty(mv2Path: string | null, mv3Path: string | null, exten
             });
 
             // Step 2: Create second window in the same tab with split layout
-            const newWindow = spawn('kitten', ['@', 'launch', '--location', 'vsplit', '--cwd', mv3Path, '--title', `MV3: ${extension.mv3_extension_id}`], {
-                stdio: 'inherit'
-            });
+            const newWindow = spawn(
+                'kitten',
+                [
+                    '@',
+                    'launch',
+                    '--location',
+                    'vsplit',
+                    '--cwd',
+                    mv3Path,
+                    '--title',
+                    `MV3: ${extension.mv3_extension_id}`,
+                ],
+                {
+                    stdio: 'inherit',
+                }
+            );
 
             newWindow.on('error', (error) => {
                 if (error.message.includes('ENOENT')) {
-                    console.error('Error: kitten command not found. Please install Kitty terminal.');
+                    console.error(
+                        'Error: kitten command not found. Please install Kitty terminal.'
+                    );
                     console.error('Visit: https://sw.kovidgoyal.net/kitty/');
                 } else {
                     console.error('Error creating split window:', error.message);
                 }
             });
-
         } else if (mv2Path) {
             // Only MV2 version available
             console.log(`Opening Kitty with MV2 version only (${extension.id})`);
 
-            const kitty = spawn('kitten', ['@', 'launch', '--type=tab', '--tab-title', `${extensionName} (MV2 only)`, '--cwd', mv2Path, '--title', `MV2: ${extension.id}`], {
-                stdio: 'inherit'
-            });
+            const kitty = spawn(
+                'kitten',
+                [
+                    '@',
+                    'launch',
+                    '--type=tab',
+                    '--tab-title',
+                    `${extensionName} (MV2 only)`,
+                    '--cwd',
+                    mv2Path,
+                    '--title',
+                    `MV2: ${extension.id}`,
+                ],
+                {
+                    stdio: 'inherit',
+                }
+            );
 
             kitty.on('error', (error) => {
                 if (error.message.includes('ENOENT')) {
-                    console.error('Error: kitten command not found. Please install Kitty terminal.');
+                    console.error(
+                        'Error: kitten command not found. Please install Kitty terminal.'
+                    );
                     console.error('Visit: https://sw.kovidgoyal.net/kitty/');
                 } else {
                     console.error('Error opening Kitty:', error.message);
                 }
             });
-
         } else if (mv3Path) {
             // Only MV3 version available
             console.log(`Opening Kitty with MV3 version only (${extension.mv3_extension_id})`);
 
-            const kitty = spawn('kitten', ['@', 'launch', '--type=tab', '--tab-title', `${extensionName} (MV3 only)`, '--cwd', mv3Path, '--title', `MV3: ${extension.mv3_extension_id}`], {
-                stdio: 'inherit'
-            });
+            const kitty = spawn(
+                'kitten',
+                [
+                    '@',
+                    'launch',
+                    '--type=tab',
+                    '--tab-title',
+                    `${extensionName} (MV3 only)`,
+                    '--cwd',
+                    mv3Path,
+                    '--title',
+                    `MV3: ${extension.mv3_extension_id}`,
+                ],
+                {
+                    stdio: 'inherit',
+                }
+            );
 
             kitty.on('error', (error) => {
                 if (error.message.includes('ENOENT')) {
-                    console.error('Error: kitten command not found. Please install Kitty terminal.');
+                    console.error(
+                        'Error: kitten command not found. Please install Kitty terminal.'
+                    );
                     console.error('Visit: https://sw.kovidgoyal.net/kitty/');
                 } else {
                     console.error('Error opening Kitty:', error.message);
                 }
             });
         }
-
-
     } catch (error) {
         console.error('Failed to open Kitty:', error);
 

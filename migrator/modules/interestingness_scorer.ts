@@ -1,25 +1,25 @@
-import { Extension } from "../types/extension";
-import { MigrationError, MigrationModule } from "../types/migration_module";
-import { logger } from "../utils/logger";
-import { ExtFileType } from "../types/ext_file_types";
+import { Extension } from '../types/extension';
+import { MigrationError, MigrationModule } from '../types/migration_module';
+import { logger } from '../utils/logger';
+import { ExtFileType } from '../types/ext_file_types';
 
 // Configuration weights similar to extension_analyzer.py
 const WEIGHTS = {
-    webRequest: 25,           // +25 per webRequest occurrence
-    html_lines: 0.25,         // +0.25 per line of HTML
-    storage_local: 5,         // +5 per storage.local occurrence
-    background_page: 10,      // +10 if has background page/service worker
-    content_scripts: 4,       // +4 if has content scripts
+    webRequest: 25, // +25 per webRequest occurrence
+    html_lines: 0.25, // +0.25 per line of HTML
+    storage_local: 5, // +5 per storage.local occurrence
+    background_page: 10, // +10 if has background page/service worker
+    content_scripts: 4, // +4 if has content scripts
     dangerous_permissions: 8, // +8 per dangerous permission (tabs, cookies, history, etc.)
-    host_permissions: 3,      // +3 per external host permission
-    crypto_patterns: 15,      // +15 per crypto/obfuscation pattern (eval, Function, btoa, etc.)
-    network_requests: 2,      // +2 per network request pattern (fetch, XMLHttpRequest, etc.)
-    extension_size: 1,        // +1 per 100KB of extension size
+    host_permissions: 3, // +3 per external host permission
+    crypto_patterns: 15, // +15 per crypto/obfuscation pattern (eval, Function, btoa, etc.)
+    network_requests: 2, // +2 per network request pattern (fetch, XMLHttpRequest, etc.)
+    extension_size: 1, // +1 per 100KB of extension size
 
     // Migration-specific weights
-    api_renames: 10,          // +10 per API rename detected
-    manifest_changes: 5,      // +5 per manifest field change
-    file_modifications: 2     // +2 per modified file
+    api_renames: 10, // +10 per API rename detected
+    manifest_changes: 5, // +5 per manifest field change
+    file_modifications: 2, // +2 per modified file
 };
 
 interface InterestingnessBreakdown {
@@ -39,11 +39,20 @@ interface InterestingnessBreakdown {
 }
 
 export class InterestingnessScorer implements MigrationModule {
-
     private static readonly DANGEROUS_PERMISSIONS = new Set([
-        'tabs', 'activeTab', 'cookies', 'history', 'bookmarks', 'management',
-        'privacy', 'proxy', 'downloads', 'nativeMessaging', 'webRequest',
-        'webRequestBlocking', 'declarativeNetRequest'
+        'tabs',
+        'activeTab',
+        'cookies',
+        'history',
+        'bookmarks',
+        'management',
+        'privacy',
+        'proxy',
+        'downloads',
+        'nativeMessaging',
+        'webRequest',
+        'webRequestBlocking',
+        'declarativeNetRequest',
     ]);
 
     public static migrate(extension: Extension): Extension | MigrationError {
@@ -55,17 +64,22 @@ export class InterestingnessScorer implements MigrationModule {
             (extension as any).interestingness_breakdown = score.breakdown;
 
             logger.debug(extension, `Calculated interestingness score: ${score.total}`, {
-                breakdown: score.breakdown
+                breakdown: score.breakdown,
             });
 
             return extension;
         } catch (error) {
-            logger.error(extension, "Failed to calculate interestingness score", { error });
+            logger.error(extension, 'Failed to calculate interestingness score', {
+                error,
+            });
             return new MigrationError(extension, error);
         }
     }
 
-    private static calculateInterestingnessScore(extension: Extension): { total: number, breakdown: InterestingnessBreakdown } {
+    private static calculateInterestingnessScore(extension: Extension): {
+        total: number;
+        breakdown: InterestingnessBreakdown;
+    } {
         const scores: InterestingnessBreakdown = {
             webRequest: 0,
             html_lines: 0,
@@ -79,7 +93,7 @@ export class InterestingnessScorer implements MigrationModule {
             extension_size: 0,
             api_renames: 0,
             manifest_changes: 0,
-            file_modifications: 0
+            file_modifications: 0,
         };
 
         // Analyze extension files for patterns
@@ -95,7 +109,7 @@ export class InterestingnessScorer implements MigrationModule {
         InterestingnessScorer.analyzeMigrationChanges(extension, scores);
 
         const total = Object.entries(scores).reduce((sum, [key, value]) => {
-            return sum + (value * WEIGHTS[key as keyof typeof WEIGHTS]);
+            return sum + value * WEIGHTS[key as keyof typeof WEIGHTS];
         }, 0);
 
         return { total: Math.round(total), breakdown: scores };
@@ -123,17 +137,32 @@ export class InterestingnessScorer implements MigrationModule {
                     webRequestCount += InterestingnessScorer.countPattern(content, /webRequest/g);
 
                     // storage.local patterns
-                    storageLocalCount += InterestingnessScorer.countPattern(content, /storage\.local/g);
+                    storageLocalCount += InterestingnessScorer.countPattern(
+                        content,
+                        /storage\.local/g
+                    );
 
                     // Crypto/obfuscation patterns
-                    const cryptoPatterns = [/eval\(/g, /Function\(/g, /btoa\(/g, /atob\(/g, /crypto\./g];
-                    cryptoPatternCount += cryptoPatterns.reduce((sum, pattern) =>
-                        sum + InterestingnessScorer.countPattern(content, pattern), 0);
+                    const cryptoPatterns = [
+                        /eval\(/g,
+                        /Function\(/g,
+                        /btoa\(/g,
+                        /atob\(/g,
+                        /crypto\./g,
+                    ];
+                    cryptoPatternCount += cryptoPatterns.reduce(
+                        (sum, pattern) =>
+                            sum + InterestingnessScorer.countPattern(content, pattern),
+                        0
+                    );
 
                     // Network request patterns
                     const networkPatterns = [/fetch\(/g, /XMLHttpRequest/g, /\.ajax\(/g];
-                    networkRequestCount += networkPatterns.reduce((sum, pattern) =>
-                        sum + InterestingnessScorer.countPattern(content, pattern), 0);
+                    networkRequestCount += networkPatterns.reduce(
+                        (sum, pattern) =>
+                            sum + InterestingnessScorer.countPattern(content, pattern),
+                        0
+                    );
                 }
             } catch (error) {
                 logger.debug(extension, `Error analyzing file ${file.path}`, { error });
@@ -158,14 +187,19 @@ export class InterestingnessScorer implements MigrationModule {
         }
 
         // Check for content scripts
-        if (manifest.content_scripts && Array.isArray(manifest.content_scripts) && manifest.content_scripts.length > 0) {
+        if (
+            manifest.content_scripts &&
+            Array.isArray(manifest.content_scripts) &&
+            manifest.content_scripts.length > 0
+        ) {
             scores.content_scripts = 1;
         }
 
         // Count dangerous permissions
         const permissions = manifest.permissions || [];
         scores.dangerous_permissions = permissions.filter((perm: string) =>
-            InterestingnessScorer.DANGEROUS_PERMISSIONS.has(perm)).length;
+            InterestingnessScorer.DANGEROUS_PERMISSIONS.has(perm)
+        ).length;
 
         // Count host permissions
         let hostPermissionCount = 0;
@@ -184,7 +218,10 @@ export class InterestingnessScorer implements MigrationModule {
         scores.host_permissions = hostPermissionCount;
     }
 
-    private static calculateExtensionSize(extension: Extension, scores: InterestingnessBreakdown): void {
+    private static calculateExtensionSize(
+        extension: Extension,
+        scores: InterestingnessBreakdown
+    ): void {
         let totalSize = 0;
 
         for (const file of extension.files) {
@@ -211,7 +248,10 @@ export class InterestingnessScorer implements MigrationModule {
         scores.extension_size = Math.floor(sizeKB / 100);
     }
 
-    private static analyzeMigrationChanges(extension: Extension, scores: InterestingnessBreakdown): void {
+    private static analyzeMigrationChanges(
+        extension: Extension,
+        scores: InterestingnessBreakdown
+    ): void {
         // This is where we could analyze migration-specific changes
         // For now, we'll implement basic heuristics based on manifest version
 
@@ -243,9 +283,11 @@ export class InterestingnessScorer implements MigrationModule {
                 try {
                     const content = file.getContent();
                     // Look for common migration patterns that suggest the file was modified
-                    if (content.includes('chrome.action') ||
+                    if (
+                        content.includes('chrome.action') ||
                         content.includes('chrome.scripting') ||
-                        content.includes('declarativeNetRequest')) {
+                        content.includes('declarativeNetRequest')
+                    ) {
                         modifiedFileCount++;
                     }
                 } catch (error) {

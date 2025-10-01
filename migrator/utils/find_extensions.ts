@@ -1,13 +1,12 @@
-import { lstatSync, existsSync, readdirSync } from "fs";
-import path from "path";
-import { Extension, isNewTabExtension } from "../types/extension";
-import { ExtFileType } from "../types/ext_file_types";
-import { LazyFile } from "../types/abstract_file";
-import { MMapFile } from "./memory_mapped_file";
-import { logger } from "./logger";
-import JSON5 from "json5";
-import crypto from "crypto"
-
+import { lstatSync, existsSync, readdirSync } from 'fs';
+import path from 'path';
+import { Extension, isNewTabExtension } from '../types/extension';
+import { ExtFileType } from '../types/ext_file_types';
+import { LazyFile } from '../types/abstract_file';
+import { MMapFile } from './memory_mapped_file';
+import { logger } from './logger';
+import JSON5 from 'json5';
+import crypto from 'crypto';
 
 /**
  * Finds all unpacked extensions given a path. Can be pointed to a single extension directory or a directory containing multiple extensions.
@@ -31,17 +30,20 @@ export function find_extensions(ext_path: string, includes_mv3: boolean = false)
 
         if (existsSync(manifestPath)) {
             // Single unpacked extension directory
-            return get_manifest([manifestPath], includes_mv3)
+            return get_manifest([manifestPath], includes_mv3);
         } else {
             // Directory containing multiple extension directories - search recursively
             return findExtensionsRecursively(pth, includes_mv3);
         }
-
     } else if (lstatSync(pth).isFile()) {
-        logger.error(null, `File paths are not supported. Please provide a directory path to unpacked extension(s): ${pth}`, {
-            "file": pth,
-            "file_type": path.extname(pth),
-        });
+        logger.error(
+            null,
+            `File paths are not supported. Please provide a directory path to unpacked extension(s): ${pth}`,
+            {
+                file: pth,
+                file_type: path.extname(pth),
+            }
+        );
         return [];
     }
 
@@ -63,28 +65,28 @@ function get_manifest(manifest_paths: string[], includes_mv3: boolean): Extensio
             const manifestContent = manifestMMapFile.getContent();
 
             const json = JSON5.parse(manifestContent) as any;
-            if (json["manifest_version"] == 2 || includes_mv3) {
+            if (json['manifest_version'] == 2 || includes_mv3) {
                 // logger.info(`Found valid Manifest V2 extension: ${json["name"] || 'Unknown'}`);
                 const extensionDir = path.dirname(manifestPath);
-                let extensionName: string = json["name"];
+                let extensionName: string = json['name'];
 
                 // Handle __MSG_name__ pattern
-                if (extensionName.includes("__MSG")) {
-                    extensionName = getLocalizedMessage(extensionDir, "name");
+                if (extensionName.includes('__MSG')) {
+                    extensionName = getLocalizedMessage(extensionDir, 'name');
                 }
 
                 const files = discoverExtensionFiles(extensionDir);
                 // logger.info(`Discovered ${files.length} files in extension: ${extensionName}`);
 
-                const id = getExtensionID(extensionDir) //id gets set in the ChromeTeste class
+                const id = getExtensionID(extensionDir); //id gets set in the ChromeTeste class
 
                 if (!id) {
-                    logger.error(undefined, "Error getting extension id while searching", {
+                    logger.error(undefined, 'Error getting extension id while searching', {
                         manifest_v2_path: manifestPath,
                         manifest_content: manifestContent,
-                        extension_dir: extensionDir
-                    })
-                    return []
+                        extension_dir: extensionDir,
+                    });
+                    return [];
                 }
 
                 const extension: Extension = {
@@ -93,13 +95,16 @@ function get_manifest(manifest_paths: string[], includes_mv3: boolean): Extensio
                     manifest_v2_path: extensionDir,
                     manifest: json,
                     files: files,
-                    isNewTabExtension: isNewTabExtension({ manifest: json } as Extension)
+                    isNewTabExtension: isNewTabExtension({ manifest: json } as Extension),
                 };
 
-                extensions.push(extension)
+                extensions.push(extension);
             }
         } catch (error) {
-            logger.error(null, `Error processing manifest file: ${manifestPath}`, { "error": (error as any).message, "manifest_v2_path": manifestPath });
+            logger.error(null, `Error processing manifest file: ${manifestPath}`, {
+                error: (error as any).message,
+                manifest_v2_path: manifestPath,
+            });
         } finally {
             // Ensure file descriptor is always closed
             if (manifestMMapFile) {
@@ -110,7 +115,6 @@ function get_manifest(manifest_paths: string[], includes_mv3: boolean): Extensio
     return extensions;
 }
 
-
 /**
  * Generates the extension id given a path to the manifest.json
  * @param{string} manifest_path
@@ -120,19 +124,20 @@ function getExtensionID(manifest_path: string): string | undefined {
     try {
         // Extension ID is derived from the extension's path or key
         // For unpacked extensions, you can generate it from the path
-        const extensionId = crypto.createHash('sha256')
+        const extensionId = crypto
+            .createHash('sha256')
             .update(manifest_path)
             .digest('hex')
             .substring(0, 32)
-            .replace(/./g, (c: any) => String.fromCharCode(97 + parseInt(c, 16) % 26));
+            .replace(/./g, (c: any) => String.fromCharCode(97 + (parseInt(c, 16) % 26)));
 
         return extensionId;
     } catch (error) {
         logger.error(null, `Failed to get extension ID: ${error}`, {
-            "manifest_v2_path": manifest_path,
-            "error": error
+            manifest_v2_path: manifest_path,
+            error: error,
         });
-        return undefined
+        return undefined;
     }
 }
 
@@ -165,7 +170,10 @@ function getLocalizedMessage(extensionDir: string, messageKey: string): string {
                     return messages[messageKey].message;
                 }
             } catch (error) {
-                logger.warn(null, `Failed to parse localization file: ${messagesPath}`, { error: error, messages_path: messagesPath });
+                logger.warn(null, `Failed to parse localization file: ${messagesPath}`, {
+                    error: error,
+                    messages_path: messagesPath,
+                });
             } finally {
                 // Ensure file descriptor is always closed
                 if (messagesMMapFile) {
@@ -208,7 +216,15 @@ function discoverExtensionFiles(extensionDir: string): LazyFile[] {
 
                     // Skip common non-essential files for faster processing
                     // IMPORTANT: Skip manifest.json as it's handled separately in extension.manifest
-                    const skipFiles = ['.ds_store', 'thumbs.db', '.gitignore', 'readme.md', 'license', 'changelog.md', 'manifest.json'];
+                    const skipFiles = [
+                        '.ds_store',
+                        'thumbs.db',
+                        '.gitignore',
+                        'readme.md',
+                        'license',
+                        'changelog.md',
+                        'manifest.json',
+                    ];
                     if (skipFiles.includes(fileName)) {
                         continue;
                     }
@@ -221,7 +237,10 @@ function discoverExtensionFiles(extensionDir: string): LazyFile[] {
                 }
             }
         } catch (error) {
-            logger.error(null, `Failed to scan directory: ${dirPath}`, { error: error, dir_path: dirPath });
+            logger.error(null, `Failed to scan directory: ${dirPath}`, {
+                error: error,
+                dir_path: dirPath,
+            });
         }
     }
 
@@ -250,7 +269,6 @@ function getFileType(filePath: string): ExtFileType {
     }
 }
 
-
 function findExtensionsRecursively(dirPath: string, includes_mv3: boolean): Extension[] {
     const extensions: Extension[] = [];
 
@@ -274,9 +292,11 @@ function findExtensionsRecursively(dirPath: string, includes_mv3: boolean): Exte
             // Note: Files are ignored - only looking for unpacked extension directories
         }
     } catch (error) {
-        logger.error(null, `Failed to read directory during recursive search: ${dirPath}`, { error: error, dir_path: dirPath });
+        logger.error(null, `Failed to read directory during recursive search: ${dirPath}`, {
+            error: error,
+            dir_path: dirPath,
+        });
     }
 
     return extensions;
 }
-

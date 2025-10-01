@@ -1,16 +1,16 @@
-import { Extension } from "../types/extension";
-import { MigrationError, MigrationModule } from "../types/migration_module";
-import { LazyFile } from "../types/abstract_file";
-import { ExtFileType } from "../types/ext_file_types";
-import * as espree from "espree";
-import * as ESTree from "estree";
-import * as escodegen from "escodegen";
-import * as fs from "fs";
-import * as path from "path";
-import { logger } from "../utils/logger";
-import { TwinningMapping } from "../types/twinning_mapping";
-import { BlacklistChecker } from "../utils/blacklist_checker";
-import { FormatPreservingGenerator } from "../utils/format_preserving_generator";
+import { Extension } from '../types/extension';
+import { MigrationError, MigrationModule } from '../types/migration_module';
+import { LazyFile } from '../types/abstract_file';
+import { ExtFileType } from '../types/ext_file_types';
+import * as espree from 'espree';
+import * as ESTree from 'estree';
+import * as escodegen from 'escodegen';
+import * as fs from 'fs';
+import * as path from 'path';
+import { logger } from '../utils/logger';
+import { TwinningMapping } from '../types/twinning_mapping';
+import { BlacklistChecker } from '../utils/blacklist_checker';
+import { FormatPreservingGenerator } from '../utils/format_preserving_generator';
 
 /**
  * Cached API mappings
@@ -18,11 +18,10 @@ import { FormatPreservingGenerator } from "../utils/format_preserving_generator"
 let api_mappings: TwinningMapping | null = null;
 
 /**
- * This module handles the transformation of Chrome Extension Manifest V2 APIs 
+ * This module handles the transformation of Chrome Extension Manifest V2 APIs
  * to their Manifest V3 equivalents using AST-based transformations.
  */
 export class RenameAPIS implements MigrationModule {
-
     /**
      * Loads API mappings from the configuration file and writes them into api_mappings
      * @returns The loaded twinning mappings or empty mappings on error
@@ -33,18 +32,18 @@ export class RenameAPIS implements MigrationModule {
         }
 
         try {
-            const mappingsPath = path.join(__dirname, "../templates/api_mappings.json");
-            logger.debug(null, "Loading API mappings", { path: mappingsPath });
+            const mappingsPath = path.join(__dirname, '../templates/api_mappings.json');
+            logger.debug(null, 'Loading API mappings', { path: mappingsPath });
 
-            const fileContent = fs.readFileSync(mappingsPath, "utf8");
+            const fileContent = fs.readFileSync(mappingsPath, 'utf8');
             api_mappings = JSON.parse(fileContent);
 
-            logger.debug(null, "API mappings cached", {
-                count: api_mappings!.mappings.length
+            logger.debug(null, 'API mappings cached', {
+                count: api_mappings!.mappings.length,
             });
         } catch (error) {
-            logger.error(null, "Failed to load API mappings", {
-                error: error instanceof Error ? error.message : String(error)
+            logger.error(null, 'Failed to load API mappings', {
+                error: error instanceof Error ? error.message : String(error),
             });
             // Fallback to empty mappings to prevent crashes
             api_mappings = { mappings: [] };
@@ -55,7 +54,7 @@ export class RenameAPIS implements MigrationModule {
     }
 
     /**
-     * Processes all JavaScript files in the extension and 
+     * Processes all JavaScript files in the extension and
      * applies API transformations based on the loaded mapping rules.
      */
     public static migrate(extension: Extension): Extension | MigrationError {
@@ -65,14 +64,14 @@ export class RenameAPIS implements MigrationModule {
         try {
             // Validate extension input
             if (!extension || !extension.id || !extension.files || !extension.manifest) {
-                return new MigrationError(extension, new Error("Invalid extension structure"));
+                return new MigrationError(extension, new Error('Invalid extension structure'));
             }
 
             const mappings = RenameAPIS.loadApiMappings();
 
             // return if no mappings available
             if (mappings.mappings.length === 0) {
-                return new MigrationError(extension, new Error("No API mappings available"));
+                return new MigrationError(extension, new Error('No API mappings available'));
             }
 
             let hasChanges = false;
@@ -82,7 +81,7 @@ export class RenameAPIS implements MigrationModule {
 
             const blacklistChecker = BlacklistChecker.getInstance();
 
-            const transformedFilesArray = extension.files.map(file => {
+            const transformedFilesArray = extension.files.map((file) => {
                 // skip files that arent js
                 if (file.filetype !== ExtFileType.JS) {
                     return file;
@@ -92,9 +91,9 @@ export class RenameAPIS implements MigrationModule {
                 const blacklistResult = blacklistChecker.isFileBlacklisted(file.path);
                 if (blacklistResult.isBlacklisted) {
                     blacklistedFiles++;
-                    logger.debug(extension, "File blacklisted from transformation", {
+                    logger.debug(extension, 'File blacklisted from transformation', {
                         filePath: file.path,
-                        reason: blacklistResult.reason
+                        reason: blacklistResult.reason,
                     });
                     return file; // Return original file without transformation
                 }
@@ -108,7 +107,13 @@ export class RenameAPIS implements MigrationModule {
                 });
             });
 
-            RenameAPIS.logMigrationResults(startTime, extension, processedFiles, transformedFiles, blacklistedFiles);
+            RenameAPIS.logMigrationResults(
+                startTime,
+                extension,
+                processedFiles,
+                transformedFiles,
+                blacklistedFiles
+            );
 
             // Return original extension if no changes were made
             if (!hasChanges) {
@@ -118,9 +123,8 @@ export class RenameAPIS implements MigrationModule {
             // Return new extension with transformed files
             return {
                 ...extension,
-                files: transformedFilesArray
+                files: transformedFilesArray,
             };
-
         } catch (error) {
             RenameAPIS.handleMigrationError(error, extension, startTime);
             return new MigrationError(extension, error);
@@ -129,7 +133,7 @@ export class RenameAPIS implements MigrationModule {
 
     /**
      * Processes a single JavaScript file for API transformations.
-     * 
+     *
      * @param file The file to process
      * @param mappings API transformation mappings
      * @param onTransformed Callback to track if transformation occurred
@@ -140,7 +144,6 @@ export class RenameAPIS implements MigrationModule {
         mappings: TwinningMapping,
         onTransformed: (transformed: boolean) => void
     ): LazyFile {
-
         const ast = file.getAST();
         if (!ast) {
             // Enhanced error reporting for AST parsing failures
@@ -152,39 +155,50 @@ export class RenameAPIS implements MigrationModule {
 
             // Count potential API transformations that would have been applied
             const content = file.getContent();
-            const potentialTransformations = RenameAPIS.countPotentialTransformations(content, mappings);
+            const potentialTransformations = RenameAPIS.countPotentialTransformations(
+                content,
+                mappings
+            );
 
             if (isLargeFile && potentialTransformations > 0) {
                 // This is a critical issue - large file with APIs that need transformation
-                logger.error(null, "AST parsing failed for large file with API transformations needed", {
-                    path: file.path,
-                    fileSizeKB: fileSizeKB,
-                    potentialTransformations: potentialTransformations,
-                    issue: "Large files (>100KB) cannot be parsed for API transformations"
-                });
+                logger.error(
+                    null,
+                    'AST parsing failed for large file with API transformations needed',
+                    {
+                        path: file.path,
+                        fileSizeKB: fileSizeKB,
+                        potentialTransformations: potentialTransformations,
+                        issue: 'Large files (>100KB) cannot be parsed for API transformations',
+                    }
+                );
 
                 // Log user-visible warning
                 console.warn(`⚠️  WARNING: API transformations skipped for ${file.path}`);
                 console.warn(`   File size: ${fileSizeKB}KB (>100KB limit for AST parsing)`);
-                console.warn(`   ${potentialTransformations} potential API transformations were not applied`);
+                console.warn(
+                    `   ${potentialTransformations} potential API transformations were not applied`
+                );
                 console.warn(`   This may cause runtime errors in Manifest V3`);
             } else if (potentialTransformations > 0) {
                 // Smaller file that failed to parse
-                logger.error(null, "AST parsing failed for file with API transformations needed", {
+                logger.error(null, 'AST parsing failed for file with API transformations needed', {
                     path: file.path,
                     fileSizeKB: fileSizeKB,
                     potentialTransformations: potentialTransformations,
-                    issue: "JavaScript syntax error or unsupported language features"
+                    issue: 'JavaScript syntax error or unsupported language features',
                 });
 
                 console.warn(`⚠️  WARNING: API transformations skipped for ${file.path}`);
                 console.warn(`   File could not be parsed (${fileSizeKB}KB)`);
-                console.warn(`   ${potentialTransformations} potential API transformations were not applied`);
+                console.warn(
+                    `   ${potentialTransformations} potential API transformations were not applied`
+                );
             } else {
                 // File failed to parse but no APIs detected
-                logger.debug(null, "AST parsing failed but no API transformations needed", {
+                logger.debug(null, 'AST parsing failed but no API transformations needed', {
                     path: file.path,
-                    fileSizeKB: fileSizeKB
+                    fileSizeKB: fileSizeKB,
                 });
             }
 
@@ -193,7 +207,11 @@ export class RenameAPIS implements MigrationModule {
         }
 
         // Apply transformations and check if AST was modified
-        const { transformedAST, transformationCount } = RenameAPIS.applyApiTransformations(ast, mappings, file.path);
+        const { transformedAST, transformationCount } = RenameAPIS.applyApiTransformations(
+            ast,
+            mappings,
+            file.path
+        );
 
         if (transformationCount === 0) {
             // logger.warn(null, "No Transformations applied", {
@@ -217,7 +235,7 @@ export class RenameAPIS implements MigrationModule {
 
     /**
      * Applies API transformations to an AST.
-     * 
+     *
      * @param ast The AST to transform
      * @param mappings API transformation mappings
      * @param filePath File path for logging
@@ -247,9 +265,9 @@ export class RenameAPIS implements MigrationModule {
         });
 
         if (transformationCount > 0) {
-            logger.debug(null, "API transformation summary", {
+            logger.debug(null, 'API transformation summary', {
                 file: filePath,
-                transformationsApplied: transformationCount
+                transformationsApplied: transformationCount,
             });
         }
 
@@ -258,7 +276,7 @@ export class RenameAPIS implements MigrationModule {
 
     /**
      * Uses a visitor pattern (https://refactoring.guru/design-patterns/visitor) to traverse the AST once
-     * 
+     *
      * @param node Current AST node
      * @param visitor Function to call for each node
      */
@@ -290,11 +308,11 @@ export class RenameAPIS implements MigrationModule {
 
     /**
      * Checks if an AST node matches a source pattern for transformation.
-     * 
+     *
      * Handles two main patterns:
      * 1. Function calls: chrome.extension.connect() -> CallExpression
      * 2. Property access: chrome.extension.onConnect -> MemberExpression
-     * 
+     *
      * @param node AST node to check
      * @param source Source pattern from mapping
      * @returns True if node matches the pattern
@@ -358,8 +376,10 @@ export class RenameAPIS implements MigrationModule {
         const sourceFormals = source.formals || [];
         const targetFormals = target.formals || [];
 
-        return sourceFormals.length !== targetFormals.length ||
-               JSON.stringify(sourceFormals) !== JSON.stringify(targetFormals);
+        return (
+            sourceFormals.length !== targetFormals.length ||
+            JSON.stringify(sourceFormals) !== JSON.stringify(targetFormals)
+        );
     }
 
     /**
@@ -401,8 +421,11 @@ export class RenameAPIS implements MigrationModule {
 
         // Case 1: executeScript(tabId, details, callback?)
         // Detect: first arg is not an object (likely number/variable for tabId) and not null literal
-        if (args.length >= 2 && args[0].type !== 'ObjectExpression' &&
-            !(args[0].type === 'Literal' && args[0].value === null)) {
+        if (
+            args.length >= 2 &&
+            args[0].type !== 'ObjectExpression' &&
+            !(args[0].type === 'Literal' && args[0].value === null)
+        ) {
             const tabIdArg = args[0];
             const detailsArg = args[1];
             const callbackArg = args[2]; // Optional
@@ -423,8 +446,8 @@ export class RenameAPIS implements MigrationModule {
             const callbackArg = args[1]; // Optional
 
             // Check if details already has target property (already MV3 format)
-            const hasTargetProperty = detailsArg.properties?.some((prop: any) =>
-                prop.key?.name === 'target' || prop.key?.value === 'target'
+            const hasTargetProperty = detailsArg.properties?.some(
+                (prop: any) => prop.key?.name === 'target' || prop.key?.value === 'target'
             );
 
             if (!hasTargetProperty) {
@@ -465,7 +488,7 @@ export class RenameAPIS implements MigrationModule {
     private static createInjectionObject(tabIdArg: any, detailsArg: any): any {
         const injectionObject = {
             type: 'ObjectExpression',
-            properties: [] as any[]
+            properties: [] as any[],
         };
 
         // Add target property
@@ -476,12 +499,12 @@ export class RenameAPIS implements MigrationModule {
             computed: false,
             key: {
                 type: 'Identifier',
-                name: 'target'
+                name: 'target',
             },
             value: {
                 type: 'ObjectExpression',
-                properties: [] as any[]
-            }
+                properties: [] as any[],
+            },
         };
 
         // Add tabId to target if provided
@@ -493,9 +516,9 @@ export class RenameAPIS implements MigrationModule {
                 computed: false,
                 key: {
                     type: 'Identifier',
-                    name: 'tabId'
+                    name: 'tabId',
                 },
-                value: tabIdArg
+                value: tabIdArg,
             });
         }
 
@@ -507,9 +530,13 @@ export class RenameAPIS implements MigrationModule {
         } else if (detailsArg) {
             // If details is not an object literal, we can't spread it
             // Log a warning and keep the original structure
-            logger.warn(null, "executeScript details parameter is not an object literal, skipping transformation", {
-                detailsType: detailsArg.type
-            });
+            logger.warn(
+                null,
+                'executeScript details parameter is not an object literal, skipping transformation',
+                {
+                    detailsType: detailsArg.type,
+                }
+            );
             return detailsArg; // Return original details as fallback
         }
 
@@ -518,11 +545,11 @@ export class RenameAPIS implements MigrationModule {
 
     /**
      * Updates a member expression with a new API path.
-     * 
+     *
      * Parses the target pattern to extract the new API path and updates
      * the AST node structure accordingly. Handles nested member expressions
      * like chrome.runtime.connect.
-     * 
+     *
      * @param memberExpr Member expression AST node to update
      * @param targetPattern Target API pattern (e.g., "chrome.runtime.connect()")
      */
@@ -543,21 +570,21 @@ export class RenameAPIS implements MigrationModule {
         // Update the API path components
         // For chrome.runtime.connect: chrome(root) -> runtime(middle) -> connect(leaf)
         if (newApiPath.length >= 3) {
-            current.object.name = newApiPath[0];     // chrome
-            current.property.name = newApiPath[1];   // runtime
+            current.object.name = newApiPath[0]; // chrome
+            current.property.name = newApiPath[1]; // runtime
             memberExpr.property.name = newApiPath[2]; // connect
         } else if (newApiPath.length === 2) {
-            current.object.name = newApiPath[0];     // chrome
-            current.property.name = newApiPath[1];   // runtime
+            current.object.name = newApiPath[0]; // chrome
+            current.property.name = newApiPath[1]; // runtime
         }
     }
 
     /**
      * Builds a string representation of a member expression.
-     * 
+     *
      * Recursively constructs the full API path from nested member expressions.
      * Example: chrome.extension.connect -> "chrome.extension.connect"
-     * 
+     *
      * @param memberExpr Member expression AST node
      * @returns String representation of the API path
      */
@@ -566,9 +593,10 @@ export class RenameAPIS implements MigrationModule {
             return '';
         }
 
-        const objectPath = memberExpr.object.type === 'MemberExpression'
-            ? RenameAPIS.buildMemberExpressionPath(memberExpr.object)
-            : (memberExpr.object.name || '');
+        const objectPath =
+            memberExpr.object.type === 'MemberExpression'
+                ? RenameAPIS.buildMemberExpressionPath(memberExpr.object)
+                : memberExpr.object.name || '';
 
         const propertyName = memberExpr.property.name || '';
 
@@ -577,11 +605,11 @@ export class RenameAPIS implements MigrationModule {
 
     /**
      * Creates a new LazyFile with transformed content.
-     * 
+     *
      * Creates an in-memory representation of the transformed file that
      * maintains the same interface as the original LazyFile but serves
      * the transformed content instead of reading from disk.
-     * 
+     *
      * @param originalFile Original file to base the transformation on
      * @param newContent Transformed JavaScript content
      * @returns New LazyFile instance with transformed content
@@ -598,7 +626,9 @@ export class RenameAPIS implements MigrationModule {
         // Override methods to work with transformed content
         transformedFile.getContent = () => newContent;
         transformedFile.getSize = () => Buffer.byteLength(newContent, 'utf8');
-        transformedFile.close = () => { /* No-op for in-memory content */ };
+        transformedFile.close = () => {
+            /* No-op for in-memory content */
+        };
 
         // Override getAST to parse transformed content with error handling
         transformedFile.getAST = () => {
@@ -608,7 +638,7 @@ export class RenameAPIS implements MigrationModule {
                     ecmaVersion: 'latest',
                     sourceType: 'script',
                     loc: true,
-                    range: true
+                    range: true,
                 } as any) as ESTree.Program;
             } catch (error) {
                 try {
@@ -617,14 +647,17 @@ export class RenameAPIS implements MigrationModule {
                         ecmaVersion: 'latest',
                         sourceType: 'module',
                         loc: true,
-                        range: true
+                        range: true,
                     } as any) as ESTree.Program;
                 } catch (moduleError) {
                     logger.error(null, `Parsing Error`, {
-                        "path": originalFile.path,
-                        "error": (moduleError instanceof Error ? moduleError.message : String(moduleError)),
-                        "message": Buffer.byteLength(newContent, 'utf8')
-                    })
+                        path: originalFile.path,
+                        error:
+                            moduleError instanceof Error
+                                ? moduleError.message
+                                : String(moduleError),
+                        message: Buffer.byteLength(newContent, 'utf8'),
+                    });
                     return undefined;
                 }
             }
@@ -650,20 +683,20 @@ export class RenameAPIS implements MigrationModule {
 
         if (transformedFiles === 0) {
             if (blacklistedFiles > 0) {
-                logger.info(extension, "No API changes required", {
+                logger.info(extension, 'No API changes required', {
                     blacklistedFiles,
                     processedFiles,
-                    duration
+                    duration,
                 });
             } else {
-                logger.info(extension, "No API changes required");
+                logger.info(extension, 'No API changes required');
             }
         } else {
-            logger.info(extension, "API rename migration completed", {
+            logger.info(extension, 'API rename migration completed', {
                 transformedFiles,
                 processedFiles,
                 blacklistedFiles,
-                duration
+                duration,
             });
         }
     }
@@ -676,7 +709,10 @@ export class RenameAPIS implements MigrationModule {
      * @param mappings API transformation mappings
      * @returns Number of potential transformations
      */
-    private static countPotentialTransformations(content: string, mappings: TwinningMapping): number {
+    private static countPotentialTransformations(
+        content: string,
+        mappings: TwinningMapping
+    ): number {
         let count = 0;
 
         for (const mapping of mappings.mappings) {
@@ -707,9 +743,13 @@ export class RenameAPIS implements MigrationModule {
      * @param extension Extension name for logging
      * @param startTime Migration start timestamp
      */
-    private static handleMigrationError(error: unknown, extension: Extension | undefined, startTime: number): void {
+    private static handleMigrationError(
+        error: unknown,
+        extension: Extension | undefined,
+        startTime: number
+    ): void {
         logger.error(extension, `Migration error at ${startTime}`, {
-            "error": error instanceof Error ? error.message : String(error)
+            error: error instanceof Error ? error.message : String(error),
         });
     }
 }

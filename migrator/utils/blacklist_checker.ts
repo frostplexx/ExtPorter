@@ -1,6 +1,6 @@
-import * as fs from "fs";
-import * as path from "path";
-import { logger } from "./logger";
+import * as fs from 'fs';
+import * as path from 'path';
+import { logger } from './logger';
 
 interface BlacklistPattern {
     pattern: string;
@@ -44,35 +44,36 @@ export class BlacklistChecker {
         }
 
         try {
-            const configPath = path.join(__dirname, "../templates/transformation_blacklist.json");
-            logger.debug(null, "Loading transformation blacklist", { path: configPath });
+            const configPath = path.join(__dirname, '../templates/transformation_blacklist.json');
+            logger.debug(null, 'Loading transformation blacklist', {
+                path: configPath,
+            });
 
-            const fileContent = fs.readFileSync(configPath, "utf8");
+            const fileContent = fs.readFileSync(configPath, 'utf8');
             this.config = JSON.parse(fileContent);
 
             // Compile regex patterns for performance
-            this.compiledPatterns = this.config!.blacklist_patterns.map(pattern => ({
+            this.compiledPatterns = this.config!.blacklist_patterns.map((pattern) => ({
                 regex: new RegExp(pattern.pattern, pattern.case_sensitive ? '' : 'i'),
-                reason: pattern.reason
+                reason: pattern.reason,
             }));
 
-            logger.debug(null, "Transformation blacklist loaded", {
-                patternCount: this.config!.blacklist_patterns.length
+            logger.debug(null, 'Transformation blacklist loaded', {
+                patternCount: this.config!.blacklist_patterns.length,
             });
-
         } catch (error) {
-            logger.error(null, "Failed to load transformation blacklist", {
-                error: error instanceof Error ? error.message : String(error)
+            logger.error(null, 'Failed to load transformation blacklist', {
+                error: error instanceof Error ? error.message : String(error),
             });
 
             // Fallback to empty config to prevent crashes
             this.config = {
-                description: "Fallback empty config",
+                description: 'Fallback empty config',
                 blacklist_patterns: [],
                 settings: {
                     log_blacklisted_files: false,
-                    count_blacklisted_in_stats: false
-                }
+                    count_blacklisted_in_stats: false,
+                },
             };
             this.compiledPatterns = [];
         }
@@ -85,7 +86,10 @@ export class BlacklistChecker {
      * @param filePath The file path to check
      * @returns Object with isBlacklisted boolean and reason string
      */
-    public isFileBlacklisted(filePath: string): { isBlacklisted: boolean; reason?: string } {
+    public isFileBlacklisted(filePath: string): {
+        isBlacklisted: boolean;
+        reason?: string;
+    } {
         const config = this.loadConfig();
 
         // Normalize file path for consistent matching
@@ -94,10 +98,10 @@ export class BlacklistChecker {
         for (const { regex, reason } of this.compiledPatterns) {
             if (regex.test(normalizedPath)) {
                 if (config.settings.log_blacklisted_files) {
-                    logger.debug(null, "File blacklisted from transformation", {
+                    logger.debug(null, 'File blacklisted from transformation', {
                         filePath: normalizedPath,
                         reason: reason,
-                        pattern: regex.source
+                        pattern: regex.source,
                     });
                 }
                 return { isBlacklisted: true, reason };
@@ -112,26 +116,33 @@ export class BlacklistChecker {
      */
     public getBlacklistStats(): {
         totalPatterns: number;
-        settings: { log_blacklisted_files: boolean; count_blacklisted_in_stats: boolean };
+        settings: {
+            log_blacklisted_files: boolean;
+            count_blacklisted_in_stats: boolean;
+        };
     } {
         const config = this.loadConfig();
         return {
             totalPatterns: config.blacklist_patterns.length,
-            settings: config.settings
+            settings: config.settings,
         };
     }
 
     /**
      * Add a runtime pattern to the blacklist (useful for testing)
      */
-    public addRuntimePattern(pattern: string, reason: string, caseSensitive: boolean = false): void {
+    public addRuntimePattern(
+        pattern: string,
+        reason: string,
+        caseSensitive: boolean = false
+    ): void {
         const regex = new RegExp(pattern, caseSensitive ? '' : 'i');
         this.compiledPatterns.push({ regex, reason });
 
-        logger.debug(null, "Runtime blacklist pattern added", {
+        logger.debug(null, 'Runtime blacklist pattern added', {
             pattern,
             reason,
-            caseSensitive
+            caseSensitive,
         });
     }
 
@@ -140,11 +151,11 @@ export class BlacklistChecker {
      */
     public clearRuntimePatterns(): void {
         const config = this.loadConfig();
-        this.compiledPatterns = config.blacklist_patterns.map(pattern => ({
+        this.compiledPatterns = config.blacklist_patterns.map((pattern) => ({
             regex: new RegExp(pattern.pattern, pattern.case_sensitive ? '' : 'i'),
-            reason: pattern.reason
+            reason: pattern.reason,
         }));
 
-        logger.debug(null, "Runtime blacklist patterns cleared");
+        logger.debug(null, 'Runtime blacklist patterns cleared');
     }
 }

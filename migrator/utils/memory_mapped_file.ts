@@ -19,7 +19,7 @@ export class MMapFile implements MemoryMappedFile {
         this.fd = openSync(filePath, 'r');
         const stats = fstatSync(this.fd);
         this.size = stats.size;
-        
+
         // Use lazy loading approach - allocate buffer but don't read until needed
         this.buffer = Buffer.alloc(this.size);
         if (this.size > 0) {

@@ -6,7 +6,7 @@ let counter = 0;
 let settings = {
     autoInject: false,
     debugMode: false,
-    notifications: true
+    notifications: true,
 };
 
 // DOM elements
@@ -14,7 +14,7 @@ const elements = {
     counter: null,
     status: null,
     buttons: {},
-    checkboxes: {}
+    checkboxes: {},
 };
 
 // Initialize popup when DOM is ready
@@ -35,14 +35,14 @@ async function initializePopup() {
         showAlert: document.getElementById('show-alert'),
         increment: document.getElementById('increment'),
         decrement: document.getElementById('decrement'),
-        reset: document.getElementById('reset')
+        reset: document.getElementById('reset'),
     };
 
     // Get checkboxes
     elements.checkboxes = {
         autoInject: document.getElementById('auto-inject'),
         debugMode: document.getElementById('debug-mode'),
-        notifications: document.getElementById('notifications')
+        notifications: document.getElementById('notifications'),
     };
 
     // Load saved settings
@@ -84,7 +84,10 @@ async function handleInjectContent() {
     setButtonState('injectContent', false);
 
     try {
-        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        const [tab] = await chrome.tabs.query({
+            active: true,
+            currentWindow: true,
+        });
 
         await chrome.tabs.executeScript(tab.id, {
             code: `
@@ -117,12 +120,11 @@ async function handleInjectContent() {
 
                 // Signal injection success
                 'INJECTION_SUCCESS';
-            `
+            `,
         });
 
         updateStatus('Content script injected successfully!', 'success');
         console.log('✅ Content script injection successful');
-
     } catch (error) {
         console.error('❌ Content script injection failed:', error);
         updateStatus(`Injection failed: ${error.message}`, 'error');
@@ -136,7 +138,10 @@ async function handleHighlightPage() {
     setButtonState('highlightPage', false);
 
     try {
-        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        const [tab] = await chrome.tabs.query({
+            active: true,
+            currentWindow: true,
+        });
 
         await chrome.tabs.executeScript(tab.id, {
             code: `
@@ -199,12 +204,11 @@ async function handleHighlightPage() {
                 }, 5000);
 
                 highlightCount;
-            `
+            `,
         });
 
         updateStatus('Page elements highlighted successfully!', 'success');
         console.log('✅ Page highlighting successful');
-
     } catch (error) {
         console.error('❌ Page highlighting failed:', error);
         updateStatus(`Highlighting failed: ${error.message}`, 'error');
@@ -218,7 +222,10 @@ async function handleChangeBackground() {
     setButtonState('changeBackground', false);
 
     try {
-        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        const [tab] = await chrome.tabs.query({
+            active: true,
+            currentWindow: true,
+        });
         const colors = ['#ff6b6b', '#4ecdc4', '#45b7d1', '#96ceb4', '#ffeaa7', '#dda0dd'];
         const randomColor = colors[Math.floor(Math.random() * colors.length)];
 
@@ -260,12 +267,11 @@ async function handleChangeBackground() {
                 }, 3000);
 
                 '${randomColor}';
-            `
+            `,
         });
 
         updateStatus(`Background changed to ${randomColor}!`, 'success');
         console.log('✅ Background change successful');
-
     } catch (error) {
         console.error('❌ Background change failed:', error);
         updateStatus(`Background change failed: ${error.message}`, 'error');
@@ -279,7 +285,10 @@ async function handleShowAlert() {
     setButtonState('showAlert', false);
 
     try {
-        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        const [tab] = await chrome.tabs.query({
+            active: true,
+            currentWindow: true,
+        });
 
         await chrome.tabs.executeScript(tab.id, {
             code: `
@@ -359,12 +368,11 @@ async function handleShowAlert() {
                 }, 5000);
 
                 'ALERT_SHOWN';
-            `
+            `,
         });
 
         updateStatus('Custom alert displayed successfully!', 'success');
         console.log('✅ Alert display successful');
-
     } catch (error) {
         console.error('❌ Alert display failed:', error);
         updateStatus(`Alert failed: ${error.message}`, 'error');
@@ -471,7 +479,7 @@ async function saveSettings() {
     try {
         await chrome.storage.sync.set({
             counter: counter,
-            settings: settings
+            settings: settings,
         });
 
         if (settings.debugMode) {
@@ -489,6 +497,6 @@ if (typeof window !== 'undefined') {
         settings: () => settings,
         elements: () => elements,
         updateStatus,
-        setButtonState
+        setButtonState,
     };
 }

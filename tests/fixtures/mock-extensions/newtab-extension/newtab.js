@@ -10,19 +10,19 @@ const newTabState = {
         weather: false,
         bookmarks: false,
         topSites: false,
-        recent: false
+        recent: false,
     },
     settings: {
         showWeather: true,
         showBookmarks: true,
         showTopSites: true,
-        use24HourFormat: false
+        use24HourFormat: false,
     },
     testData: {
         bookmarksTestRun: false,
         storageTestRun: false,
-        errorTestRun: false
-    }
+        errorTestRun: false,
+    },
 };
 
 // DOM elements cache
@@ -116,7 +116,7 @@ function initializeClock() {
         const timeOptions = {
             hour12: !newTabState.settings.use24HourFormat,
             hour: '2-digit',
-            minute: '2-digit'
+            minute: '2-digit',
         };
 
         const timeString = now.toLocaleTimeString('en-US', timeOptions);
@@ -128,7 +128,7 @@ function initializeClock() {
             weekday: 'long',
             year: 'numeric',
             month: 'long',
-            day: 'numeric'
+            day: 'numeric',
         };
 
         const dateString = now.toLocaleDateString('en-US', dateOptions);
@@ -152,7 +152,7 @@ function initializeWeather() {
         temperature: Math.floor(Math.random() * 30) + 60, // 60-90°F
         condition: ['Sunny', 'Partly Cloudy', 'Cloudy', 'Rainy'][Math.floor(Math.random() * 4)],
         humidity: Math.floor(Math.random() * 40) + 40, // 40-80%
-        wind: Math.floor(Math.random() * 15) + 5 // 5-20 mph
+        wind: Math.floor(Math.random() * 15) + 5, // 5-20 mph
     };
 
     // Update weather display
@@ -196,7 +196,6 @@ async function initializeBookmarks() {
         elements.bookmarksList.setAttribute('data-bookmark-count', bookmarks.length.toString());
         newTabState.widgetsLoaded.bookmarks = true;
         console.log(`✅ Bookmarks widget initialized with ${bookmarks.length} bookmarks`);
-
     } catch (error) {
         console.error('❌ Failed to load bookmarks:', error);
         elements.bookmarksList.innerHTML = '<div class="error">Failed to load bookmarks</div>';
@@ -226,7 +225,6 @@ async function initializeTopSites() {
         elements.topsitesList.setAttribute('data-topsite-count', topSites.length.toString());
         newTabState.widgetsLoaded.topSites = true;
         console.log(`✅ Top sites widget initialized with ${topSites.length} sites`);
-
     } catch (error) {
         console.error('❌ Failed to load top sites:', error);
         elements.topsitesList.innerHTML = '<div class="error">Failed to load top sites</div>';
@@ -242,9 +240,21 @@ function initializeRecentActivity() {
     // Generate mock recent activity for testing
     const mockRecentActivity = [
         { title: 'GitHub', url: 'https://github.com', time: '2 minutes ago' },
-        { title: 'Stack Overflow', url: 'https://stackoverflow.com', time: '15 minutes ago' },
-        { title: 'MDN Web Docs', url: 'https://developer.mozilla.org', time: '1 hour ago' },
-        { title: 'Chrome Extensions', url: 'https://developer.chrome.com', time: '2 hours ago' }
+        {
+            title: 'Stack Overflow',
+            url: 'https://stackoverflow.com',
+            time: '15 minutes ago',
+        },
+        {
+            title: 'MDN Web Docs',
+            url: 'https://developer.mozilla.org',
+            time: '1 hour ago',
+        },
+        {
+            title: 'Chrome Extensions',
+            url: 'https://developer.chrome.com',
+            time: '2 hours ago',
+        },
     ];
 
     // Clear loading state
@@ -325,7 +335,7 @@ function showMockTopSites() {
         { title: 'Google', url: 'https://google.com' },
         { title: 'YouTube', url: 'https://youtube.com' },
         { title: 'Gmail', url: 'https://gmail.com' },
-        { title: 'GitHub', url: 'https://github.com' }
+        { title: 'GitHub', url: 'https://github.com' },
     ];
 
     elements.topsitesList.innerHTML = '';
@@ -353,8 +363,12 @@ function setupEventListeners() {
     // Quick action buttons
     elements.newTabBtn.addEventListener('click', () => chrome.tabs.create({}));
     elements.newWindowBtn.addEventListener('click', () => chrome.windows.create({}));
-    elements.bookmarksBtn.addEventListener('click', () => chrome.tabs.create({ url: 'chrome://bookmarks/' }));
-    elements.historyBtn.addEventListener('click', () => chrome.tabs.create({ url: 'chrome://history/' }));
+    elements.bookmarksBtn.addEventListener('click', () =>
+        chrome.tabs.create({ url: 'chrome://bookmarks/' })
+    );
+    elements.historyBtn.addEventListener('click', () =>
+        chrome.tabs.create({ url: 'chrome://history/' })
+    );
 
     // Test buttons
     elements.refreshDataBtn.addEventListener('click', refreshAllData);
@@ -378,7 +392,9 @@ function toggleSetting(settingName) {
     newTabState.settings[settingName] = !newTabState.settings[settingName];
 
     // Update toggle visual state
-    const toggleElement = document.getElementById(`${settingName.replace(/([A-Z])/g, '-$1').toLowerCase()}-toggle`);
+    const toggleElement = document.getElementById(
+        `${settingName.replace(/([A-Z])/g, '-$1').toLowerCase()}-toggle`
+    );
     if (toggleElement) {
         toggleElement.classList.toggle('active', newTabState.settings[settingName]);
         toggleElement.setAttribute('data-active', newTabState.settings[settingName].toString());
@@ -434,7 +450,6 @@ async function refreshAllData() {
             elements.refreshDataBtn.textContent = '🔄 Refresh Data';
             elements.refreshDataBtn.disabled = false;
         }, 2000);
-
     } catch (error) {
         console.error('❌ Refresh failed:', error);
         elements.refreshDataBtn.textContent = '❌ Failed';
@@ -467,7 +482,6 @@ async function testBookmarksFunctionality() {
             elements.testBookmarksBtn.textContent = '📚 Test Bookmarks';
             elements.testBookmarksBtn.disabled = false;
         }, 3000);
-
     } catch (error) {
         console.error('❌ Bookmarks test failed:', error);
         elements.testBookmarksBtn.textContent = '❌ Failed';
@@ -491,7 +505,7 @@ async function testStorageFunctionality() {
         const testData = {
             testTime: Date.now(),
             testString: 'New Tab Test Extension',
-            testNumber: Math.random()
+            testNumber: Math.random(),
         };
 
         // Save test data
@@ -502,10 +516,11 @@ async function testStorageFunctionality() {
 
         // Verify data integrity
         const retrieved = result.newTabTest;
-        const isValid = retrieved &&
-                       retrieved.testTime === testData.testTime &&
-                       retrieved.testString === testData.testString &&
-                       retrieved.testNumber === testData.testNumber;
+        const isValid =
+            retrieved &&
+            retrieved.testTime === testData.testTime &&
+            retrieved.testString === testData.testString &&
+            retrieved.testNumber === testData.testNumber;
 
         if (isValid) {
             newTabState.testData.storageTestRun = true;
@@ -520,7 +535,6 @@ async function testStorageFunctionality() {
             elements.testStorageBtn.textContent = '💾 Test Storage';
             elements.testStorageBtn.disabled = false;
         }, 3000);
-
     } catch (error) {
         console.error('❌ Storage test failed:', error);
         elements.testStorageBtn.textContent = '❌ Failed';
@@ -542,7 +556,6 @@ function testErrorHandling() {
     try {
         // Intentionally cause an error for testing
         throw new Error('Intentional test error for Puppeteer testing');
-
     } catch (error) {
         console.error('🧪 Test error caught (expected):', error);
 
@@ -560,7 +573,7 @@ function testErrorHandling() {
 
 // Utility functions
 function extractBookmarks(bookmarkTree, result = []) {
-    bookmarkTree.forEach(node => {
+    bookmarkTree.forEach((node) => {
         if (node.url) {
             result.push({ title: node.title, url: node.url });
         } else if (node.children) {
@@ -574,7 +587,10 @@ async function loadSettings() {
     try {
         const result = await chrome.storage.sync.get(['newTabSettings']);
         if (result.newTabSettings) {
-            newTabState.settings = { ...newTabState.settings, ...result.newTabSettings };
+            newTabState.settings = {
+                ...newTabState.settings,
+                ...result.newTabSettings,
+            };
         }
 
         // Apply loaded settings to UI
@@ -606,7 +622,7 @@ window.newTabTestExtension = {
     testData: () => newTabState.testData,
     refreshData: refreshAllData,
     toggleSetting: toggleSetting,
-    extractBookmarks: extractBookmarks
+    extractBookmarks: extractBookmarks,
 };
 
 console.log('✅ New Tab script setup complete');

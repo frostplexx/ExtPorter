@@ -14,26 +14,32 @@ declare global {
     }
 }
 
-
 describe('Mock Extensions Puppeteer Tests', () => {
     let browser: Browser;
     let page: Page;
 
     const popupExtensionPath = path.join(__dirname, '../fixtures/mock-extensions/popup-extension');
-    const newtabExtensionPath = path.join(__dirname, '../fixtures/mock-extensions/newtab-extension');
-
+    const newtabExtensionPath = path.join(
+        __dirname,
+        '../fixtures/mock-extensions/newtab-extension'
+    );
 
     // fetches the path of the chrome binary
     const getChromePath = () => {
         if (process.env.IN_NIX_SHELL) {
             let bin_path = execSync(`which google-chrome-stable`).toString();
-            bin_path = bin_path.replace("/bin/google-chrome-stable", "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome").replace("\n", "")
-            return bin_path
+            bin_path = bin_path
+                .replace(
+                    '/bin/google-chrome-stable',
+                    '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
+                )
+                .replace('\n', '');
+            return bin_path;
         } else {
             // TODO
-            return ""
+            return '';
         }
-    }
+    };
 
     beforeAll(async () => {
         // Launch browser with extension loading
@@ -63,7 +69,7 @@ describe('Mock Extensions Puppeteer Tests', () => {
                 '--disable-manifest-v2-deprecation-warnings',
                 '--disable-extensions-manifest-v2-deprecation-warnings',
                 '--silent-debugger-extension-api',
-            ]
+            ],
         });
     });
 
@@ -101,14 +107,17 @@ describe('Mock Extensions Puppeteer Tests', () => {
             await page.waitForSelector('#extension-info-modal', { timeout: 5000 });
 
             // Verify modal content
-            const modalTitle = await page.$eval('#extension-info-modal h3', el => el.textContent);
+            const modalTitle = await page.$eval('#extension-info-modal h3', (el) => el.textContent);
             expect(modalTitle).toContain('Popup Test Extension');
 
             // Test highlight functionality
             await page.click('#test-highlight');
 
             // Close modal by clicking close button
-            await page.waitForSelector('#extension-info-modal', { hidden: true, timeout: 5000 });
+            await page.waitForSelector('#extension-info-modal', {
+                hidden: true,
+                timeout: 5000,
+            });
         });
 
         test('should test content script functionality', async () => {
@@ -135,10 +144,15 @@ describe('Mock Extensions Puppeteer Tests', () => {
             await newTabPage.goto('chrome://newtab/');
 
             // Wait for our custom new tab to load
-            await newTabPage.waitForSelector('[data-testid="newtab-title"]', { timeout: 5000 });
+            await newTabPage.waitForSelector('[data-testid="newtab-title"]', {
+                timeout: 5000,
+            });
 
             // Verify title
-            const title = await newTabPage.$eval('[data-testid="newtab-title"]', el => el.textContent);
+            const title = await newTabPage.$eval(
+                '[data-testid="newtab-title"]',
+                (el) => el.textContent
+            );
             expect(title).toContain('New Tab Test');
 
             // Check if widgets are present
@@ -157,11 +171,15 @@ describe('Mock Extensions Puppeteer Tests', () => {
             const newTabPage = await browser.newPage();
             await newTabPage.goto('chrome://newtab/');
 
-            await newTabPage.waitForSelector('[data-testid="newtab-title"]', { timeout: 5000 });
+            await newTabPage.waitForSelector('[data-testid="newtab-title"]', {
+                timeout: 5000,
+            });
 
             // Test settings toggle
             await newTabPage.click('[data-testid="settings-toggle"]');
-            await newTabPage.waitForSelector('#settings-content.open', { timeout: 2000 });
+            await newTabPage.waitForSelector('#settings-content.open', {
+                timeout: 2000,
+            });
 
             // Test weather toggle
             await newTabPage.click('[data-testid="weather-toggle"]');
@@ -178,7 +196,10 @@ describe('Mock Extensions Puppeteer Tests', () => {
             await newTabPage.click('[data-testid="test-bookmarks-btn"]');
 
             // Verify clock is running
-            const timeDisplay = await newTabPage.$eval('[data-testid="time-display"]', el => el.textContent);
+            const timeDisplay = await newTabPage.$eval(
+                '[data-testid="time-display"]',
+                (el) => el.textContent
+            );
             expect(timeDisplay).not.toBe('--:--');
 
             await newTabPage.close();
@@ -188,8 +209,9 @@ describe('Mock Extensions Puppeteer Tests', () => {
             const newTabPage = await browser.newPage();
             await newTabPage.goto('chrome://newtab/');
 
-            await newTabPage.waitForSelector('[data-testid="newtab-title"]', { timeout: 5000 });
-
+            await newTabPage.waitForSelector('[data-testid="newtab-title"]', {
+                timeout: 5000,
+            });
 
             // Check bookmarks list content
             const bookmarksList = await newTabPage.$('[data-testid="bookmarks-list"]');
@@ -198,10 +220,11 @@ describe('Mock Extensions Puppeteer Tests', () => {
             // Test bookmarks functionality button
             await newTabPage.click('[data-testid="test-bookmarks-btn"]');
 
-
             // Verify bookmark count attribute is set
             const element = await newTabPage.$('[data-testid="test-bookmarks-btn"]');
-            const bookmarkCount = await element?.evaluate(el => el.getAttribute('data-bookmark-count'));
+            const bookmarkCount = await element?.evaluate((el) =>
+                el.getAttribute('data-bookmark-count')
+            );
             expect(bookmarkCount).toBeDefined();
 
             await newTabPage.close();
@@ -215,11 +238,17 @@ describe('Mock Extensions Puppeteer Tests', () => {
 
             // Test if Chrome extension APIs are available
             const hasStorageAPI = await testPage.evaluate(() => {
-                return typeof (window as any).chrome !== 'undefined' && typeof (window as any).chrome.storage !== 'undefined';
+                return (
+                    typeof (window as any).chrome !== 'undefined' &&
+                    typeof (window as any).chrome.storage !== 'undefined'
+                );
             });
 
             const hasTabsAPI = await testPage.evaluate(() => {
-                return typeof (window as any).chrome !== 'undefined' && typeof (window as any).chrome.tabs !== 'undefined';
+                return (
+                    typeof (window as any).chrome !== 'undefined' &&
+                    typeof (window as any).chrome.tabs !== 'undefined'
+                );
             });
 
             // Note: These will be false on regular pages due to security restrictions
@@ -246,8 +275,8 @@ describe('Mock Extensions Puppeteer Tests', () => {
             await page.goto('https://example.com');
 
             // Filter out unrelated errors
-            const extensionErrors = consoleLogs.filter(log =>
-                log.includes('extension') || log.includes('chrome-extension')
+            const extensionErrors = consoleLogs.filter(
+                (log) => log.includes('extension') || log.includes('chrome-extension')
             );
 
             // Should not have critical extension loading errors
