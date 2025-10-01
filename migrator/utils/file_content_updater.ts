@@ -1,11 +1,10 @@
-import { LazyFile } from "../types/abstract_file";
-import { ExtFileType } from "../types/ext_file_types";
-import * as fs from "fs-extra";
-import * as path from "path";
-import { logger } from "./logger";
+import { LazyFile } from '../types/abstract_file';
+import { ExtFileType } from '../types/ext_file_types';
+import * as fs from 'fs-extra';
+import * as path from 'path';
+import { logger } from './logger';
 
 export class FileContentUpdater {
-
     /**
      * Updates the content of a LazyFile by writing new content to its absolute path
      *
@@ -19,7 +18,10 @@ export class FileContentUpdater {
             const absolutePath = (file as any)._absolutePath;
 
             if (!absolutePath) {
-                logger.warn(null, `Cannot update file content: no absolute path found for ${file.path}`);
+                logger.warn(
+                    null,
+                    `Cannot update file content: no absolute path found for ${file.path}`
+                );
                 return false;
             }
 
@@ -50,7 +52,12 @@ export class FileContentUpdater {
      * @param fileType The file type
      * @returns A new LazyFile instance or null if creation failed
      */
-    static createNewFile(absolutePath: string, content: string, relativePath: string, fileType: ExtFileType): LazyFile | null {
+    static createNewFile(
+        absolutePath: string,
+        content: string,
+        relativePath: string,
+        fileType: ExtFileType
+    ): LazyFile | null {
         try {
             // Ensure the directory exists
             fs.ensureDirSync(path.dirname(absolutePath));

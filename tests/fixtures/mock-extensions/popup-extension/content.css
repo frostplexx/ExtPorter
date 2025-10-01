@@ -13,7 +13,8 @@
 }
 
 @keyframes pulseGlow {
-    0%, 100% {
+    0%,
+    100% {
         box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
     }
     50% {
@@ -22,9 +23,10 @@
 }
 
 /* Base styles for extension elements */
-[id^="popup-test"] {
+[id^='popup-test'] {
     animation: fadeInSlide 0.3s ease-out;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    font-family:
+        -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
     box-sizing: border-box;
 }
 
@@ -49,7 +51,8 @@
 }
 
 @keyframes highlightPulse {
-    0%, 100% {
+    0%,
+    100% {
         outline-color: #ff6b6b;
         outline-width: 3px;
     }
@@ -227,8 +230,8 @@ body[data-extension-bg-test] {
 
 /* Print styles */
 @media print {
-    [id^="popup-test"],
-    [class*="extension-"],
+    [id^='popup-test'],
+    [class*='extension-'],
     .popup-test-highlight {
         display: none !important;
     }

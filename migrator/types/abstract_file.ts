@@ -1,10 +1,10 @@
-import * as espree from "espree";
-import * as ESTree from "estree";
-import { ExtFileType } from "./ext_file_types";
-import { MMapFile } from "../utils/memory_mapped_file";
-import { logger } from "../utils/logger";
-import { lstatSync } from "fs";
-import { Extension } from "./extension";
+import * as espree from 'espree';
+import * as ESTree from 'estree';
+import { ExtFileType } from './ext_file_types';
+import { MMapFile } from '../utils/memory_mapped_file';
+import { logger } from '../utils/logger';
+import { lstatSync } from 'fs';
+import { Extension } from './extension';
 
 export interface AbstractFile {
     path: string;
@@ -30,8 +30,6 @@ export class LazyFile implements AbstractFile {
         this.filetype = fileType;
         // Don't open file descriptor until needed
     }
-
-
 
     private _getMMapFile(): MMapFile {
         if (!this._mmapFile) {
@@ -61,7 +59,7 @@ export class LazyFile implements AbstractFile {
                     ecmaVersion: 'latest',
                     sourceType: 'script',
                     loc: true,
-                    range: true
+                    range: true,
                 } as any) as ESTree.Program;
             } catch (scriptError) {
                 // Fallback: try parsing as module if script parsing fails
@@ -70,7 +68,7 @@ export class LazyFile implements AbstractFile {
                         ecmaVersion: 'latest',
                         sourceType: 'module',
                         loc: true,
-                        range: true
+                        range: true,
                     } as any) as ESTree.Program;
                 } catch (moduleError) {
                     throw scriptError; // Throw original error

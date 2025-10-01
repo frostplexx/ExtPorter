@@ -1,14 +1,14 @@
-import { MigrationModule, MigrationError } from "../types/migration_module";
-import { Extension } from "../types/extension";
-import { LazyFile } from "../types/abstract_file";
-import { ExtFileType } from "../types/ext_file_types";
-import { logger } from "../utils/logger";
-import { FileContentUpdater } from "../utils/file_content_updater";
-import { globals } from "../index";
-import * as fs from "fs-extra";
-import * as path from "path";
-import * as crypto from "crypto";
-import { execSync } from "child_process";
+import { MigrationModule, MigrationError } from '../types/migration_module';
+import { Extension } from '../types/extension';
+import { LazyFile } from '../types/abstract_file';
+import { ExtFileType } from '../types/ext_file_types';
+import { logger } from '../utils/logger';
+import { FileContentUpdater } from '../utils/file_content_updater';
+import { globals } from '../index';
+import * as fs from 'fs-extra';
+import * as path from 'path';
+import * as crypto from 'crypto';
+import { execSync } from 'child_process';
 
 export interface RemoteResource {
     url: string;
@@ -27,7 +27,8 @@ export interface DownloadResult {
 }
 
 export class ResourceDownloader extends MigrationModule {
-    private static readonly USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36";
+    private static readonly USER_AGENT =
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36';
     private static readonly TIMEOUT_MS = 10000; // 10 seconds
     private static readonly MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 
@@ -47,17 +48,17 @@ export class ResourceDownloader extends MigrationModule {
         /https:\/\/[^\/]*\.googleapis\.com\/[^"'\s]*/g,
 
         // Generic HTTPS resources
-        /https:\/\/[^\/\s"']+\.[^\/\s"']+\/[^"'\s]*\.(js|css|woff|woff2|ttf|eot|svg|png|jpg|jpeg|gif|ico)(?:[?#][^"'\s]*)?/gi
+        /https:\/\/[^\/\s"']+\.[^\/\s"']+\/[^"'\s]*\.(js|css|woff|woff2|ttf|eot|svg|png|jpg|jpeg|gif|ico)(?:[?#][^"'\s]*)?/gi,
     ];
 
     public static migrate(extension: Extension): Extension | MigrationError {
         try {
             // Check for null/invalid extension or manifest
             if (!extension || !extension.manifest) {
-                throw new Error("Extension or manifest is null/undefined");
+                throw new Error('Extension or manifest is null/undefined');
             }
 
-            logger.info(extension, "Starting remote resource download");
+            logger.info(extension, 'Starting remote resource download');
 
             const downloader = new ResourceDownloader();
             const result = downloader.processExtension(extension);
@@ -65,7 +66,7 @@ export class ResourceDownloader extends MigrationModule {
             logger.info(extension, `Remote resource download completed`);
             return result;
         } catch (error) {
-            logger.error(extension, "Failed to download remote resources", { error });
+            logger.error(extension, 'Failed to download remote resources', { error });
             return new MigrationError(extension, error);
         }
     }
@@ -74,11 +75,14 @@ export class ResourceDownloader extends MigrationModule {
         const remoteResources = this.findRemoteResources(extension);
 
         if (remoteResources.length === 0) {
-            logger.info(extension, "No remote resources found to download");
+            logger.info(extension, 'No remote resources found to download');
             return extension;
         }
 
-        logger.info(extension, `Found ${remoteResources.length} remote resources to download: ${remoteResources.map(r => r.url).join(', ')}`);
+        logger.info(
+            extension,
+            `Found ${remoteResources.length} remote resources to download: ${remoteResources.map((r) => r.url).join(', ')}`
+        );
 
         // Create a copy of the extension to avoid mutating the original
         const extensionCopy: Extension = {
@@ -87,14 +91,17 @@ export class ResourceDownloader extends MigrationModule {
             mv3_extension_id: extension.mv3_extension_id,
             manifest_v2_path: extension.manifest_v2_path,
             manifest: { ...extension.manifest },
-            files: [...extension.files] // Shallow copy of files array
+            files: [...extension.files], // Shallow copy of files array
         };
 
         const downloadResults = this.downloadResources(extensionCopy, remoteResources);
         const updatedExtension = this.updateReferencesToLocal(extensionCopy, downloadResults);
 
-        const successCount = downloadResults.filter(r => r.success).length;
-        logger.info(extension, `Downloaded ${successCount}/${downloadResults.length} remote resources`);
+        const successCount = downloadResults.filter((r) => r.success).length;
+        logger.info(
+            extension,
+            `Downloaded ${successCount}/${downloadResults.length} remote resources`
+        );
 
         return updatedExtension;
     }
@@ -106,20 +113,21 @@ export class ResourceDownloader extends MigrationModule {
         this.extractUrlsFromObject(extension.manifest, resources);
 
         // Search in all files
-        extension.files.forEach(file => {
-            if (file.filetype === ExtFileType.JS ||
+        extension.files.forEach((file) => {
+            if (
+                file.filetype === ExtFileType.JS ||
                 file.filetype === ExtFileType.CSS ||
                 file.filetype === ExtFileType.HTML ||
-                file.filetype === ExtFileType.OTHER) {
-
+                file.filetype === ExtFileType.OTHER
+            ) {
                 const content = file.getContent();
                 this.extractUrlsFromContent(content, resources);
             }
         });
 
-        return Array.from(resources).map(url => ({
+        return Array.from(resources).map((url) => ({
             url,
-            localPath: this.generateLocalPath(url)
+            localPath: this.generateLocalPath(url),
         }));
     }
 
@@ -129,17 +137,17 @@ export class ResourceDownloader extends MigrationModule {
         if (typeof obj === 'string') {
             this.extractUrlsFromContent(obj, resources);
         } else if (Array.isArray(obj)) {
-            obj.forEach(item => this.extractUrlsFromObject(item, resources));
+            obj.forEach((item) => this.extractUrlsFromObject(item, resources));
         } else if (typeof obj === 'object') {
-            Object.values(obj).forEach(value => this.extractUrlsFromObject(value, resources));
+            Object.values(obj).forEach((value) => this.extractUrlsFromObject(value, resources));
         }
     }
 
     private extractUrlsFromContent(content: string, resources: Set<string>): void {
-        ResourceDownloader.URL_PATTERNS.forEach(pattern => {
+        ResourceDownloader.URL_PATTERNS.forEach((pattern) => {
             const matches = content.match(pattern);
             if (matches) {
-                matches.forEach(url => {
+                matches.forEach((url) => {
                     // Clean up URL (remove quotes, etc.)
                     const cleanUrl = url.replace(/['"]/g, '').trim();
                     if (this.isValidResourceUrl(cleanUrl)) {
@@ -153,10 +161,12 @@ export class ResourceDownloader extends MigrationModule {
     private isValidResourceUrl(url: string): boolean {
         try {
             const parsed = new URL(url);
-            return parsed.protocol === 'https:' &&
-                   !url.includes('localhost') &&
-                   !url.includes('127.0.0.1') &&
-                   !url.includes('example.com');
+            return (
+                parsed.protocol === 'https:' &&
+                !url.includes('localhost') &&
+                !url.includes('127.0.0.1') &&
+                !url.includes('example.com')
+            );
         } catch {
             return false;
         }
@@ -197,11 +207,13 @@ export class ResourceDownloader extends MigrationModule {
                     this.addDownloadedFileToExtension(extension, result.localPath, resource.url);
                 }
             } catch (error) {
-                logger.warn(extension, `Failed to download resource: ${resource.url}`, { error });
+                logger.warn(extension, `Failed to download resource: ${resource.url}`, {
+                    error,
+                });
                 results.push({
                     success: false,
                     url: resource.url,
-                    error: error instanceof Error ? error.message : String(error)
+                    error: error instanceof Error ? error.message : String(error),
                 });
             }
         }
@@ -218,20 +230,24 @@ export class ResourceDownloader extends MigrationModule {
             return {
                 success: false,
                 url: resource.url,
-                error: error instanceof Error ? error.message : String(error)
+                error: error instanceof Error ? error.message : String(error),
             };
         }
     }
 
     private downloadResourceSync(extension: Extension, resource: RemoteResource): DownloadResult {
-        if (!extension.mv3_extension_id){
+        if (!extension.mv3_extension_id) {
             return {
                 success: false,
                 url: resource.url,
-                error: "Extension mv3_extension_id is required"
+                error: 'Extension mv3_extension_id is required',
             };
-         }
-        const outputPath = path.join(globals.outputDir, extension.mv3_extension_id, resource.localPath);
+        }
+        const outputPath = path.join(
+            globals.outputDir,
+            extension.mv3_extension_id,
+            resource.localPath
+        );
 
         // Ensure directory exists
         fs.ensureDirSync(path.dirname(outputPath));
@@ -248,22 +264,30 @@ export class ResourceDownloader extends MigrationModule {
                 url: resource.url,
                 localPath: resource.localPath,
                 contentType: downloadedData.contentType || this.inferContentType(resource.url),
-                size: downloadedData.content.length
+                size: downloadedData.content.length,
             };
         } catch (error) {
-            logger.warn(extension, `Failed to download resource: ${resource.url}`, { error });
+            logger.warn(extension, `Failed to download resource: ${resource.url}`, {
+                error,
+            });
             return {
                 success: false,
                 url: resource.url,
-                error: error instanceof Error ? error.message : String(error)
+                error: error instanceof Error ? error.message : String(error),
             };
         }
     }
 
-    private downloadFileSync(url: string): { content: Buffer, contentType?: string } {
+    private downloadFileSync(url: string): {
+        content: Buffer;
+        contentType?: string;
+    } {
         try {
             // Use curl for synchronous download with timeout and size limits
-            const tempFile = path.join(require('os').tmpdir(), `download_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`);
+            const tempFile = path.join(
+                require('os').tmpdir(),
+                `download_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+            );
 
             const curlCommand = [
                 'curl',
@@ -272,15 +296,18 @@ export class ResourceDownloader extends MigrationModule {
                 '-f', // Fail on HTTP errors
                 `--max-time ${Math.ceil(ResourceDownloader.TIMEOUT_MS / 1000)}`, // Timeout in seconds
                 `--max-filesize ${ResourceDownloader.MAX_FILE_SIZE}`, // Max file size
-                '-H', `"User-Agent: ${ResourceDownloader.USER_AGENT}"`,
-                '-H', '"Accept: */*"',
-                '-o', tempFile, // Output to temp file
-                `"${url}"`
+                '-H',
+                `"User-Agent: ${ResourceDownloader.USER_AGENT}"`,
+                '-H',
+                '"Accept: */*"',
+                '-o',
+                tempFile, // Output to temp file
+                `"${url}"`,
             ].join(' ');
 
             execSync(curlCommand, {
                 stdio: 'pipe',
-                timeout: ResourceDownloader.TIMEOUT_MS + 5000 // Extra 5s buffer
+                timeout: ResourceDownloader.TIMEOUT_MS + 5000, // Extra 5s buffer
             });
 
             // Read the downloaded content
@@ -294,7 +321,9 @@ export class ResourceDownloader extends MigrationModule {
 
             return { content, contentType };
         } catch (error) {
-            throw new Error(`Failed to download ${url}: ${error instanceof Error ? error.message : String(error)}`);
+            throw new Error(
+                `Failed to download ${url}: ${error instanceof Error ? error.message : String(error)}`
+            );
         }
     }
 
@@ -302,33 +331,60 @@ export class ResourceDownloader extends MigrationModule {
         const fileExt = path.extname(new URL(url).pathname).toLowerCase();
 
         switch (fileExt) {
-            case '.css': return 'text/css';
-            case '.js': return 'application/javascript';
-            case '.json': return 'application/json';
-            case '.woff': case '.woff2': return 'font/woff';
-            case '.ttf': return 'font/ttf';
-            case '.eot': return 'application/vnd.ms-fontobject';
-            case '.svg': return 'image/svg+xml';
-            case '.png': return 'image/png';
-            case '.jpg': case '.jpeg': return 'image/jpeg';
-            case '.gif': return 'image/gif';
-            default: return 'application/octet-stream';
+            case '.css':
+                return 'text/css';
+            case '.js':
+                return 'application/javascript';
+            case '.json':
+                return 'application/json';
+            case '.woff':
+            case '.woff2':
+                return 'font/woff';
+            case '.ttf':
+                return 'font/ttf';
+            case '.eot':
+                return 'application/vnd.ms-fontobject';
+            case '.svg':
+                return 'image/svg+xml';
+            case '.png':
+                return 'image/png';
+            case '.jpg':
+            case '.jpeg':
+                return 'image/jpeg';
+            case '.gif':
+                return 'image/gif';
+            default:
+                return 'application/octet-stream';
         }
     }
 
-    private addDownloadedFileToExtension(extension: Extension, localPath: string, originalUrl: string): void {
+    private addDownloadedFileToExtension(
+        extension: Extension,
+        localPath: string,
+        originalUrl: string
+    ): void {
         // Determine file type from URL and extension
         const fileExtension = path.extname(localPath).toLowerCase();
         let fileType = ExtFileType.OTHER;
 
         // Check file extension first
         switch (fileExtension) {
-            case '.js': fileType = ExtFileType.JS; break;
-            case '.css': fileType = ExtFileType.CSS; break;
-            case '.html': case '.htm': fileType = ExtFileType.HTML; break;
+            case '.js':
+                fileType = ExtFileType.JS;
+                break;
+            case '.css':
+                fileType = ExtFileType.CSS;
+                break;
+            case '.html':
+            case '.htm':
+                fileType = ExtFileType.HTML;
+                break;
             default:
                 // For files without extensions, infer from URL
-                if (originalUrl.includes('googleapis.com/css') || originalUrl.includes('fonts.googleapis.com')) {
+                if (
+                    originalUrl.includes('googleapis.com/css') ||
+                    originalUrl.includes('fonts.googleapis.com')
+                ) {
                     fileType = ExtFileType.CSS;
                 } else if (originalUrl.includes('.js') || originalUrl.includes('javascript')) {
                     fileType = ExtFileType.JS;
@@ -343,14 +399,20 @@ export class ResourceDownloader extends MigrationModule {
 
         extension.files.push(downloadedFile);
 
-        logger.debug(extension, `Added downloaded file to extension: ${localPath} (from ${originalUrl})`);
+        logger.debug(
+            extension,
+            `Added downloaded file to extension: ${localPath} (from ${originalUrl})`
+        );
     }
 
-    private updateReferencesToLocal(extension: Extension, downloadResults: DownloadResult[]): Extension {
+    private updateReferencesToLocal(
+        extension: Extension,
+        downloadResults: DownloadResult[]
+    ): Extension {
         const urlMapping = new Map<string, string>();
 
         // Build mapping of remote URLs to local paths
-        downloadResults.forEach(result => {
+        downloadResults.forEach((result) => {
             if (result.success && result.localPath) {
                 urlMapping.set(result.url, result.localPath);
             }
@@ -364,12 +426,13 @@ export class ResourceDownloader extends MigrationModule {
         extension.manifest = this.replaceUrlsInObject(extension.manifest, urlMapping);
 
         // Update file contents
-        extension.files.forEach(file => {
-            if (file.filetype === ExtFileType.JS ||
+        extension.files.forEach((file) => {
+            if (
+                file.filetype === ExtFileType.JS ||
                 file.filetype === ExtFileType.CSS ||
                 file.filetype === ExtFileType.HTML ||
-                file.filetype === ExtFileType.OTHER) {
-
+                file.filetype === ExtFileType.OTHER
+            ) {
                 try {
                     const originalContent = file.getContent();
                     const updatedContent = this.replaceUrlsInContent(originalContent, urlMapping);
@@ -378,13 +441,21 @@ export class ResourceDownloader extends MigrationModule {
                         logger.debug(extension, `Updated resource references in: ${file.path}`);
 
                         // Update the file content using our utility
-                        const updateSuccess = FileContentUpdater.updateFileContent(file, updatedContent);
+                        const updateSuccess = FileContentUpdater.updateFileContent(
+                            file,
+                            updatedContent
+                        );
                         if (!updateSuccess) {
-                            logger.warn(extension, `Failed to write updated content to file: ${file.path}`);
+                            logger.warn(
+                                extension,
+                                `Failed to write updated content to file: ${file.path}`
+                            );
                         }
                     }
                 } catch (error) {
-                    logger.warn(extension, `Failed to update references in file: ${file.path}`, { error });
+                    logger.warn(extension, `Failed to update references in file: ${file.path}`, {
+                        error,
+                    });
                 }
             }
         });
@@ -398,7 +469,7 @@ export class ResourceDownloader extends MigrationModule {
         if (typeof obj === 'string') {
             return this.replaceUrlsInContent(obj, urlMapping);
         } else if (Array.isArray(obj)) {
-            return obj.map(item => this.replaceUrlsInObject(item, urlMapping));
+            return obj.map((item) => this.replaceUrlsInObject(item, urlMapping));
         } else if (typeof obj === 'object') {
             const result: any = {};
             for (const [key, value] of Object.entries(obj)) {

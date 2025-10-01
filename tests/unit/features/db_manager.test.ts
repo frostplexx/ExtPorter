@@ -74,9 +74,9 @@ describe('Database Manager', () => {
                 name: 'Test Extension',
                 version: '1.0.0',
                 manifest_version: 2,
-                description: 'A test extension'
+                description: 'A test extension',
             },
-            files: []
+            files: [],
         };
 
         it('should insert found extensions', async () => {
@@ -93,9 +93,9 @@ describe('Database Manager', () => {
                 ...sampleExtension,
                 manifest: {
                     ...sampleExtension.manifest,
-                    manifest_version: 3
+                    manifest_version: 3,
                 },
-                mv3_extension_id: 'migrated-123'
+                mv3_extension_id: 'migrated-123',
             };
 
             await expect(db.insertMigratedExtension(migratedExtension)).resolves.not.toThrow();
@@ -107,7 +107,7 @@ describe('Database Manager', () => {
             // Use a unique ID for this test to avoid conflicts
             const uniqueExtension = {
                 ...sampleExtension,
-                id: `test-extension-duplicate-${Date.now()}-${Math.random()}`
+                id: `test-extension-duplicate-${Date.now()}-${Math.random()}`,
             };
             const extensions = [uniqueExtension];
 
@@ -125,13 +125,12 @@ describe('Database Manager', () => {
 
             const invalidExtension = {
                 // Missing required fields
-                name: 'Invalid Extension'
+                name: 'Invalid Extension',
             } as any;
 
             // Should handle invalid data gracefully
             await expect(db.insertFoundExtensions([invalidExtension])).resolves.not.toThrow();
         });
-
     });
 
     describe('Error Handling', () => {
@@ -147,9 +146,9 @@ describe('Database Manager', () => {
                     name: 'Large Extension',
                     version: '1.0.0',
                     manifest_version: 2,
-                    description: 'A'.repeat(10000) // Very long description
+                    description: 'A'.repeat(10000), // Very long description
                 },
-                files: []
+                files: [],
             };
 
             // Should not throw even with large data
@@ -168,9 +167,9 @@ describe('Database Manager', () => {
                 manifest: {
                     name: 'Stats Extension',
                     version: '1.0.0',
-                    manifest_version: 2
+                    manifest_version: 2,
                 },
-                files: []
+                files: [],
             };
 
             // Perform multiple operations

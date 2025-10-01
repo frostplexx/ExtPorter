@@ -3,14 +3,12 @@ import fs from 'fs-extra';
 import { Database } from '../features/database/db_manager';
 import { Extension } from '../types/extension';
 
-
 export enum LogLevel {
-    DEBUG = "debug",
-    INFO = "info",
-    WARN = "warning",
-    ERROR = "error",
+    DEBUG = 'debug',
+    INFO = 'info',
+    WARN = 'warning',
+    ERROR = 'error',
 }
-
 
 // Create logs directory if it doesn't exist
 const logsDir = path.join(process.cwd(), 'logs');
@@ -18,12 +16,11 @@ fs.ensureDirSync(logsDir);
 
 // Define log level hierarchy (higher number = more verbose)
 const LOG_LEVELS: Record<string, number> = {
-    'error': 0,
-    'warning': 1,
-    'info': 2,
-    'debug': 3
+    error: 0,
+    warning: 1,
+    info: 2,
+    debug: 3,
 };
-
 
 // Get log level from environment variable, default to 'info'
 const ENV_LOG_LEVEL = process.env.LOG_LEVEL || 'info';
@@ -34,10 +31,10 @@ const currentLogLevel = LOG_LEVELS[ENV_LOG_LEVEL.toLowerCase()] ?? LOG_LEVELS['i
 // ANSI color codes for log levels
 const COLORS = {
     reset: '\x1b[0m',
-    debug: '\x1b[36m',    // Cyan
-    info: '\x1b[32m',     // Green  
-    warning: '\x1b[33m',  // Yellow
-    error: '\x1b[31m',    // Red
+    debug: '\x1b[36m', // Cyan
+    info: '\x1b[32m', // Green
+    warning: '\x1b[33m', // Yellow
+    error: '\x1b[31m', // Red
 };
 
 /**
@@ -91,13 +88,13 @@ function sanitizeMeta(meta: any): any {
         return {
             _truncated: true,
             _originalSize: byteSize,
-            data: truncated
+            data: truncated,
         };
     } catch (error) {
         // If serialization fails, convert to string safely
         return {
             _serializationError: true,
-            data: truncateToByteSize(String(meta), MAX_META_SIZE)
+            data: truncateToByteSize(String(meta), MAX_META_SIZE),
         };
     }
 }
@@ -105,22 +102,30 @@ function sanitizeMeta(meta: any): any {
 /**
  * Format log entry for database storage with size limits
  */
-function formatLog(extension: Extension | null = null, message: string, loglevel: LogLevel, meta?: any) {
+function formatLog(
+    extension: Extension | null = null,
+    message: string,
+    loglevel: LogLevel,
+    meta?: any
+) {
     // Truncate message if too large
     const truncatedMessage = truncateToByteSize(message, 1024 * 1024); // 1MB max for message
     const sanitizedMeta = sanitizeMeta(meta);
 
     const logEntry = {
-        "loglevel": loglevel,
-        "extension": extension != null ? {
-            "id": extension.id,
-            "path": extension.manifest_v2_path,
-            "name": extension.name,
-            "isNewTabExtension": extension.isNewTabExtension || false,
-        } : '',
-        "message": truncatedMessage.toLowerCase(),
-        "meta": sanitizedMeta,
-        "time": Date.now(),
+        loglevel: loglevel,
+        extension:
+            extension != null
+                ? {
+                      id: extension.id,
+                      path: extension.manifest_v2_path,
+                      name: extension.name,
+                      isNewTabExtension: extension.isNewTabExtension || false,
+                  }
+                : '',
+        message: truncatedMessage.toLowerCase(),
+        meta: sanitizedMeta,
+        time: Date.now(),
     };
 
     // Final size check - if still too large, remove meta entirely
@@ -128,19 +133,19 @@ function formatLog(extension: Extension | null = null, message: string, loglevel
         const totalSize = Buffer.byteLength(JSON.stringify(logEntry), 'utf8');
         if (totalSize > MAX_LOG_ENTRY_SIZE) {
             return {
-                "loglevel": loglevel,
-                "message": truncatedMessage,
-                "meta": { _removed: "Meta too large", _originalSize: totalSize },
-                "time": Date.now(),
+                loglevel: loglevel,
+                message: truncatedMessage,
+                meta: { _removed: 'Meta too large', _originalSize: totalSize },
+                time: Date.now(),
             };
         }
     } catch (error) {
         // If size check fails, return minimal entry
         return {
-            "loglevel": loglevel,
-            "message": "Log entry size check failed",
-            "meta": { _error: String(error) },
-            "time": Date.now(),
+            loglevel: loglevel,
+            message: 'Log entry size check failed',
+            meta: { _error: String(error) },
+            time: Date.now(),
         };
     }
 
@@ -164,7 +169,9 @@ async function flushLogBatch() {
 
     // Check if database is shutting down
     if ((Database.shared as any).isShuttingDown) {
-        console.error(`[SHUTDOWN VIOLATION] Logger attempted to flush ${logBatch.length} logs after database shutdown`);
+        console.error(
+            `[SHUTDOWN VIOLATION] Logger attempted to flush ${logBatch.length} logs after database shutdown`
+        );
         console.error(`[SHUTDOWN VIOLATION] Stack trace:`, new Error().stack);
         logBatch = []; // Clear the batch to prevent retries
         return;
@@ -199,7 +206,10 @@ async function flushLogBatch() {
         } catch (error) {
             console.error(`Failed to flush log chunk (${chunk.length} logs) to database:`, error);
             // Don't retry if database is closed
-            if ((error as any).message?.includes('Topology is closed') || (error as any).message?.includes('Database not initialized')) {
+            if (
+                (error as any).message?.includes('Topology is closed') ||
+                (error as any).message?.includes('Database not initialized')
+            ) {
                 console.warn(`Database closed, discarding ${chunk.length} logs`);
                 continue;
             }
@@ -217,11 +227,18 @@ async function flushLogBatch() {
 /**
  * Add log to batch and flush if necessary (non-blocking)
  */
-function addLogToBatch(level: LogLevel, extension: Extension | null = null, message: string, meta?: any) {
+function addLogToBatch(
+    level: LogLevel,
+    extension: Extension | null = null,
+    message: string,
+    meta?: any
+) {
     if (shouldLog(level)) {
         // Check if database is shutting down
         if ((Database.shared as any).isShuttingDown) {
-            console.error(`[SHUTDOWN VIOLATION] Logger attempted to add log after database shutdown: "${message.substring(0, 100)}..."`);
+            console.error(
+                `[SHUTDOWN VIOLATION] Logger attempted to add log after database shutdown: "${message.substring(0, 100)}..."`
+            );
             console.error(`[SHUTDOWN VIOLATION] Stack trace:`, new Error().stack);
             return;
         }
@@ -244,7 +261,7 @@ function addLogToBatch(level: LogLevel, extension: Extension | null = null, mess
                 batchTimer = null;
             }
             // Don't await here to keep it non-blocking
-            flushLogBatch().catch(error => {
+            flushLogBatch().catch((error) => {
                 console.error('Background log flush failed:', error);
             });
         }
@@ -281,7 +298,9 @@ export const logger = {
      */
     info: (extension: Extension | null = null, message: string, meta?: any) => {
         // Supress logging in test mode
-        if (process.env.NODE_ENV === "test") { return }
+        if (process.env.NODE_ENV === 'test') {
+            return;
+        }
         if (shouldLog(LogLevel.INFO)) {
             console.info(`${getColoredLabel(LogLevel.INFO)} ${message}`, meta || '');
             addLogToBatch(LogLevel.INFO, extension, message, meta);
@@ -293,7 +312,9 @@ export const logger = {
      */
     warn: (extension: Extension | null = null, message: string, meta?: any) => {
         // Supress logging in test mode
-        if (process.env.NODE_ENV === "test") { return }
+        if (process.env.NODE_ENV === 'test') {
+            return;
+        }
         if (shouldLog(LogLevel.WARN)) {
             console.warn(`${getColoredLabel(LogLevel.WARN)} ${message}`, meta || '');
             addLogToBatch(LogLevel.WARN, extension, message, meta);
@@ -305,7 +326,9 @@ export const logger = {
      */
     error: (extension: Extension | null = null, message: string, meta?: any) => {
         // Supress logging in test mode
-        if (process.env.NODE_ENV === "test") { return }
+        if (process.env.NODE_ENV === 'test') {
+            return;
+        }
         if (shouldLog(LogLevel.ERROR)) {
             console.error(`${getColoredLabel(LogLevel.ERROR)} ${message}`, meta || '');
             addLogToBatch(LogLevel.ERROR, extension, message, meta);
@@ -317,7 +340,9 @@ export const logger = {
      */
     debug: (extension: Extension | null = null, message: string, meta?: any) => {
         // Supress logging in test mode
-        if (process.env.NODE_ENV === "test") { return }
+        if (process.env.NODE_ENV === 'test') {
+            return;
+        }
         if (shouldLog(LogLevel.DEBUG)) {
             console.debug(`${getColoredLabel(LogLevel.DEBUG)} ${message}`, meta || '');
             addLogToBatch(LogLevel.DEBUG, extension, message, meta);

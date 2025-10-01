@@ -2,9 +2,7 @@ import { FormatPreservingGenerator } from '../../../migrator/utils/format_preser
 import * as espree from 'espree';
 
 describe('FormatPreservingGenerator', () => {
-
     describe('generateWithPreservedFormatting', () => {
-
         it('should preserve single line comments', () => {
             const sourceCode = `
 // This is a header comment
@@ -20,10 +18,13 @@ function test() {
                 ecmaVersion: 'latest',
                 sourceType: 'script',
                 loc: true,
-                range: true
+                range: true,
             });
 
-            const result = FormatPreservingGenerator.generateWithPreservedFormatting(ast as any, sourceCode);
+            const result = FormatPreservingGenerator.generateWithPreservedFormatting(
+                ast as any,
+                sourceCode
+            );
 
             expect(result).toContain('// This is a header comment');
             expect(result).toContain('// This is a standalone comment');
@@ -51,10 +52,13 @@ function test() {
                 ecmaVersion: 'latest',
                 sourceType: 'script',
                 loc: true,
-                range: true
+                range: true,
             });
 
-            const result = FormatPreservingGenerator.generateWithPreservedFormatting(ast as any, sourceCode);
+            const result = FormatPreservingGenerator.generateWithPreservedFormatting(
+                ast as any,
+                sourceCode
+            );
 
             expect(result).toContain('/* This is a block comment */');
             expect(result).toContain('This is a multiline');
@@ -85,10 +89,13 @@ function initialize() {
                 ecmaVersion: 'latest',
                 sourceType: 'script',
                 loc: true,
-                range: true
+                range: true,
             });
 
-            const result = FormatPreservingGenerator.generateWithPreservedFormatting(ast as any, sourceCode);
+            const result = FormatPreservingGenerator.generateWithPreservedFormatting(
+                ast as any,
+                sourceCode
+            );
 
             // Count comments in input vs output
             const inputComments = (sourceCode.match(/\/\/.*|\/\*[\s\S]*?\*\//g) || []).length;
@@ -122,10 +129,13 @@ function test() {
                 ecmaVersion: 'latest',
                 sourceType: 'script',
                 loc: true,
-                range: true
+                range: true,
             });
 
-            const result = FormatPreservingGenerator.generateWithPreservedFormatting(ast as any, sourceCode);
+            const result = FormatPreservingGenerator.generateWithPreservedFormatting(
+                ast as any,
+                sourceCode
+            );
 
             expect(result).toContain('    // Indented comment');
             expect(result).toContain('        // Deeply indented comment');
@@ -143,10 +153,13 @@ function test() {
                 ecmaVersion: 'latest',
                 sourceType: 'script',
                 loc: true,
-                range: true
+                range: true,
             });
 
-            const result = FormatPreservingGenerator.generateWithPreservedFormatting(ast as any, sourceCode);
+            const result = FormatPreservingGenerator.generateWithPreservedFormatting(
+                ast as any,
+                sourceCode
+            );
 
             expect(result).toContain('var x = 1');
             expect(result).toContain('function test()');
@@ -170,10 +183,13 @@ var y = "string with // fake comment";
                 ecmaVersion: 'latest',
                 sourceType: 'script',
                 loc: true,
-                range: true
+                range: true,
             });
 
-            const result = FormatPreservingGenerator.generateWithPreservedFormatting(ast as any, sourceCode);
+            const result = FormatPreservingGenerator.generateWithPreservedFormatting(
+                ast as any,
+                sourceCode
+            );
 
             expect(result).toContain('Comment with special chars: @#$%^&*()');
             expect(result).toContain('Comment with quotes: "test" and \'test\'');
@@ -200,16 +216,18 @@ var x = 1;
                     ecmaVersion: 'latest',
                     sourceType: 'script',
                     loc: true,
-                    range: true
+                    range: true,
                 });
 
-                const result = FormatPreservingGenerator.generateWithPreservedFormatting(ast as any, sourceCode);
+                const result = FormatPreservingGenerator.generateWithPreservedFormatting(
+                    ast as any,
+                    sourceCode
+                );
 
                 // Should not contain comments when disabled
                 expect(result).not.toContain('This comment should be ignored');
                 expect(result).not.toContain('Another comment to ignore');
                 expect(result).toContain('var x = 1');
-
             } finally {
                 // Restore original environment
                 if (originalEnv !== undefined) {
@@ -237,10 +255,13 @@ function largeFunction() {
                 ecmaVersion: 'latest',
                 sourceType: 'script',
                 loc: true,
-                range: true
+                range: true,
             });
 
-            const result = FormatPreservingGenerator.generateWithPreservedFormatting(ast as any, largeSourceCode);
+            const result = FormatPreservingGenerator.generateWithPreservedFormatting(
+                ast as any,
+                largeSourceCode
+            );
 
             // Should still preserve some comments even with simplified processing
             const outputComments = (result.match(/\/\/.*|\/\*[\s\S]*?\*\//g) || []).length;
@@ -262,10 +283,13 @@ chrome.browserAction.onClicked.addListener(() => {
                 ecmaVersion: 'latest',
                 sourceType: 'script',
                 loc: true,
-                range: true
+                range: true,
             });
 
-            const result = FormatPreservingGenerator.generateWithPreservedFormatting(ast as any, sourceCode);
+            const result = FormatPreservingGenerator.generateWithPreservedFormatting(
+                ast as any,
+                sourceCode
+            );
 
             // Comments should be preserved as-is (not transformed)
             expect(result).toContain('chrome.browserAction.onClicked');
@@ -295,16 +319,20 @@ function calculate() {
                 ecmaVersion: 'latest',
                 sourceType: 'script',
                 loc: true,
-                range: true
+                range: true,
             });
 
-            const result = FormatPreservingGenerator.generateWithPreservedFormatting(ast as any, sourceCode);
+            const result = FormatPreservingGenerator.generateWithPreservedFormatting(
+                ast as any,
+                sourceCode
+            );
 
             // Verify comments appear in logical positions
             const lines = result.split('\n');
 
             // Find comment lines and verify they're near expected code
-            const commentLines = lines.map((line, index) => ({ line, index }))
+            const commentLines = lines
+                .map((line, index) => ({ line, index }))
                 .filter(({ line }) => line.includes('//'));
 
             expect(commentLines.length).toBeGreaterThan(0);
@@ -319,13 +347,13 @@ function calculate() {
             // Verify that most comments are preserved even if placement differs
             const totalInputComments = (sourceCode.match(/\/\/.*|\/\*[\s\S]*?\*\//g) || []).length;
             const totalOutputComments = (result.match(/\/\/.*|\/\*[\s\S]*?\*\//g) || []).length;
-            expect(totalOutputComments).toBeGreaterThanOrEqual(Math.floor(totalInputComments * 0.7));
+            expect(totalOutputComments).toBeGreaterThanOrEqual(
+                Math.floor(totalInputComments * 0.7)
+            );
         });
-
     });
 
     describe('performance characteristics', () => {
-
         it('should handle files without comments quickly', () => {
             const sourceCode = `
 var x = 1;
@@ -339,10 +367,13 @@ var y = test();
                 ecmaVersion: 'latest',
                 sourceType: 'script',
                 loc: true,
-                range: true
+                range: true,
             });
 
-            const result = FormatPreservingGenerator.generateWithPreservedFormatting(ast as any, sourceCode);
+            const result = FormatPreservingGenerator.generateWithPreservedFormatting(
+                ast as any,
+                sourceCode
+            );
 
             const duration = Date.now() - start;
 
@@ -352,10 +383,13 @@ var y = test();
         });
 
         it('should handle many comments efficiently', () => {
-            const sourceCode = Array.from({ length: 50 }, (_, i) => `
+            const sourceCode = Array.from(
+                { length: 50 },
+                (_, i) => `
 // Comment number ${i}
 var variable${i} = ${i};
-`).join('\n');
+`
+            ).join('\n');
 
             const start = Date.now();
 
@@ -363,10 +397,13 @@ var variable${i} = ${i};
                 ecmaVersion: 'latest',
                 sourceType: 'script',
                 loc: true,
-                range: true
+                range: true,
             });
 
-            const result = FormatPreservingGenerator.generateWithPreservedFormatting(ast as any, sourceCode);
+            const result = FormatPreservingGenerator.generateWithPreservedFormatting(
+                ast as any,
+                sourceCode
+            );
 
             const duration = Date.now() - start;
 
@@ -377,7 +414,5 @@ var variable${i} = ${i};
             const outputComments = (result.match(/\/\/.*|\/\*[\s\S]*?\*\//g) || []).length;
             expect(outputComments).toBeGreaterThan(0);
         });
-
     });
-
 });

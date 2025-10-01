@@ -13,9 +13,12 @@ class ExtensionSearcher {
         if (!Database.shared.database) throw new Error('Database not initialized');
 
         // Get all extensions from the single extensions collection
-        const allExtensions = await Database.shared.database.collection(Collections.EXTENSIONS).find({}).toArray();
+        const allExtensions = await Database.shared.database
+            .collection(Collections.EXTENSIONS)
+            .find({})
+            .toArray();
 
-        return allExtensions.map(ext => ({
+        return allExtensions.map((ext) => ({
             id: ext.id,
             name: ext.name || ext.manifest?.name || 'Unknown',
             manifest_v2_path: ext.manifest_v2_path || '',
@@ -24,7 +27,7 @@ class ExtensionSearcher {
             isNewTabExtension: ext.isNewTabExtension,
             mv3_extension_id: ext.mv3_extension_id,
             interestingness_score: ext.interestingness_score || 0,
-            interestingness_breakdown: ext.interestingness_breakdown
+            interestingness_breakdown: ext.interestingness_breakdown,
         }));
     }
 
@@ -40,35 +43,36 @@ class ExtensionSearcher {
         const scoreInfo = ` | Score: ${score}`;
 
         // Truncate long descriptions to make room for score
-        const truncatedDesc = description.length > 50
-            ? description.substring(0, 47) + '...'
-            : description;
+        const truncatedDesc =
+            description.length > 50 ? description.substring(0, 47) + '...' : description;
 
         return `${mv2Id}${mv3Id}${scoreInfo} | ${name} | v${version} | ${truncatedDesc}`;
     }
 
     async searchWithFzf(extensions: Extension[]) {
         // Sort extensions by interestingness score (highest first)
-        const sortedExtensions = extensions.sort((a, b) =>
-            (b.interestingness_score || 0) - (a.interestingness_score || 0)
+        const sortedExtensions = extensions.sort(
+            (a, b) => (b.interestingness_score || 0) - (a.interestingness_score || 0)
         );
 
-        const fzfInput = sortedExtensions
-            .map(ext => this.formatExtensionForFzf(ext))
-            .join('\n');
+        const fzfInput = sortedExtensions.map((ext) => this.formatExtensionForFzf(ext)).join('\n');
 
-        const fzf = spawn('fzf', [
-            '--height=40%',
-            '--layout=reverse',
-            '--border',
-            '--prompt=Search Extensions: ',
-            '--preview=echo {}',
-            '--preview-window=down:3:wrap',
-            '--bind=enter:accept',
-            '--header=Sorted by interestingness score (highest first). Use arrow keys to navigate, Enter to select, Esc to quit'
-        ], {
-            stdio: ['pipe', 'pipe', 'inherit']
-        });
+        const fzf = spawn(
+            'fzf',
+            [
+                '--height=40%',
+                '--layout=reverse',
+                '--border',
+                '--prompt=Search Extensions: ',
+                '--preview=echo {}',
+                '--preview-window=down:3:wrap',
+                '--bind=enter:accept',
+                '--header=Sorted by interestingness score (highest first). Use arrow keys to navigate, Enter to select, Esc to quit',
+            ],
+            {
+                stdio: ['pipe', 'pipe', 'inherit'],
+            }
+        );
 
         fzf.stdin.write(fzfInput);
         fzf.stdin.end();
@@ -88,7 +92,9 @@ class ExtensionSearcher {
                         const mv2Match = selectedLine.match(/MV2: ([^\s|]+)/);
                         if (mv2Match) {
                             const extensionId = mv2Match[1];
-                            const selectedExtension = sortedExtensions.find(ext => ext.id === extensionId);
+                            const selectedExtension = sortedExtensions.find(
+                                (ext) => ext.id === extensionId
+                            );
                             if (selectedExtension) {
                                 this.displayExtensionDetails(selectedExtension);
                             }
@@ -153,7 +159,7 @@ class ExtensionSearcher {
 
         if (ext.manifest) {
             console.log('\nManifest Keys:');
-            Object.keys(ext.manifest).forEach(key => {
+            Object.keys(ext.manifest).forEach((key) => {
                 if (!['name', 'description', 'version', 'manifest_version'].includes(key)) {
                     console.log(`  - ${key}`);
                 }
@@ -162,7 +168,6 @@ class ExtensionSearcher {
 
         console.log('='.repeat(70));
     }
-
 }
 
 async function main() {
@@ -183,7 +188,6 @@ async function main() {
         console.log('Starting search interface...\n');
 
         await searcher.searchWithFzf(extensions);
-
     } catch (error) {
         console.error('Error:', error);
     } finally {

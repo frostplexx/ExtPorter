@@ -5,41 +5,43 @@ import * as fs from 'fs-extra';
 import * as path from 'path';
 
 export interface TestExtensionFixture {
-  name: string;
-  manifest: any;
-  files: Array<{
-    path: string;
-    content: string;
-    type: ExtFileType;
-  }>;
+    name: string;
+    manifest: any;
+    files: Array<{
+        path: string;
+        content: string;
+        type: ExtFileType;
+    }>;
 }
 
 export const SAMPLE_EXTENSIONS: TestExtensionFixture[] = [
-  {
-    name: 'simple-extension',
-    manifest: {
-      name: 'Simple Extension',
-      version: '1.0.0',
-      manifest_version: 2,
-      description: 'A simple test extension',
-      permissions: ['activeTab', 'storage'],
-      browser_action: {
-        default_popup: 'popup.html',
-        default_title: 'Simple Extension'
-      },
-      background: {
-        scripts: ['background.js'],
-        persistent: false
-      },
-      content_scripts: [{
-        matches: ['<all_urls>'],
-        js: ['content.js']
-      }]
-    },
-    files: [
-      {
-        path: 'background.js',
-        content: `
+    {
+        name: 'simple-extension',
+        manifest: {
+            name: 'Simple Extension',
+            version: '1.0.0',
+            manifest_version: 2,
+            description: 'A simple test extension',
+            permissions: ['activeTab', 'storage'],
+            browser_action: {
+                default_popup: 'popup.html',
+                default_title: 'Simple Extension',
+            },
+            background: {
+                scripts: ['background.js'],
+                persistent: false,
+            },
+            content_scripts: [
+                {
+                    matches: ['<all_urls>'],
+                    js: ['content.js'],
+                },
+            ],
+        },
+        files: [
+            {
+                path: 'background.js',
+                content: `
 chrome.runtime.onInstalled.addListener(() => {
   console.log('Extension installed');
 });
@@ -50,11 +52,11 @@ chrome.browserAction.onClicked.addListener((tab) => {
   });
 });
         `,
-        type: ExtFileType.JS
-      },
-      {
-        path: 'content.js',
-        content: `
+                type: ExtFileType.JS,
+            },
+            {
+                path: 'content.js',
+                content: `
 console.log('Content script loaded');
 
 // Add a simple observer
@@ -67,11 +69,11 @@ observer.observe(document.body, {
   subtree: true
 });
         `,
-        type: ExtFileType.JS
-      },
-      {
-        path: 'popup.html',
-        content: `
+                type: ExtFileType.JS,
+            },
+            {
+                path: 'popup.html',
+                content: `
 <!DOCTYPE html>
 <html>
 <head>
@@ -96,11 +98,11 @@ observer.observe(document.body, {
 </body>
 </html>
         `,
-        type: ExtFileType.HTML
-      },
-      {
-        path: 'popup.js',
-        content: `
+                type: ExtFileType.HTML,
+            },
+            {
+                path: 'popup.js',
+                content: `
 document.addEventListener('DOMContentLoaded', () => {
   const button = document.getElementById('action-btn');
 
@@ -113,55 +115,54 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 });
         `,
-        type: ExtFileType.JS
-      }
-    ]
-  },
-  {
-    name: 'complex-extension',
-    manifest: {
-      name: 'Complex Extension',
-      version: '2.1.0',
-      manifest_version: 2,
-      description: 'A complex test extension with multiple features',
-      permissions: [
-        'activeTab',
-        'storage',
-        'webRequestBlocking',
-        'http://example.com/*',
-        'https://api.example.com/*'
-      ],
-      web_accessible_resources: [
-        'images/*',
-        'css/injected.css'
-      ],
-      browser_action: {
-        default_popup: 'popup.html',
-        default_title: 'Complex Extension',
-        default_icon: {
-          16: 'icons/icon16.png',
-          48: 'icons/icon48.png',
-          128: 'icons/icon128.png'
-        }
-      },
-      page_action: {
-        default_title: 'Page Action'
-      },
-      background: {
-        scripts: ['background.js', 'utils.js'],
-        persistent: false
-      },
-      content_scripts: [{
-        matches: ['*://*.example.com/*'],
-        js: ['content.js'],
-        css: ['content.css']
-      }],
-      options_page: 'options.html'
+                type: ExtFileType.JS,
+            },
+        ],
     },
-    files: [
-      {
-        path: 'background.js',
-        content: `
+    {
+        name: 'complex-extension',
+        manifest: {
+            name: 'Complex Extension',
+            version: '2.1.0',
+            manifest_version: 2,
+            description: 'A complex test extension with multiple features',
+            permissions: [
+                'activeTab',
+                'storage',
+                'webRequestBlocking',
+                'http://example.com/*',
+                'https://api.example.com/*',
+            ],
+            web_accessible_resources: ['images/*', 'css/injected.css'],
+            browser_action: {
+                default_popup: 'popup.html',
+                default_title: 'Complex Extension',
+                default_icon: {
+                    16: 'icons/icon16.png',
+                    48: 'icons/icon48.png',
+                    128: 'icons/icon128.png',
+                },
+            },
+            page_action: {
+                default_title: 'Page Action',
+            },
+            background: {
+                scripts: ['background.js', 'utils.js'],
+                persistent: false,
+            },
+            content_scripts: [
+                {
+                    matches: ['*://*.example.com/*'],
+                    js: ['content.js'],
+                    css: ['content.css'],
+                },
+            ],
+            options_page: 'options.html',
+        },
+        files: [
+            {
+                path: 'background.js',
+                content: `
 // Complex background script with multiple APIs
 const API_URL = 'https://fonts.googleapis.com/css2?family=Roboto:wght@400;500&display=swap';
 
@@ -195,11 +196,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
 });
         `,
-        type: ExtFileType.JS
-      },
-      {
-        path: 'utils.js',
-        content: `
+                type: ExtFileType.JS,
+            },
+            {
+                path: 'utils.js',
+                content: `
 // Utility functions
 function loadExternalResource(url) {
   if (url.includes('cdn.jsdelivr.net')) {
@@ -223,11 +224,11 @@ window.extensionUtils = {
   injectCSS
 };
         `,
-        type: ExtFileType.JS
-      },
-      {
-        path: 'content.js',
-        content: `
+                type: ExtFileType.JS,
+            },
+            {
+                path: 'content.js',
+                content: `
 // Content script with remote resource usage
 const FONT_URL = 'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap';
 const CDN_LIBRARY = 'https://unpkg.com/lodash@4.17.21/lodash.min.js';
@@ -265,11 +266,11 @@ if (document.readyState === 'loading') {
   enhancePage();
 }
         `,
-        type: ExtFileType.JS
-      },
-      {
-        path: 'content.css',
-        content: `
+                type: ExtFileType.JS,
+            },
+            {
+                path: 'content.css',
+                content: `
 /* Content CSS with external resources */
 @import url('https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css');
 
@@ -294,11 +295,11 @@ if (document.readyState === 'loading') {
   display: inline-block;
 }
         `,
-        type: ExtFileType.CSS
-      },
-      {
-        path: 'popup.html',
-        content: `
+                type: ExtFileType.CSS,
+            },
+            {
+                path: 'popup.html',
+                content: `
 <!DOCTYPE html>
 <html>
 <head>
@@ -347,30 +348,30 @@ if (document.readyState === 'loading') {
 </body>
 </html>
         `,
-        type: ExtFileType.HTML
-      }
-    ]
-  },
-  {
-    name: 'newtab-extension',
-    manifest: {
-      name: 'New Tab Extension',
-      version: '1.5.0',
-      manifest_version: 2,
-      description: 'A new tab replacement extension',
-      permissions: ['storage', 'bookmarks'],
-      chrome_url_overrides: {
-        newtab: 'newtab.html'
-      },
-      background: {
-        scripts: ['background.js'],
-        persistent: false
-      }
+                type: ExtFileType.HTML,
+            },
+        ],
     },
-    files: [
-      {
-        path: 'newtab.html',
-        content: `
+    {
+        name: 'newtab-extension',
+        manifest: {
+            name: 'New Tab Extension',
+            version: '1.5.0',
+            manifest_version: 2,
+            description: 'A new tab replacement extension',
+            permissions: ['storage', 'bookmarks'],
+            chrome_url_overrides: {
+                newtab: 'newtab.html',
+            },
+            background: {
+                scripts: ['background.js'],
+                persistent: false,
+            },
+        },
+        files: [
+            {
+                path: 'newtab.html',
+                content: `
 <!DOCTYPE html>
 <html>
 <head>
@@ -440,11 +441,11 @@ if (document.readyState === 'loading') {
 </body>
 </html>
         `,
-        type: ExtFileType.HTML
-      },
-      {
-        path: 'newtab.js',
-        content: `
+                type: ExtFileType.HTML,
+            },
+            {
+                path: 'newtab.js',
+                content: `
 // New tab page functionality
 document.addEventListener('DOMContentLoaded', () => {
   loadBookmarks();
@@ -508,11 +509,11 @@ function extractBookmarks(bookmarkTree, result = []) {
   return result;
 }
         `,
-        type: ExtFileType.JS
-      },
-      {
-        path: 'background.js',
-        content: `
+                type: ExtFileType.JS,
+            },
+            {
+                path: 'background.js',
+                content: `
 // Background script for new tab extension
 chrome.runtime.onInstalled.addListener(() => {
   chrome.storage.sync.set({
@@ -529,45 +530,50 @@ chrome.storage.onChanged.addListener((changes, namespace) => {
   }
 });
         `,
-        type: ExtFileType.JS
-      }
-    ]
-  }
+                type: ExtFileType.JS,
+            },
+        ],
+    },
 ];
 
 /**
  * Creates test extension files in the specified directory
  */
 export function createTestExtension(fixture: TestExtensionFixture, baseDir: string): Extension {
-  const extensionDir = path.join(baseDir, fixture.name);
-  fs.ensureDirSync(extensionDir);
+    const extensionDir = path.join(baseDir, fixture.name);
+    fs.ensureDirSync(extensionDir);
 
-  // Write manifest
-  fs.writeJsonSync(path.join(extensionDir, 'manifest.json'), fixture.manifest, { spaces: 2 });
+    // Write manifest
+    fs.writeJsonSync(path.join(extensionDir, 'manifest.json'), fixture.manifest, {
+        spaces: 2,
+    });
 
-  // Create lazy files
-  const lazyFiles: LazyFile[] = [];
+    // Create lazy files
+    const lazyFiles: LazyFile[] = [];
 
-  fixture.files.forEach(file => {
-    const filePath = path.join(extensionDir, file.path);
-    fs.ensureDirSync(path.dirname(filePath));
-    fs.writeFileSync(filePath, file.content.trim());
+    fixture.files.forEach((file) => {
+        const filePath = path.join(extensionDir, file.path);
+        fs.ensureDirSync(path.dirname(filePath));
+        fs.writeFileSync(filePath, file.content.trim());
 
-    lazyFiles.push(new LazyFile(file.path, filePath, file.type));
-  });
+        lazyFiles.push(new LazyFile(file.path, filePath, file.type));
+    });
 
-  return {
-    id: `test-${fixture.name}`,
-    name: fixture.name,
-    manifest_v2_path: extensionDir,
-    manifest: fixture.manifest,
-    files: lazyFiles
-  };
+    return {
+        id: `test-${fixture.name}`,
+        name: fixture.name,
+        manifest_v2_path: extensionDir,
+        manifest: fixture.manifest,
+        files: lazyFiles,
+    };
 }
 
 /**
  * Creates multiple test extensions from fixtures
  */
-export function createTestExtensions(fixtures: TestExtensionFixture[], baseDir: string): Extension[] {
-  return fixtures.map(fixture => createTestExtension(fixture, baseDir));
+export function createTestExtensions(
+    fixtures: TestExtensionFixture[],
+    baseDir: string
+): Extension[] {
+    return fixtures.map((fixture) => createTestExtension(fixture, baseDir));
 }
