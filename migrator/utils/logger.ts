@@ -1,7 +1,6 @@
-import winston from 'winston';
 import path from 'path';
 import fs from 'fs-extra';
-import { Database, Collections } from '../features/database/db_manager';
+import { Database } from '../features/database/db_manager';
 import { Extension } from '../types/extension';
 
 
