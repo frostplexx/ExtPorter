@@ -1,429 +1,395 @@
 {
-    "mappings": [
-        {
-            "source": {
-                "returnType": "Port",
-                "formals": [
-                    { "type": "string", "name": "extensionId" },
-                    { "type": "object", "name": "connectInfo" }
-                ],
-                "body": "return chrome.extension.connect(extensionId, connectInfo);"
-            },
-            "target": {
-                "returnType": "Port",
-                "formals": [
-                    { "type": "string", "name": "extensionId" },
-                    { "type": "object", "name": "connectInfo" }
-                ],
-                "body": "return chrome.runtime.connect(extensionId, connectInfo);"
-            }
-        },
-        {
-            "source": {
-                "returnType": "Port",
-                "formals": [
-                    { "type": "string", "name": "application" }
-                ],
-                "body": "return chrome.extension.connectNative(application);"
-            },
-            "target": {
-                "returnType": "Port",
-                "formals": [
-                    { "type": "string", "name": "application" }
-                ],
-                "body": "return chrome.runtime.connectNative(application);"
-            }
-        },
-        {
-            "source": {
-                "returnType": "Array",
-                "formals": [
-                    { "type": "number", "name": "windowId" }
-                ],
-                "body": "return chrome.extension.getExtensionTabs(windowId);"
-            },
-            "target": {
-                "returnType": "Array",
-                "formals": [
-                    { "type": "number", "name": "windowId" }
-                ],
-                "body": "return chrome.extension.getViews({windowId: windowId});"
-            }
-        },
-        {
-            "source": {
-                "returnType": "string",
-                "formals": [
-                    { "type": "string", "name": "path" }
-                ],
-                "body": "return chrome.extension.getURL(path);"
-            },
-            "target": {
-                "returnType": "string",
-                "formals": [
-                    { "type": "string", "name": "path" }
-                ],
-                "body": "return chrome.runtime.getURL(path);"
-            }
-        },
-        {
-            "source": {
-                "returnType": "Event",
-                "formals": [],
-                "body": "return chrome.extension.onConnect;"
-            },
-            "target": {
-                "returnType": "Event",
-                "formals": [],
-                "body": "return chrome.runtime.onConnect;"
-            }
-        },
-        {
-            "source": {
-                "returnType": "Event",
-                "formals": [],
-                "body": "return chrome.extension.onConnectExternal;"
-            },
-            "target": {
-                "returnType": "Event",
-                "formals": [],
-                "body": "return chrome.runtime.onConnectExternal;"
-            }
-        },
-        {
-            "source": {
-                "returnType": "Event",
-                "formals": [],
-                "body": "return chrome.extension.onMessage;"
-            },
-            "target": {
-                "returnType": "Event",
-                "formals": [],
-                "body": "return chrome.runtime.onMessage;"
-            }
-        },
-        {
-            "source": {
-                "returnType": "Event",
-                "formals": [],
-                "body": "return chrome.extension.onRequest;"
-            },
-            "target": {
-                "returnType": "Event",
-                "formals": [],
-                "body": "return chrome.runtime.onMessage;"
-            }
-        },
-        {
-            "source": {
-                "returnType": "Event",
-                "formals": [],
-                "body": "return chrome.extension.onRequestExternal;"
-            },
-            "target": {
-                "returnType": "Event",
-                "formals": [],
-                "body": "return chrome.runtime.onMessageExternal;"
-            }
-        },
-        {
-            "source": {
-                "returnType": "void",
-                "formals": [
-                    { "type": "string", "name": "extensionId" },
-                    { "type": "any", "name": "message" },
-                    { "type": "object", "name": "options" },
-                    { "type": "function", "name": "responseCallback" }
-                ],
-                "body": "chrome.extension.sendMessage(extensionId, message, options, responseCallback);"
-            },
-            "target": {
-                "returnType": "void",
-                "formals": [
-                    { "type": "string", "name": "extensionId" },
-                    { "type": "any", "name": "message" },
-                    { "type": "object", "name": "options" },
-                    { "type": "function", "name": "responseCallback" }
-                ],
-                "body": "chrome.runtime.sendMessage(extensionId, message, options, responseCallback);"
-            }
-        },
-        {
-            "source": {
-                "returnType": "void",
-                "formals": [
-                    { "type": "string", "name": "application" },
-                    { "type": "object", "name": "message" },
-                    { "type": "function", "name": "responseCallback" }
-                ],
-                "body": "chrome.extension.sendNativeMessage(application, message, responseCallback);"
-            },
-            "target": {
-                "returnType": "void",
-                "formals": [
-                    { "type": "string", "name": "application" },
-                    { "type": "object", "name": "message" },
-                    { "type": "function", "name": "responseCallback" }
-                ],
-                "body": "chrome.runtime.sendNativeMessage(application, message, responseCallback);"
-            }
-        },
-        {
-            "source": {
-                "returnType": "void",
-                "formals": [
-                    { "type": "string", "name": "extensionId" },
-                    { "type": "any", "name": "request" },
-                    { "type": "function", "name": "responseCallback" }
-                ],
-                "body": "chrome.extension.sendRequest(extensionId, request, responseCallback);"
-            },
-            "target": {
-                "returnType": "void",
-                "formals": [
-                    { "type": "string", "name": "extensionId" },
-                    { "type": "any", "name": "message" },
-                    { "type": "function", "name": "responseCallback" }
-                ],
-                "body": "chrome.runtime.sendMessage(extensionId, message, responseCallback);"
-            }
-        },
-        {
-            "source": {
-                "returnType": "Array",
-                "formals": [
-                    { "type": "number", "name": "windowId" },
-                    { "type": "function", "name": "callback" }
-                ],
-                "body": "chrome.tabs.getAllInWindow(windowId, callback);"
-            },
-            "target": {
-                "returnType": "Array",
-                "formals": [
-                    { "type": "number", "name": "windowId" },
-                    { "type": "function", "name": "callback" }
-                ],
-                "body": "chrome.tabs.query({windowId: windowId}, callback);"
-            }
-        },
-        {
-            "source": {
-                "returnType": "void",
-                "formals": [
-                    { "type": "number", "name": "windowId" },
-                    { "type": "function", "name": "callback" }
-                ],
-                "body": "chrome.tabs.getSelected(windowId, callback);"
-            },
-            "target": {
-                "returnType": "void",
-                "formals": [
-                    { "type": "number", "name": "windowId" },
-                    { "type": "function", "name": "callback" }
-                ],
-                "body": "chrome.tabs.query({active: true, windowId: windowId}, callback);"
-            }
-        },
-        {
-            "source": {
-                "returnType": "Event",
-                "formals": [],
-                "body": "return chrome.tabs.onActiveChanged;"
-            },
-            "target": {
-                "returnType": "Event",
-                "formals": [],
-                "body": "return chrome.tabs.onActivated;"
-            }
-        },
-        {
-            "source": {
-                "returnType": "Event",
-                "formals": [],
-                "body": "return chrome.tabs.onHighlightChanged;"
-            },
-            "target": {
-                "returnType": "Event",
-                "formals": [],
-                "body": "return chrome.tabs.onHighlighted;"
-            }
-        },
-        {
-            "source": {
-                "returnType": "Event",
-                "formals": [],
-                "body": "return chrome.tabs.onSelectionChanged;"
-            },
-            "target": {
-                "returnType": "Event",
-                "formals": [],
-                "body": "return chrome.tabs.onActivated;"
-            }
-        },
-        {
-            "source": {
-                "returnType": "void",
-                "formals": [
-                    { "type": "number", "name": "tabId" },
-                    { "type": "any", "name": "request" },
-                    { "type": "function", "name": "responseCallback" }
-                ],
-                "body": "chrome.tabs.sendRequest(tabId, request, responseCallback);"
-            },
-            "target": {
-                "returnType": "void",
-                "formals": [
-                    { "type": "number", "name": "tabId" },
-                    { "type": "any", "name": "message" },
-                    { "type": "function", "name": "responseCallback" }
-                ],
-                "body": "chrome.runtime.sendMessage(tabId, message, responseCallback);"
-            }
-        },
-        {
-            "source": {
-                "returnType": "void",
-                "formals": [
-                    { "type": "number", "name": "tabId" },
-                    { "type": "object", "name": "details" }
-                ],
-                "body": "chrome.tabs.executeScript(tabId, details);"
-            },
-            "target": {
-                "returnType": "void",
-                "formals": [
-                    { "type": "object", "name": "injection" }
-                ],
-                "body": "chrome.scripting.executeScript(injection);"
-            }
-        },
-        {
-            "source": {
-                "returnType": "Event",
-                "formals": [],
-                "body": "return chrome.browserAction.onClicked;"
-            },
-            "target": {
-                "returnType": "Event",
-                "formals": [],
-                "body": "return chrome.action.onClicked;"
-            }
-        },
-        {
-            "source": {
-                "returnType": "Event",
-                "formals": [],
-                "body": "return chrome.pageAction.onClicked;"
-            },
-            "target": {
-                "returnType": "Event",
-                "formals": [],
-                "body": "return chrome.action.onClicked;"
-            }
-        },
-        {
-            "source": {
-                "returnType": "void",
-                "formals": [
-                    { "type": "object", "name": "details" }
-                ],
-                "body": "chrome.browserAction.setTitle(details);"
-            },
-            "target": {
-                "returnType": "void",
-                "formals": [
-                    { "type": "object", "name": "details" }
-                ],
-                "body": "chrome.action.setTitle(details);"
-            }
-        },
-        {
-            "source": {
-                "returnType": "void",
-                "formals": [
-                    { "type": "object", "name": "details" }
-                ],
-                "body": "chrome.browserAction.setBadgeText(details);"
-            },
-            "target": {
-                "returnType": "void",
-                "formals": [
-                    { "type": "object", "name": "details" }
-                ],
-                "body": "chrome.action.setBadgeText(details);"
-            }
-        },
-        {
-            "source": {
-                "returnType": "void",
-                "formals": [
-                    { "type": "number", "name": "tabId" }
-                ],
-                "body": "chrome.pageAction.show(tabId);"
-            },
-            "target": {
-                "returnType": "void",
-                "formals": [
-                    { "type": "number", "name": "tabId" }
-                ],
-                "body": "chrome.action.show(tabId);"
-            }
-        },
-        {
-            "source": {
-                "returnType": "void",
-                "formals": [
-                    { "type": "number", "name": "tabId" }
-                ],
-                "body": "chrome.pageAction.hide(tabId);"
-            },
-            "target": {
-                "returnType": "void",
-                "formals": [
-                    { "type": "number", "name": "tabId" }
-                ],
-                "body": "chrome.action.hide(tabId);"
-            }
-        },
-        {
-            "source": {
-                "returnType": "void",
-                "formals": [
-                    { "type": "object", "name": "details" }
-                ],
-                "body": "chrome.pageAction.setTitle(details);"
-            },
-            "target": {
-                "returnType": "void",
-                "formals": [
-                    { "type": "object", "name": "details" }
-                ],
-                "body": "chrome.action.setTitle(details);"
-            }
-        },
-        {
-            "source": {
-                "returnType": "object",
-                "formals": [],
-                "body": "return chrome.browserAction;"
-            },
-            "target": {
-                "returnType": "object",
-                "formals": [],
-                "body": "return chrome.action;"
-            }
-        },
-        {
-            "source": {
-                "returnType": "object",
-                "formals": [],
-                "body": "return chrome.pageAction;"
-            },
-            "target": {
-                "returnType": "object",
-                "formals": [],
-                "body": "return chrome.action;"
-            }
-        }
-    ]
+  "mappings": [
+    {
+      "source": {
+        "returnType": "Port",
+        "formals": [
+          { "type": "string", "name": "extensionId" },
+          { "type": "object", "name": "connectInfo" }
+        ],
+        "body": "return chrome.extension.connect(extensionId, connectInfo);"
+      },
+      "target": {
+        "returnType": "Port",
+        "formals": [
+          { "type": "string", "name": "extensionId" },
+          { "type": "object", "name": "connectInfo" }
+        ],
+        "body": "return chrome.runtime.connect(extensionId, connectInfo);"
+      }
+    },
+    {
+      "source": {
+        "returnType": "Port",
+        "formals": [{ "type": "string", "name": "application" }],
+        "body": "return chrome.extension.connectNative(application);"
+      },
+      "target": {
+        "returnType": "Port",
+        "formals": [{ "type": "string", "name": "application" }],
+        "body": "return chrome.runtime.connectNative(application);"
+      }
+    },
+    {
+      "source": {
+        "returnType": "Array",
+        "formals": [{ "type": "number", "name": "windowId" }],
+        "body": "return chrome.extension.getExtensionTabs(windowId);"
+      },
+      "target": {
+        "returnType": "Array",
+        "formals": [{ "type": "number", "name": "windowId" }],
+        "body": "return chrome.extension.getViews({windowId: windowId});"
+      }
+    },
+    {
+      "source": {
+        "returnType": "string",
+        "formals": [{ "type": "string", "name": "path" }],
+        "body": "return chrome.extension.getURL(path);"
+      },
+      "target": {
+        "returnType": "string",
+        "formals": [{ "type": "string", "name": "path" }],
+        "body": "return chrome.runtime.getURL(path);"
+      }
+    },
+    {
+      "source": {
+        "returnType": "Event",
+        "formals": [],
+        "body": "return chrome.extension.onConnect;"
+      },
+      "target": {
+        "returnType": "Event",
+        "formals": [],
+        "body": "return chrome.runtime.onConnect;"
+      }
+    },
+    {
+      "source": {
+        "returnType": "Event",
+        "formals": [],
+        "body": "return chrome.extension.onConnectExternal;"
+      },
+      "target": {
+        "returnType": "Event",
+        "formals": [],
+        "body": "return chrome.runtime.onConnectExternal;"
+      }
+    },
+    {
+      "source": {
+        "returnType": "Event",
+        "formals": [],
+        "body": "return chrome.extension.onMessage;"
+      },
+      "target": {
+        "returnType": "Event",
+        "formals": [],
+        "body": "return chrome.runtime.onMessage;"
+      }
+    },
+    {
+      "source": {
+        "returnType": "Event",
+        "formals": [],
+        "body": "return chrome.extension.onRequest;"
+      },
+      "target": {
+        "returnType": "Event",
+        "formals": [],
+        "body": "return chrome.runtime.onMessage;"
+      }
+    },
+    {
+      "source": {
+        "returnType": "Event",
+        "formals": [],
+        "body": "return chrome.extension.onRequestExternal;"
+      },
+      "target": {
+        "returnType": "Event",
+        "formals": [],
+        "body": "return chrome.runtime.onMessageExternal;"
+      }
+    },
+    {
+      "source": {
+        "returnType": "void",
+        "formals": [
+          { "type": "string", "name": "extensionId" },
+          { "type": "any", "name": "message" },
+          { "type": "object", "name": "options" },
+          { "type": "function", "name": "responseCallback" }
+        ],
+        "body": "chrome.extension.sendMessage(extensionId, message, options, responseCallback);"
+      },
+      "target": {
+        "returnType": "void",
+        "formals": [
+          { "type": "string", "name": "extensionId" },
+          { "type": "any", "name": "message" },
+          { "type": "object", "name": "options" },
+          { "type": "function", "name": "responseCallback" }
+        ],
+        "body": "chrome.runtime.sendMessage(extensionId, message, options, responseCallback);"
+      }
+    },
+    {
+      "source": {
+        "returnType": "void",
+        "formals": [
+          { "type": "string", "name": "application" },
+          { "type": "object", "name": "message" },
+          { "type": "function", "name": "responseCallback" }
+        ],
+        "body": "chrome.extension.sendNativeMessage(application, message, responseCallback);"
+      },
+      "target": {
+        "returnType": "void",
+        "formals": [
+          { "type": "string", "name": "application" },
+          { "type": "object", "name": "message" },
+          { "type": "function", "name": "responseCallback" }
+        ],
+        "body": "chrome.runtime.sendNativeMessage(application, message, responseCallback);"
+      }
+    },
+    {
+      "source": {
+        "returnType": "void",
+        "formals": [
+          { "type": "string", "name": "extensionId" },
+          { "type": "any", "name": "request" },
+          { "type": "function", "name": "responseCallback" }
+        ],
+        "body": "chrome.extension.sendRequest(extensionId, request, responseCallback);"
+      },
+      "target": {
+        "returnType": "void",
+        "formals": [
+          { "type": "string", "name": "extensionId" },
+          { "type": "any", "name": "message" },
+          { "type": "function", "name": "responseCallback" }
+        ],
+        "body": "chrome.runtime.sendMessage(extensionId, message, responseCallback);"
+      }
+    },
+    {
+      "source": {
+        "returnType": "Array",
+        "formals": [
+          { "type": "number", "name": "windowId" },
+          { "type": "function", "name": "callback" }
+        ],
+        "body": "chrome.tabs.getAllInWindow(windowId, callback);"
+      },
+      "target": {
+        "returnType": "Array",
+        "formals": [
+          { "type": "number", "name": "windowId" },
+          { "type": "function", "name": "callback" }
+        ],
+        "body": "chrome.tabs.query({windowId: windowId}, callback);"
+      }
+    },
+    {
+      "source": {
+        "returnType": "void",
+        "formals": [
+          { "type": "number", "name": "windowId" },
+          { "type": "function", "name": "callback" }
+        ],
+        "body": "chrome.tabs.getSelected(windowId, callback);"
+      },
+      "target": {
+        "returnType": "void",
+        "formals": [
+          { "type": "number", "name": "windowId" },
+          { "type": "function", "name": "callback" }
+        ],
+        "body": "chrome.tabs.query({active: true, windowId: windowId}, callback);"
+      }
+    },
+    {
+      "source": {
+        "returnType": "Event",
+        "formals": [],
+        "body": "return chrome.tabs.onActiveChanged;"
+      },
+      "target": {
+        "returnType": "Event",
+        "formals": [],
+        "body": "return chrome.tabs.onActivated;"
+      }
+    },
+    {
+      "source": {
+        "returnType": "Event",
+        "formals": [],
+        "body": "return chrome.tabs.onHighlightChanged;"
+      },
+      "target": {
+        "returnType": "Event",
+        "formals": [],
+        "body": "return chrome.tabs.onHighlighted;"
+      }
+    },
+    {
+      "source": {
+        "returnType": "Event",
+        "formals": [],
+        "body": "return chrome.tabs.onSelectionChanged;"
+      },
+      "target": {
+        "returnType": "Event",
+        "formals": [],
+        "body": "return chrome.tabs.onActivated;"
+      }
+    },
+    {
+      "source": {
+        "returnType": "void",
+        "formals": [
+          { "type": "number", "name": "tabId" },
+          { "type": "any", "name": "request" },
+          { "type": "function", "name": "responseCallback" }
+        ],
+        "body": "chrome.tabs.sendRequest(tabId, request, responseCallback);"
+      },
+      "target": {
+        "returnType": "void",
+        "formals": [
+          { "type": "number", "name": "tabId" },
+          { "type": "any", "name": "message" },
+          { "type": "function", "name": "responseCallback" }
+        ],
+        "body": "chrome.runtime.sendMessage(tabId, message, responseCallback);"
+      }
+    },
+    {
+      "source": {
+        "returnType": "void",
+        "formals": [
+          { "type": "number", "name": "tabId" },
+          { "type": "object", "name": "details" }
+        ],
+        "body": "chrome.tabs.executeScript(tabId, details);"
+      },
+      "target": {
+        "returnType": "void",
+        "formals": [{ "type": "object", "name": "injection" }],
+        "body": "chrome.scripting.executeScript(injection);"
+      }
+    },
+    {
+      "source": {
+        "returnType": "Event",
+        "formals": [],
+        "body": "return chrome.browserAction.onClicked;"
+      },
+      "target": {
+        "returnType": "Event",
+        "formals": [],
+        "body": "return chrome.action.onClicked;"
+      }
+    },
+    {
+      "source": {
+        "returnType": "Event",
+        "formals": [],
+        "body": "return chrome.pageAction.onClicked;"
+      },
+      "target": {
+        "returnType": "Event",
+        "formals": [],
+        "body": "return chrome.action.onClicked;"
+      }
+    },
+    {
+      "source": {
+        "returnType": "void",
+        "formals": [{ "type": "object", "name": "details" }],
+        "body": "chrome.browserAction.setTitle(details);"
+      },
+      "target": {
+        "returnType": "void",
+        "formals": [{ "type": "object", "name": "details" }],
+        "body": "chrome.action.setTitle(details);"
+      }
+    },
+    {
+      "source": {
+        "returnType": "void",
+        "formals": [{ "type": "object", "name": "details" }],
+        "body": "chrome.browserAction.setBadgeText(details);"
+      },
+      "target": {
+        "returnType": "void",
+        "formals": [{ "type": "object", "name": "details" }],
+        "body": "chrome.action.setBadgeText(details);"
+      }
+    },
+    {
+      "source": {
+        "returnType": "void",
+        "formals": [{ "type": "number", "name": "tabId" }],
+        "body": "chrome.pageAction.show(tabId);"
+      },
+      "target": {
+        "returnType": "void",
+        "formals": [{ "type": "number", "name": "tabId" }],
+        "body": "chrome.action.show(tabId);"
+      }
+    },
+    {
+      "source": {
+        "returnType": "void",
+        "formals": [{ "type": "number", "name": "tabId" }],
+        "body": "chrome.pageAction.hide(tabId);"
+      },
+      "target": {
+        "returnType": "void",
+        "formals": [{ "type": "number", "name": "tabId" }],
+        "body": "chrome.action.hide(tabId);"
+      }
+    },
+    {
+      "source": {
+        "returnType": "void",
+        "formals": [{ "type": "object", "name": "details" }],
+        "body": "chrome.pageAction.setTitle(details);"
+      },
+      "target": {
+        "returnType": "void",
+        "formals": [{ "type": "object", "name": "details" }],
+        "body": "chrome.action.setTitle(details);"
+      }
+    },
+    {
+      "source": {
+        "returnType": "object",
+        "formals": [],
+        "body": "return chrome.browserAction;"
+      },
+      "target": {
+        "returnType": "object",
+        "formals": [],
+        "body": "return chrome.action;"
+      }
+    },
+    {
+      "source": {
+        "returnType": "object",
+        "formals": [],
+        "body": "return chrome.pageAction;"
+      },
+      "target": {
+        "returnType": "object",
+        "formals": [],
+        "body": "return chrome.action;"
+      }
+    }
+  ]
 }

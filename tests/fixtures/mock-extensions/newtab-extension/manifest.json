@@ -4,12 +4,7 @@
   "version": "1.0.0",
   "description": "A test extension that replaces the new tab page for Puppeteer testing",
 
-  "permissions": [
-    "storage",
-    "bookmarks",
-    "topSites",
-    "tabs"
-  ],
+  "permissions": ["storage", "bookmarks", "topSites", "tabs"],
 
   "chrome_url_overrides": {
     "newtab": "newtab.html"
@@ -26,8 +21,5 @@
     "128": "icons/icon128.jpeg"
   },
 
-  "web_accessible_resources": [
-    "assets/*",
-    "widgets/*"
-  ]
+  "web_accessible_resources": ["assets/*", "widgets/*"]
 }

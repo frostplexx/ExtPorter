@@ -1,8 +1,8 @@
-import { Extension } from '../../migrator/types/extension';
-import { LazyFile } from '../../migrator/types/abstract_file';
-import { ExtFileType } from '../../migrator/types/ext_file_types';
-import * as fs from 'fs';
-import * as path from 'path';
+import { Extension } from "../../migrator/types/extension";
+import { LazyFile } from "../../migrator/types/abstract_file";
+import { ExtFileType } from "../../migrator/types/ext_file_types";
+import * as fs from "fs";
+import * as path from "path";
 
 /**
  * Helper functions for creating test fixtures and mocks
@@ -30,9 +30,11 @@ export function createMockFile(options: MockFileOptions): LazyFile {
   mockFile.path = options.path;
   mockFile.filetype = options.filetype || ExtFileType.JS;
 
-  const content = options.content || '';
+  const content = options.content || "";
   mockFile.getContent = jest.fn().mockReturnValue(content);
-  mockFile.getSize = jest.fn().mockReturnValue(Buffer.byteLength(content, 'utf8'));
+  mockFile.getSize = jest
+    .fn()
+    .mockReturnValue(Buffer.byteLength(content, "utf8"));
   mockFile.close = jest.fn();
   mockFile.getAST = jest.fn().mockReturnValue(undefined);
 
@@ -42,13 +44,15 @@ export function createMockFile(options: MockFileOptions): LazyFile {
 /**
  * Creates a mock Extension for testing
  */
-export function createMockExtension(options: MockExtensionOptions = {}): Extension {
+export function createMockExtension(
+  options: MockExtensionOptions = {},
+): Extension {
   return {
-    id: options.id || 'test-extension-id',
-    name: options.name || 'Test Extension',
+    id: options.id || "test-extension-id",
+    name: options.name || "Test Extension",
     manifest: options.manifest || { manifest_version: 3 },
     files: options.files || [],
-    isNewTabExtension: options.isNewTabExtension || false
+    isNewTabExtension: options.isNewTabExtension || false,
   } as Extension;
 }
 
@@ -56,19 +60,23 @@ export function createMockExtension(options: MockExtensionOptions = {}): Extensi
  * Loads a sample extension from fixtures
  */
 export function loadSampleExtension(extensionName: string): Extension {
-  const extensionPath = path.join(__dirname, 'sample_extensions', extensionName);
+  const extensionPath = path.join(
+    __dirname,
+    "sample_extensions",
+    extensionName,
+  );
 
   if (!fs.existsSync(extensionPath)) {
     throw new Error(`Sample extension not found: ${extensionName}`);
   }
 
   // Load manifest
-  const manifestPath = path.join(extensionPath, 'manifest.json');
-  const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+  const manifestPath = path.join(extensionPath, "manifest.json");
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
 
   // Load all files
   const files: LazyFile[] = [];
-  const loadFiles = (dir: string, relativePath = '') => {
+  const loadFiles = (dir: string, relativePath = "") => {
     const items = fs.readdirSync(dir);
 
     for (const item of items) {
@@ -78,14 +86,16 @@ export function loadSampleExtension(extensionName: string): Extension {
       if (fs.statSync(fullPath).isDirectory()) {
         loadFiles(fullPath, itemRelativePath);
       } else {
-        const content = fs.readFileSync(fullPath, 'utf8');
+        const content = fs.readFileSync(fullPath, "utf8");
         const filetype = getFileType(item);
 
-        files.push(createMockFile({
-          path: itemRelativePath,
-          content,
-          filetype
-        }));
+        files.push(
+          createMockFile({
+            path: itemRelativePath,
+            content,
+            filetype,
+          }),
+        );
       }
     }
   };
@@ -96,7 +106,7 @@ export function loadSampleExtension(extensionName: string): Extension {
     id: extensionName,
     name: manifest.name,
     manifest,
-    files
+    files,
   });
 }
 
@@ -107,13 +117,13 @@ function getFileType(filename: string): ExtFileType {
   const ext = path.extname(filename).toLowerCase();
 
   switch (ext) {
-    case '.js':
+    case ".js":
       return ExtFileType.JS;
-    case '.json':
+    case ".json":
       return ExtFileType.OTHER;
-    case '.css':
+    case ".css":
       return ExtFileType.CSS;
-    case '.html':
+    case ".html":
       return ExtFileType.HTML;
     default:
       return ExtFileType.OTHER;
@@ -126,10 +136,10 @@ function getFileType(filename: string): ExtFileType {
 export function createTestManifest(overrides: any = {}): any {
   return {
     manifest_version: 3,
-    name: 'Test Extension',
-    version: '1.0.0',
-    description: 'Test extension for unit tests',
-    ...overrides
+    name: "Test Extension",
+    version: "1.0.0",
+    description: "Test extension for unit tests",
+    ...overrides,
   };
 }
 
@@ -173,7 +183,7 @@ export const CALLBACK_PATTERNS = {
         console.log('All done');
       });
     });
-  });`
+  });`,
 };
 
 /**
@@ -192,7 +202,7 @@ export const NON_CALLBACK_PATTERNS = {
 
   promiseUsage: `chrome.storage.local.get(['key']).then(result => {
     console.log(result);
-  });`
+  });`,
 };
 
 /**
@@ -202,71 +212,91 @@ export function createMockChromeAPI(): any {
   return {
     storage: {
       local: {
-        get: jest.fn().mockResolvedValue({ key: 'test-value' }),
+        get: jest.fn().mockResolvedValue({ key: "test-value" }),
         set: jest.fn().mockResolvedValue(undefined),
         clear: jest.fn().mockResolvedValue(undefined),
         remove: jest.fn().mockResolvedValue(undefined),
-        getBytesInUse: jest.fn().mockResolvedValue(1024)
+        getBytesInUse: jest.fn().mockResolvedValue(1024),
       },
       sync: {
-        get: jest.fn().mockResolvedValue({ syncKey: 'sync-value' }),
+        get: jest.fn().mockResolvedValue({ syncKey: "sync-value" }),
         set: jest.fn().mockResolvedValue(undefined),
         clear: jest.fn().mockResolvedValue(undefined),
-        remove: jest.fn().mockResolvedValue(undefined)
+        remove: jest.fn().mockResolvedValue(undefined),
       },
       session: {
-        get: jest.fn().mockResolvedValue({ sessionKey: 'session-value' }),
+        get: jest.fn().mockResolvedValue({ sessionKey: "session-value" }),
         set: jest.fn().mockResolvedValue(undefined),
         clear: jest.fn().mockResolvedValue(undefined),
-        remove: jest.fn().mockResolvedValue(undefined)
-      }
+        remove: jest.fn().mockResolvedValue(undefined),
+      },
     },
     tabs: {
-      query: jest.fn().mockResolvedValue([{ id: 1, url: 'https://example.com' }]),
-      get: jest.fn().mockResolvedValue({ id: 1, url: 'https://example.com' }),
-      create: jest.fn().mockResolvedValue({ id: 2, url: 'https://new-tab.com' }),
-      update: jest.fn().mockResolvedValue({ id: 1, url: 'https://updated.com' }),
+      query: jest
+        .fn()
+        .mockResolvedValue([{ id: 1, url: "https://example.com" }]),
+      get: jest.fn().mockResolvedValue({ id: 1, url: "https://example.com" }),
+      create: jest
+        .fn()
+        .mockResolvedValue({ id: 2, url: "https://new-tab.com" }),
+      update: jest
+        .fn()
+        .mockResolvedValue({ id: 1, url: "https://updated.com" }),
       remove: jest.fn().mockResolvedValue(undefined),
-      duplicate: jest.fn().mockResolvedValue({ id: 3, url: 'https://example.com' }),
+      duplicate: jest
+        .fn()
+        .mockResolvedValue({ id: 3, url: "https://example.com" }),
       move: jest.fn().mockResolvedValue([{ id: 1, index: 1 }]),
       reload: jest.fn().mockResolvedValue(undefined),
-      captureVisibleTab: jest.fn().mockResolvedValue('data:image/png;base64,...'),
-      executeScript: jest.fn().mockResolvedValue([{ result: 'script executed' }]),
+      captureVisibleTab: jest
+        .fn()
+        .mockResolvedValue("data:image/png;base64,..."),
+      executeScript: jest
+        .fn()
+        .mockResolvedValue([{ result: "script executed" }]),
       insertCSS: jest.fn().mockResolvedValue(undefined),
       removeCSS: jest.fn().mockResolvedValue(undefined),
-      sendMessage: jest.fn().mockResolvedValue({ response: 'tab message sent' }),
-      detectLanguage: jest.fn().mockResolvedValue('en'),
+      sendMessage: jest
+        .fn()
+        .mockResolvedValue({ response: "tab message sent" }),
+      detectLanguage: jest.fn().mockResolvedValue("en"),
       getZoom: jest.fn().mockResolvedValue(1.0),
-      setZoom: jest.fn().mockResolvedValue(undefined)
+      setZoom: jest.fn().mockResolvedValue(undefined),
     },
     runtime: {
-      sendMessage: jest.fn().mockResolvedValue({ response: 'message sent' }),
-      sendNativeMessage: jest.fn().mockResolvedValue({ nativeResponse: 'native message sent' }),
-      getURL: jest.fn().mockReturnValue('chrome-extension://test/file.html'),
-      getPlatformInfo: jest.fn().mockResolvedValue({ os: 'mac', arch: 'x86-64' }),
+      sendMessage: jest.fn().mockResolvedValue({ response: "message sent" }),
+      sendNativeMessage: jest
+        .fn()
+        .mockResolvedValue({ nativeResponse: "native message sent" }),
+      getURL: jest.fn().mockReturnValue("chrome-extension://test/file.html"),
+      getPlatformInfo: jest
+        .fn()
+        .mockResolvedValue({ os: "mac", arch: "x86-64" }),
       getPackageDirectoryEntry: jest.fn().mockResolvedValue({}),
-      requestUpdateCheck: jest.fn().mockResolvedValue({ status: 'no_update' }),
-      id: 'test-extension-id',
-      getManifest: jest.fn().mockReturnValue({ version: '1.0.0' })
+      requestUpdateCheck: jest.fn().mockResolvedValue({ status: "no_update" }),
+      id: "test-extension-id",
+      getManifest: jest.fn().mockReturnValue({ version: "1.0.0" }),
     },
     action: {
       setBadgeText: jest.fn().mockResolvedValue(undefined),
-      getBadgeText: jest.fn().mockResolvedValue('test'),
+      getBadgeText: jest.fn().mockResolvedValue("test"),
       setBadgeBackgroundColor: jest.fn().mockResolvedValue(undefined),
-      getBadgeBackgroundColor: jest.fn().mockResolvedValue('#FF0000'),
+      getBadgeBackgroundColor: jest.fn().mockResolvedValue("#FF0000"),
       setTitle: jest.fn().mockResolvedValue(undefined),
-      getTitle: jest.fn().mockResolvedValue('Test Extension'),
+      getTitle: jest.fn().mockResolvedValue("Test Extension"),
       setIcon: jest.fn().mockResolvedValue(undefined),
       setPopup: jest.fn().mockResolvedValue(undefined),
-      getPopup: jest.fn().mockResolvedValue('popup.html'),
+      getPopup: jest.fn().mockResolvedValue("popup.html"),
       enable: jest.fn().mockResolvedValue(undefined),
       disable: jest.fn().mockResolvedValue(undefined),
-      isEnabled: jest.fn().mockResolvedValue(true)
+      isEnabled: jest.fn().mockResolvedValue(true),
     },
     scripting: {
-      executeScript: jest.fn().mockResolvedValue([{ result: 'script executed' }]),
+      executeScript: jest
+        .fn()
+        .mockResolvedValue([{ result: "script executed" }]),
       insertCSS: jest.fn().mockResolvedValue(undefined),
-      removeCSS: jest.fn().mockResolvedValue(undefined)
-    }
+      removeCSS: jest.fn().mockResolvedValue(undefined),
+    },
   };
 }

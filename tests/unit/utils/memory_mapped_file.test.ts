@@ -1,10 +1,13 @@
-import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
-import * as fs from 'fs-extra';
-import * as path from 'path';
-import { MMapFile } from '../../../migrator/utils/memory_mapped_file';
+import { describe, it, expect, beforeEach, afterEach } from "@jest/globals";
+import * as fs from "fs-extra";
+import * as path from "path";
+import { MMapFile } from "../../../migrator/utils/memory_mapped_file";
 
-describe('MMapFile', () => {
-  const testDir = path.join(process.env.TEST_OUTPUT_DIR!, 'memory_mapped_file_test');
+describe("MMapFile", () => {
+  const testDir = path.join(
+    process.env.TEST_OUTPUT_DIR!,
+    "memory_mapped_file_test",
+  );
 
   beforeEach(() => {
     fs.ensureDirSync(testDir);
@@ -16,10 +19,10 @@ describe('MMapFile', () => {
     }
   });
 
-  describe('constructor', () => {
-    it('should open and read a text file correctly', () => {
-      const testFile = path.join(testDir, 'test.txt');
-      const testContent = 'Hello, World!\nThis is a test file.';
+  describe("constructor", () => {
+    it("should open and read a text file correctly", () => {
+      const testFile = path.join(testDir, "test.txt");
+      const testContent = "Hello, World!\nThis is a test file.";
       fs.writeFileSync(testFile, testContent);
 
       const mmapFile = new MMapFile(testFile);
@@ -31,20 +34,20 @@ describe('MMapFile', () => {
       mmapFile.close();
     });
 
-    it('should handle empty files', () => {
-      const testFile = path.join(testDir, 'empty.txt');
-      fs.writeFileSync(testFile, '');
+    it("should handle empty files", () => {
+      const testFile = path.join(testDir, "empty.txt");
+      fs.writeFileSync(testFile, "");
 
       const mmapFile = new MMapFile(testFile);
 
       expect(mmapFile.size).toBe(0);
-      expect(mmapFile.getContent()).toBe('');
+      expect(mmapFile.getContent()).toBe("");
 
       mmapFile.close();
     });
 
-    it('should throw error for non-existent files', () => {
-      const nonExistentFile = path.join(testDir, 'non-existent.txt');
+    it("should throw error for non-existent files", () => {
+      const nonExistentFile = path.join(testDir, "non-existent.txt");
 
       expect(() => {
         new MMapFile(nonExistentFile);
@@ -52,10 +55,10 @@ describe('MMapFile', () => {
     });
   });
 
-  describe('getContent', () => {
-    it('should return file content as string', () => {
-      const testFile = path.join(testDir, 'content.txt');
-      const testContent = 'Line 1\nLine 2\nLine 3';
+  describe("getContent", () => {
+    it("should return file content as string", () => {
+      const testFile = path.join(testDir, "content.txt");
+      const testContent = "Line 1\nLine 2\nLine 3";
       fs.writeFileSync(testFile, testContent);
 
       const mmapFile = new MMapFile(testFile);
@@ -65,9 +68,9 @@ describe('MMapFile', () => {
       mmapFile.close();
     });
 
-    it('should cache content on subsequent calls', () => {
-      const testFile = path.join(testDir, 'cache.txt');
-      const testContent = 'Cached content';
+    it("should cache content on subsequent calls", () => {
+      const testFile = path.join(testDir, "cache.txt");
+      const testContent = "Cached content";
       fs.writeFileSync(testFile, testContent);
 
       const mmapFile = new MMapFile(testFile);
@@ -81,10 +84,10 @@ describe('MMapFile', () => {
       mmapFile.close();
     });
 
-    it('should handle UTF-8 encoded content', () => {
-      const testFile = path.join(testDir, 'utf8.txt');
-      const testContent = 'Hello 世界! 🌍 Émojis and special chars: àáâãäå';
-      fs.writeFileSync(testFile, testContent, 'utf8');
+    it("should handle UTF-8 encoded content", () => {
+      const testFile = path.join(testDir, "utf8.txt");
+      const testContent = "Hello 世界! 🌍 Émojis and special chars: àáâãäå";
+      fs.writeFileSync(testFile, testContent, "utf8");
 
       const mmapFile = new MMapFile(testFile);
       const content = mmapFile.getContent();
@@ -93,13 +96,13 @@ describe('MMapFile', () => {
       mmapFile.close();
     });
 
-    it('should handle JSON content', () => {
-      const testFile = path.join(testDir, 'test.json');
+    it("should handle JSON content", () => {
+      const testFile = path.join(testDir, "test.json");
       const testObject = {
-        name: 'Test Extension',
-        version: '1.0',
+        name: "Test Extension",
+        version: "1.0",
         manifest_version: 2,
-        permissions: ['activeTab', 'storage']
+        permissions: ["activeTab", "storage"],
       };
       fs.writeJsonSync(testFile, testObject);
 
@@ -112,25 +115,25 @@ describe('MMapFile', () => {
     });
   });
 
-  describe('getBuffer', () => {
-    it('should return the raw buffer', () => {
-      const testFile = path.join(testDir, 'buffer.txt');
-      const testContent = 'Buffer test content';
+  describe("getBuffer", () => {
+    it("should return the raw buffer", () => {
+      const testFile = path.join(testDir, "buffer.txt");
+      const testContent = "Buffer test content";
       fs.writeFileSync(testFile, testContent);
 
       const mmapFile = new MMapFile(testFile);
       const buffer = mmapFile.getBuffer();
 
       expect(buffer).toBeInstanceOf(Buffer);
-      expect(buffer.toString('utf8')).toBe(testContent);
+      expect(buffer.toString("utf8")).toBe(testContent);
       expect(buffer.length).toBe(testContent.length);
 
       mmapFile.close();
     });
 
-    it('should return the same buffer instance on multiple calls', () => {
-      const testFile = path.join(testDir, 'buffer-same.txt');
-      fs.writeFileSync(testFile, 'test');
+    it("should return the same buffer instance on multiple calls", () => {
+      const testFile = path.join(testDir, "buffer-same.txt");
+      fs.writeFileSync(testFile, "test");
 
       const mmapFile = new MMapFile(testFile);
       const buffer1 = mmapFile.getBuffer();
@@ -141,10 +144,10 @@ describe('MMapFile', () => {
     });
   });
 
-  describe('close', () => {
-    it('should close the file descriptor', () => {
-      const testFile = path.join(testDir, 'close.txt');
-      fs.writeFileSync(testFile, 'test content');
+  describe("close", () => {
+    it("should close the file descriptor", () => {
+      const testFile = path.join(testDir, "close.txt");
+      fs.writeFileSync(testFile, "test content");
 
       const mmapFile = new MMapFile(testFile);
       const originalFd = mmapFile.fd;
@@ -156,9 +159,9 @@ describe('MMapFile', () => {
       expect(mmapFile.fd).toBe(-1);
     });
 
-    it('should be safe to call close multiple times', () => {
-      const testFile = path.join(testDir, 'close-multiple.txt');
-      fs.writeFileSync(testFile, 'test content');
+    it("should be safe to call close multiple times", () => {
+      const testFile = path.join(testDir, "close-multiple.txt");
+      fs.writeFileSync(testFile, "test content");
 
       const mmapFile = new MMapFile(testFile);
 
@@ -169,9 +172,9 @@ describe('MMapFile', () => {
       expect(mmapFile.fd).toBe(-1);
     });
 
-    it('should still allow access to cached content after close', () => {
-      const testFile = path.join(testDir, 'close-cached.txt');
-      const testContent = 'cached after close';
+    it("should still allow access to cached content after close", () => {
+      const testFile = path.join(testDir, "close-cached.txt");
+      const testContent = "cached after close";
       fs.writeFileSync(testFile, testContent);
 
       const mmapFile = new MMapFile(testFile);
@@ -184,10 +187,10 @@ describe('MMapFile', () => {
     });
   });
 
-  describe('large files', () => {
-    it('should handle moderately large files', () => {
-      const testFile = path.join(testDir, 'large.txt');
-      const largeContent = 'A'.repeat(1024 * 10); // 10KB
+  describe("large files", () => {
+    it("should handle moderately large files", () => {
+      const testFile = path.join(testDir, "large.txt");
+      const largeContent = "A".repeat(1024 * 10); // 10KB
       fs.writeFileSync(testFile, largeContent);
 
       const mmapFile = new MMapFile(testFile);
@@ -199,10 +202,12 @@ describe('MMapFile', () => {
     });
   });
 
-  describe('binary files', () => {
-    it('should handle binary content', () => {
-      const testFile = path.join(testDir, 'binary.bin');
-      const binaryData = Buffer.from([0x00, 0x01, 0x02, 0x03, 0xFF, 0xFE, 0xFD]);
+  describe("binary files", () => {
+    it("should handle binary content", () => {
+      const testFile = path.join(testDir, "binary.bin");
+      const binaryData = Buffer.from([
+        0x00, 0x01, 0x02, 0x03, 0xff, 0xfe, 0xfd,
+      ]);
       fs.writeFileSync(testFile, binaryData);
 
       const mmapFile = new MMapFile(testFile);
@@ -214,11 +219,11 @@ describe('MMapFile', () => {
     });
   });
 
-  describe('error handling', () => {
-    it('should handle permission errors gracefully', () => {
+  describe("error handling", () => {
+    it("should handle permission errors gracefully", () => {
       // This test might not work on all systems due to permission restrictions
-      const testFile = path.join(testDir, 'permission-test.txt');
-      fs.writeFileSync(testFile, 'test');
+      const testFile = path.join(testDir, "permission-test.txt");
+      fs.writeFileSync(testFile, "test");
 
       // Try to change permissions (might not work on all systems)
       try {
@@ -232,7 +237,9 @@ describe('MMapFile', () => {
         fs.chmodSync(testFile, 0o644);
       } catch (error) {
         // Skip test if we can't change permissions
-        console.log('Skipping permission test - unable to change file permissions');
+        console.log(
+          "Skipping permission test - unable to change file permissions",
+        );
       }
     });
   });

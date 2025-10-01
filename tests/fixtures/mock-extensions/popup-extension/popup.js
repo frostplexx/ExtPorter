@@ -1,93 +1,108 @@
 // Popup Test Extension - Main popup script
-console.log('🔧 Popup script loaded');
+console.log("🔧 Popup script loaded");
 
 // State management
 let counter = 0;
 let settings = {
-    autoInject: false,
-    debugMode: false,
-    notifications: true
+  autoInject: false,
+  debugMode: false,
+  notifications: true,
 };
 
 // DOM elements
 const elements = {
-    counter: null,
-    status: null,
-    buttons: {},
-    checkboxes: {}
+  counter: null,
+  status: null,
+  buttons: {},
+  checkboxes: {},
 };
 
 // Initialize popup when DOM is ready
-document.addEventListener('DOMContentLoaded', initializePopup);
+document.addEventListener("DOMContentLoaded", initializePopup);
 
 async function initializePopup() {
-    console.log('🚀 Initializing popup...');
+  console.log("🚀 Initializing popup...");
 
-    // Get DOM elements
-    elements.counter = document.getElementById('counter');
-    elements.status = document.getElementById('status');
+  // Get DOM elements
+  elements.counter = document.getElementById("counter");
+  elements.status = document.getElementById("status");
 
-    // Get buttons
-    elements.buttons = {
-        injectContent: document.getElementById('inject-content'),
-        highlightPage: document.getElementById('highlight-page'),
-        changeBackground: document.getElementById('change-background'),
-        showAlert: document.getElementById('show-alert'),
-        increment: document.getElementById('increment'),
-        decrement: document.getElementById('decrement'),
-        reset: document.getElementById('reset')
-    };
+  // Get buttons
+  elements.buttons = {
+    injectContent: document.getElementById("inject-content"),
+    highlightPage: document.getElementById("highlight-page"),
+    changeBackground: document.getElementById("change-background"),
+    showAlert: document.getElementById("show-alert"),
+    increment: document.getElementById("increment"),
+    decrement: document.getElementById("decrement"),
+    reset: document.getElementById("reset"),
+  };
 
-    // Get checkboxes
-    elements.checkboxes = {
-        autoInject: document.getElementById('auto-inject'),
-        debugMode: document.getElementById('debug-mode'),
-        notifications: document.getElementById('notifications')
-    };
+  // Get checkboxes
+  elements.checkboxes = {
+    autoInject: document.getElementById("auto-inject"),
+    debugMode: document.getElementById("debug-mode"),
+    notifications: document.getElementById("notifications"),
+  };
 
-    // Load saved settings
-    await loadSettings();
+  // Load saved settings
+  await loadSettings();
 
-    // Set up event listeners
-    setupEventListeners();
+  // Set up event listeners
+  setupEventListeners();
 
-    // Update UI
-    updateCounterDisplay();
-    updateStatus('Popup initialized successfully', 'success');
+  // Update UI
+  updateCounterDisplay();
+  updateStatus("Popup initialized successfully", "success");
 
-    console.log('✅ Popup initialization complete');
+  console.log("✅ Popup initialization complete");
 }
 
 function setupEventListeners() {
-    // Action buttons
-    elements.buttons.injectContent.addEventListener('click', handleInjectContent);
-    elements.buttons.highlightPage.addEventListener('click', handleHighlightPage);
-    elements.buttons.changeBackground.addEventListener('click', handleChangeBackground);
-    elements.buttons.showAlert.addEventListener('click', handleShowAlert);
+  // Action buttons
+  elements.buttons.injectContent.addEventListener("click", handleInjectContent);
+  elements.buttons.highlightPage.addEventListener("click", handleHighlightPage);
+  elements.buttons.changeBackground.addEventListener(
+    "click",
+    handleChangeBackground,
+  );
+  elements.buttons.showAlert.addEventListener("click", handleShowAlert);
 
-    // Counter buttons
-    elements.buttons.increment.addEventListener('click', handleIncrement);
-    elements.buttons.decrement.addEventListener('click', handleDecrement);
-    elements.buttons.reset.addEventListener('click', handleReset);
+  // Counter buttons
+  elements.buttons.increment.addEventListener("click", handleIncrement);
+  elements.buttons.decrement.addEventListener("click", handleDecrement);
+  elements.buttons.reset.addEventListener("click", handleReset);
 
-    // Settings checkboxes
-    elements.checkboxes.autoInject.addEventListener('change', handleAutoInjectChange);
-    elements.checkboxes.debugMode.addEventListener('change', handleDebugModeChange);
-    elements.checkboxes.notifications.addEventListener('change', handleNotificationsChange);
+  // Settings checkboxes
+  elements.checkboxes.autoInject.addEventListener(
+    "change",
+    handleAutoInjectChange,
+  );
+  elements.checkboxes.debugMode.addEventListener(
+    "change",
+    handleDebugModeChange,
+  );
+  elements.checkboxes.notifications.addEventListener(
+    "change",
+    handleNotificationsChange,
+  );
 
-    console.log('📡 Event listeners set up');
+  console.log("📡 Event listeners set up");
 }
 
 // Action handlers
 async function handleInjectContent() {
-    updateStatus('Injecting content script...', 'info');
-    setButtonState('injectContent', false);
+  updateStatus("Injecting content script...", "info");
+  setButtonState("injectContent", false);
 
-    try {
-        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  try {
+    const [tab] = await chrome.tabs.query({
+      active: true,
+      currentWindow: true,
+    });
 
-        await chrome.tabs.executeScript(tab.id, {
-            code: `
+    await chrome.tabs.executeScript(tab.id, {
+      code: `
                 console.log('💉 Content script injected via popup');
 
                 // Create and show injection indicator
@@ -117,29 +132,31 @@ async function handleInjectContent() {
 
                 // Signal injection success
                 'INJECTION_SUCCESS';
-            `
-        });
+            `,
+    });
 
-        updateStatus('Content script injected successfully!', 'success');
-        console.log('✅ Content script injection successful');
-
-    } catch (error) {
-        console.error('❌ Content script injection failed:', error);
-        updateStatus(`Injection failed: ${error.message}`, 'error');
-    } finally {
-        setButtonState('injectContent', true);
-    }
+    updateStatus("Content script injected successfully!", "success");
+    console.log("✅ Content script injection successful");
+  } catch (error) {
+    console.error("❌ Content script injection failed:", error);
+    updateStatus(`Injection failed: ${error.message}`, "error");
+  } finally {
+    setButtonState("injectContent", true);
+  }
 }
 
 async function handleHighlightPage() {
-    updateStatus('Highlighting page elements...', 'info');
-    setButtonState('highlightPage', false);
+  updateStatus("Highlighting page elements...", "info");
+  setButtonState("highlightPage", false);
 
-    try {
-        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  try {
+    const [tab] = await chrome.tabs.query({
+      active: true,
+      currentWindow: true,
+    });
 
-        await chrome.tabs.executeScript(tab.id, {
-            code: `
+    await chrome.tabs.executeScript(tab.id, {
+      code: `
                 console.log('🎨 Highlighting page elements');
 
                 // Add highlight styles
@@ -199,31 +216,40 @@ async function handleHighlightPage() {
                 }, 5000);
 
                 highlightCount;
-            `
-        });
+            `,
+    });
 
-        updateStatus('Page elements highlighted successfully!', 'success');
-        console.log('✅ Page highlighting successful');
-
-    } catch (error) {
-        console.error('❌ Page highlighting failed:', error);
-        updateStatus(`Highlighting failed: ${error.message}`, 'error');
-    } finally {
-        setButtonState('highlightPage', true);
-    }
+    updateStatus("Page elements highlighted successfully!", "success");
+    console.log("✅ Page highlighting successful");
+  } catch (error) {
+    console.error("❌ Page highlighting failed:", error);
+    updateStatus(`Highlighting failed: ${error.message}`, "error");
+  } finally {
+    setButtonState("highlightPage", true);
+  }
 }
 
 async function handleChangeBackground() {
-    updateStatus('Changing page background...', 'info');
-    setButtonState('changeBackground', false);
+  updateStatus("Changing page background...", "info");
+  setButtonState("changeBackground", false);
 
-    try {
-        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-        const colors = ['#ff6b6b', '#4ecdc4', '#45b7d1', '#96ceb4', '#ffeaa7', '#dda0dd'];
-        const randomColor = colors[Math.floor(Math.random() * colors.length)];
+  try {
+    const [tab] = await chrome.tabs.query({
+      active: true,
+      currentWindow: true,
+    });
+    const colors = [
+      "#ff6b6b",
+      "#4ecdc4",
+      "#45b7d1",
+      "#96ceb4",
+      "#ffeaa7",
+      "#dda0dd",
+    ];
+    const randomColor = colors[Math.floor(Math.random() * colors.length)];
 
-        await chrome.tabs.executeScript(tab.id, {
-            code: `
+    await chrome.tabs.executeScript(tab.id, {
+      code: `
                 console.log('🎨 Changing page background color');
 
                 // Store original background
@@ -260,29 +286,31 @@ async function handleChangeBackground() {
                 }, 3000);
 
                 '${randomColor}';
-            `
-        });
+            `,
+    });
 
-        updateStatus(`Background changed to ${randomColor}!`, 'success');
-        console.log('✅ Background change successful');
-
-    } catch (error) {
-        console.error('❌ Background change failed:', error);
-        updateStatus(`Background change failed: ${error.message}`, 'error');
-    } finally {
-        setButtonState('changeBackground', true);
-    }
+    updateStatus(`Background changed to ${randomColor}!`, "success");
+    console.log("✅ Background change successful");
+  } catch (error) {
+    console.error("❌ Background change failed:", error);
+    updateStatus(`Background change failed: ${error.message}`, "error");
+  } finally {
+    setButtonState("changeBackground", true);
+  }
 }
 
 async function handleShowAlert() {
-    updateStatus('Showing page alert...', 'info');
-    setButtonState('showAlert', false);
+  updateStatus("Showing page alert...", "info");
+  setButtonState("showAlert", false);
 
-    try {
-        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  try {
+    const [tab] = await chrome.tabs.query({
+      active: true,
+      currentWindow: true,
+    });
 
-        await chrome.tabs.executeScript(tab.id, {
-            code: `
+    await chrome.tabs.executeScript(tab.id, {
+      code: `
                 console.log('🚨 Showing custom alert');
 
                 // Create custom alert overlay
@@ -359,136 +387,144 @@ async function handleShowAlert() {
                 }, 5000);
 
                 'ALERT_SHOWN';
-            `
-        });
+            `,
+    });
 
-        updateStatus('Custom alert displayed successfully!', 'success');
-        console.log('✅ Alert display successful');
-
-    } catch (error) {
-        console.error('❌ Alert display failed:', error);
-        updateStatus(`Alert failed: ${error.message}`, 'error');
-    } finally {
-        setButtonState('showAlert', true);
-    }
+    updateStatus("Custom alert displayed successfully!", "success");
+    console.log("✅ Alert display successful");
+  } catch (error) {
+    console.error("❌ Alert display failed:", error);
+    updateStatus(`Alert failed: ${error.message}`, "error");
+  } finally {
+    setButtonState("showAlert", true);
+  }
 }
 
 // Counter handlers
 function handleIncrement() {
-    counter++;
-    updateCounterDisplay();
-    updateStatus(`Counter incremented to ${counter}`, 'info');
-    saveSettings();
+  counter++;
+  updateCounterDisplay();
+  updateStatus(`Counter incremented to ${counter}`, "info");
+  saveSettings();
 }
 
 function handleDecrement() {
-    counter--;
-    updateCounterDisplay();
-    updateStatus(`Counter decremented to ${counter}`, 'info');
-    saveSettings();
+  counter--;
+  updateCounterDisplay();
+  updateStatus(`Counter decremented to ${counter}`, "info");
+  saveSettings();
 }
 
 function handleReset() {
-    counter = 0;
-    updateCounterDisplay();
-    updateStatus('Counter reset to 0', 'info');
-    saveSettings();
+  counter = 0;
+  updateCounterDisplay();
+  updateStatus("Counter reset to 0", "info");
+  saveSettings();
 }
 
 // Settings handlers
 function handleAutoInjectChange() {
-    settings.autoInject = elements.checkboxes.autoInject.checked;
-    updateStatus(`Auto-inject ${settings.autoInject ? 'enabled' : 'disabled'}`, 'info');
-    saveSettings();
+  settings.autoInject = elements.checkboxes.autoInject.checked;
+  updateStatus(
+    `Auto-inject ${settings.autoInject ? "enabled" : "disabled"}`,
+    "info",
+  );
+  saveSettings();
 }
 
 function handleDebugModeChange() {
-    settings.debugMode = elements.checkboxes.debugMode.checked;
-    updateStatus(`Debug mode ${settings.debugMode ? 'enabled' : 'disabled'}`, 'info');
-    saveSettings();
+  settings.debugMode = elements.checkboxes.debugMode.checked;
+  updateStatus(
+    `Debug mode ${settings.debugMode ? "enabled" : "disabled"}`,
+    "info",
+  );
+  saveSettings();
 }
 
 function handleNotificationsChange() {
-    settings.notifications = elements.checkboxes.notifications.checked;
-    updateStatus(`Notifications ${settings.notifications ? 'enabled' : 'disabled'}`, 'info');
-    saveSettings();
+  settings.notifications = elements.checkboxes.notifications.checked;
+  updateStatus(
+    `Notifications ${settings.notifications ? "enabled" : "disabled"}`,
+    "info",
+  );
+  saveSettings();
 }
 
 // Utility functions
 function updateCounterDisplay() {
-    if (elements.counter) {
-        elements.counter.textContent = counter;
-        elements.counter.setAttribute('data-value', counter);
-    }
+  if (elements.counter) {
+    elements.counter.textContent = counter;
+    elements.counter.setAttribute("data-value", counter);
+  }
 }
 
-function updateStatus(message, type = 'info') {
-    if (elements.status) {
-        elements.status.textContent = message;
-        elements.status.className = `status ${type}`;
-        elements.status.setAttribute('data-status', type);
-        elements.status.setAttribute('data-message', message);
-    }
+function updateStatus(message, type = "info") {
+  if (elements.status) {
+    elements.status.textContent = message;
+    elements.status.className = `status ${type}`;
+    elements.status.setAttribute("data-status", type);
+    elements.status.setAttribute("data-message", message);
+  }
 
-    if (settings.debugMode) {
-        console.log(`📊 Status: ${type.toUpperCase()} - ${message}`);
-    }
+  if (settings.debugMode) {
+    console.log(`📊 Status: ${type.toUpperCase()} - ${message}`);
+  }
 }
 
 function setButtonState(buttonName, enabled) {
-    const button = elements.buttons[buttonName];
-    if (button) {
-        button.disabled = !enabled;
-        button.setAttribute('data-enabled', enabled.toString());
-    }
+  const button = elements.buttons[buttonName];
+  if (button) {
+    button.disabled = !enabled;
+    button.setAttribute("data-enabled", enabled.toString());
+  }
 }
 
 // Storage functions
 async function loadSettings() {
-    try {
-        const result = await chrome.storage.sync.get(['counter', 'settings']);
+  try {
+    const result = await chrome.storage.sync.get(["counter", "settings"]);
 
-        if (result.counter !== undefined) {
-            counter = result.counter;
-        }
-
-        if (result.settings) {
-            settings = { ...settings, ...result.settings };
-        }
-
-        // Update UI with loaded settings
-        elements.checkboxes.autoInject.checked = settings.autoInject;
-        elements.checkboxes.debugMode.checked = settings.debugMode;
-        elements.checkboxes.notifications.checked = settings.notifications;
-
-        console.log('📁 Settings loaded:', { counter, settings });
-    } catch (error) {
-        console.error('❌ Failed to load settings:', error);
+    if (result.counter !== undefined) {
+      counter = result.counter;
     }
+
+    if (result.settings) {
+      settings = { ...settings, ...result.settings };
+    }
+
+    // Update UI with loaded settings
+    elements.checkboxes.autoInject.checked = settings.autoInject;
+    elements.checkboxes.debugMode.checked = settings.debugMode;
+    elements.checkboxes.notifications.checked = settings.notifications;
+
+    console.log("📁 Settings loaded:", { counter, settings });
+  } catch (error) {
+    console.error("❌ Failed to load settings:", error);
+  }
 }
 
 async function saveSettings() {
-    try {
-        await chrome.storage.sync.set({
-            counter: counter,
-            settings: settings
-        });
+  try {
+    await chrome.storage.sync.set({
+      counter: counter,
+      settings: settings,
+    });
 
-        if (settings.debugMode) {
-            console.log('💾 Settings saved:', { counter, settings });
-        }
-    } catch (error) {
-        console.error('❌ Failed to save settings:', error);
+    if (settings.debugMode) {
+      console.log("💾 Settings saved:", { counter, settings });
     }
+  } catch (error) {
+    console.error("❌ Failed to save settings:", error);
+  }
 }
 
 // Export for testing
-if (typeof window !== 'undefined') {
-    window.popupTestExtension = {
-        counter: () => counter,
-        settings: () => settings,
-        elements: () => elements,
-        updateStatus,
-        setButtonState
-    };
+if (typeof window !== "undefined") {
+  window.popupTestExtension = {
+    counter: () => counter,
+    settings: () => settings,
+    elements: () => elements,
+    updateStatus,
+    setButtonState,
+  };
 }

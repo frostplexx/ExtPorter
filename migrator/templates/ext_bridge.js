@@ -1,6 +1,5 @@
-
-(function() {
-  'use strict';
+(function () {
+  "use strict";
 
   // Skip if bridge is already loaded to prevent double-wrapping
   if (window._chromeExtBridgeLoaded) {
@@ -12,17 +11,16 @@
   const originalChrome = window.chrome;
 
   // Skip if chrome is not available (shouldn't happen in extensions)
-  if (!originalChrome || typeof originalChrome !== 'object') {
+  if (!originalChrome || typeof originalChrome !== "object") {
     return;
   }
 
-
   // Generic method wrapper that handles both callbacks and promises
   function createCallbackCompatibleMethod(originalMethod) {
-    return function(...args) {
+    return function (...args) {
       const lastArg = args[args.length - 1];
 
-      if (typeof lastArg === 'function') {
+      if (typeof lastArg === "function") {
         const callback = args.pop();
 
         // Helper to set chrome.runtime.lastError and call callback
@@ -30,7 +28,9 @@
           if (!chrome.runtime) chrome.runtime = {};
 
           if (error) {
-            chrome.runtime.lastError = { message: error.message || 'Unknown error' };
+            chrome.runtime.lastError = {
+              message: error.message || "Unknown error",
+            };
             callback(undefined);
           } else {
             delete chrome.runtime.lastError;
@@ -46,10 +46,11 @@
         try {
           const result = originalMethod.apply(this, args);
 
-          if (result && typeof result.then === 'function') {
+          if (result && typeof result.then === "function") {
             // Promise: bridge to callback
-            result.then(data => callbackWithError(null, data))
-                  .catch(error => callbackWithError(error));
+            result
+              .then((data) => callbackWithError(null, data))
+              .catch((error) => callbackWithError(error));
           } else {
             // Synchronous: call callback directly
             callbackWithError(null, result);
@@ -66,15 +67,19 @@
 
   // Recursively wrap chrome API object
   function wrapChromeAPI(obj) {
-    if (!obj || typeof obj !== 'object') return obj;
+    if (!obj || typeof obj !== "object") return obj;
 
     const wrapped = {};
 
     for (const [key, value] of Object.entries(obj)) {
-      if (typeof value === 'function') {
+      if (typeof value === "function") {
         // Wrap methods that might need callback compatibility
         wrapped[key] = createCallbackCompatibleMethod(value);
-      } else if (typeof value === 'object' && value !== null && key !== 'runtime') {
+      } else if (
+        typeof value === "object" &&
+        value !== null &&
+        key !== "runtime"
+      ) {
         // Recursively wrap nested objects (skip runtime to avoid infinite recursion)
         wrapped[key] = wrapChromeAPI(value);
       } else {
@@ -104,17 +109,17 @@
       const cb = args.pop();
 
       fn(...args)
-        .then(result => cb(null, result))
-        .catch(err => cb(err));
+        .then((result) => cb(null, result))
+        .catch((err) => cb(err));
     };
   }
 
   // Export for testing if in test environment
-  if (typeof module !== 'undefined' && module.exports) {
+  if (typeof module !== "undefined" && module.exports) {
     module.exports = {
       createCallbackCompatibleMethod,
       wrapChromeAPI,
-      callbackify
+      callbackify,
     };
   }
 })();

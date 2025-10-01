@@ -1,6 +1,6 @@
 import { BrowserContext } from "puppeteer";
 
 export interface Globals {
-    extensionsPath: string,
-    outputDir: string,
+  extensionsPath: string;
+  outputDir: string;
 }
