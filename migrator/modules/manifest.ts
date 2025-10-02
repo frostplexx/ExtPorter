@@ -329,7 +329,7 @@ export class MigrateManifest implements MigrationModule {
             .replace(/'unsafe-inline'\s*/g, ' ')
             .replace(/\s+data:\s*/g, ' ') // Remove data: URLs
             .replace(/\s+blob:\s*/g, ' ') // Remove blob: URLs
-            .replace(/\s+http:\/\/(?!localhost[:\/])[^\s;]+/g, ' ') // Remove non-localhost HTTP
+            .replace(/\s+http:\/\/(?!localhost[:/])[^\s;]+/g, ' ') // Remove non-localhost HTTP
             .replace(/\s+(?!https:\/\/)[^\s';][^\s';]*\.js(?=\s|;|$)/g, ' ') // Remove bare .js file paths (not HTTPS URLs)
             .replace(/\s+(?!https:\/\/)[^\s';][^\s';]*\/[^\s';]*\.js(?=\s|;|$)/g, ' ') // Remove paths with slashes to .js files (not HTTPS URLs)
             .replace(/\s+/g, ' ')
@@ -412,7 +412,7 @@ export class MigrateManifest implements MigrationModule {
             /'nonce-[^']+'/, // Nonces are generally not recommended for extensions
             /\bdata:/, // Data URLs are generally problematic
             /\bblob:/, // Blob URLs can be problematic
-            /\bhttp:\/\/(?!localhost[:\/])[^\s;]+/, // Non-localhost HTTP (insecure)
+            /\bhttp:\/\/(?!localhost[:/])[^\s;]+/, // Non-localhost HTTP (insecure)
             /\s(?!https:\/\/)[^'\s;][^'\s;]*\.js(?=\s|;|$)/, // Bare JavaScript file paths (not quoted, not HTTPS URLs)
             /\s(?!https:\/\/)[^'\s;][^'\s;]*\/[^'\s;]*\.js(?=\s|;|$)/, // Paths with slashes to JS files (not HTTPS URLs)
         ];
@@ -428,6 +428,7 @@ export class MigrateManifest implements MigrationModule {
      */
     private static sanitizeHashDirectives(csp: string): string {
         // List of known insecure patterns (including specific problematic values)
+        // FIXME: make this generic
         const insecurePatterns = [
             "'sha256-iZBJenro+ON4QTZuWnyvHk3Yj9s/TfHgJLTCP8EJzhE='",
             'remote_resources/f3d11240_ga.js', // Specific file path that causes Chrome MV3 errors

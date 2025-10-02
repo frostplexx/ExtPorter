@@ -57,7 +57,6 @@ export class FormatPreservingGenerator {
     } {
         const lines = originalSource.split(/\r?\n/);
         const indentCounts: { [key: string]: number } = {};
-        let totalNewlines = 0;
         let crlfCount = 0;
         let lfCount = 0;
         let singleQuotes = 0;
