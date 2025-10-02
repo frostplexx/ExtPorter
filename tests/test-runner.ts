@@ -165,7 +165,7 @@ class TestRunner {
             const hasTest = content.includes('it(') || content.includes('test(');
             const hasExpect = content.includes('expect(');
 
-            if (hasDescribe && hasTest && hasExpected) {
+            if (hasDescribe && hasTest && hasExpect) {
                 console.log(`    ✅ Test structure valid\n`);
                 this.results.set(suite.name, true);
             } else {

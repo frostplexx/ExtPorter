@@ -9,6 +9,7 @@ import * as fs from 'fs-extra';
 import * as path from 'path';
 import * as crypto from 'crypto';
 import { execSync } from 'child_process';
+import os from 'os'
 
 export interface RemoteResource {
     url: string;
@@ -45,10 +46,10 @@ export class ResourceDownloader extends MigrationModule {
         /https:\/\/stackpath\.bootstrapcdn\.com\/[^"'\s]*/g,
 
         // Google APIs
-        /https:\/\/[^\/]*\.googleapis\.com\/[^"'\s]*/g,
+        /https:\/\/[^/]*\.googleapis\.com\/[^"'\s]*/g,
 
         // Generic HTTPS resources
-        /https:\/\/[^\/\s"']+\.[^\/\s"']+\/[^"'\s]*\.(js|css|woff|woff2|ttf|eot|svg|png|jpg|jpeg|gif|ico)(?:[?#][^"'\s]*)?/gi,
+        /https:\/\/[^/\s"']+\.[^/\s"']+\/[^"'\s]*\.(js|css|woff|woff2|ttf|eot|svg|png|jpg|jpeg|gif|ico)(?:[?#][^"'\s]*)?/gi,
     ];
 
     public static migrate(extension: Extension): Extension | MigrationError {
@@ -285,7 +286,7 @@ export class ResourceDownloader extends MigrationModule {
         try {
             // Use curl for synchronous download with timeout and size limits
             const tempFile = path.join(
-                require('os').tmpdir(),
+                os.tmpdir(),
                 `download_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
             );
 

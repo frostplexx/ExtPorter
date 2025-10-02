@@ -63,7 +63,7 @@ function truncateToByteSize(str: string, maxBytes: number): string {
     if (buffer.length <= maxBytes) return str;
 
     // Find safe truncation point (avoid cutting UTF-8 characters)
-    let truncated = buffer.subarray(0, maxBytes).toString('utf8');
+    const truncated = buffer.subarray(0, maxBytes).toString('utf8');
     const lastValidChar = truncated.length;
 
     return truncated.substring(0, lastValidChar) + '... [TRUNCATED]';
@@ -92,6 +92,7 @@ function sanitizeMeta(meta: any): any {
         };
     } catch (error) {
         // If serialization fails, convert to string safely
+        console.error(error as any)
         return {
             _serializationError: true,
             data: truncateToByteSize(String(meta), MAX_META_SIZE),
