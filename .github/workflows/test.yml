@@ -35,19 +35,13 @@ jobs:
         node-version: '24'
         cache: 'yarn'
 
-    - name: Install Chrome and dependencies in parallel
+    - name: Install Chrome
       run: |
-        # Install Chrome 138 via direct download in background
-        (wget -q https://github.com/NDViet/google-chrome-stable/releases/download/138.0.7204.183-1/google-chrome-stable_138.0.7204.183-1_amd64.deb && sudo dpkg -i google-chrome-stable_138.0.7204.183-1_amd64.deb || sudo apt-get install -f -y) &
-        CHROME_PID=$!
+        wget -q https://github.com/NDViet/google-chrome-stable/releases/download/138.0.7204.183-1/google-chrome-stable_138.0.7204.183-1_amd64.deb
+        sudo dpkg -i google-chrome-stable_138.0.7204.183-1_amd64.deb || sudo apt-get install -f -y
 
-        # Install Node dependencies in parallel
-        yarn install --frozen-lockfile &
-        YARN_PID=$!
-
-        # Wait for both to complete
-        wait $CHROME_PID
-        wait $YARN_PID
+    - name: Install dependencies
+      run: yarn install --frozen-lockfile
 
     - name: Build project
       run: yarn build
