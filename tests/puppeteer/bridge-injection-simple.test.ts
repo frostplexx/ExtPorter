@@ -246,7 +246,7 @@ console.log('✅ Bridge test content script setup complete');
                     getAST: () => undefined,
                     getSize: () => 1000,
                     getBuffer: () => Buffer.from(''),
-                    close: () => {},
+                    close: () => { },
                 } as LazyFile
             ]
         };

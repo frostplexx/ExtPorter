@@ -72,7 +72,7 @@ describe('Bridge Functionality Test', () => {
                             setTimeout(() => {
                                 (window as any).__storageData = { ...(window as any).__storageData, ...data };
                                 callback();
-                            }, 10);
+                            }, 2);
                         },
                         get: (keys: string[], callback: (result: any) => void) => {
                             // Simulate async storage retrieval
@@ -84,7 +84,7 @@ describe('Bridge Functionality Test', () => {
                                     }
                                 });
                                 callback(result);
-                            }, 10);
+                            }, 2);
                         }
                     }
                 },

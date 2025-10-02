@@ -112,8 +112,8 @@ describe('Bridge Injection Puppeteer Tests', () => {
             executablePath: getChromePath(),
             pipe: true,
             devtools: true,
+            enableExtensions: [migratedExtensionPath],
             args: [
-                `--load-extension=${migratedExtensionPath}`,
                 '--no-first-run',
                 '--disable-default-apps',
                 '--disable-popup-blocking',
