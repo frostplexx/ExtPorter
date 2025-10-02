@@ -11,7 +11,7 @@ module.exports = {
             },
         ],
     },
-    collectCoverageFrom: ['src/**/*.ts', '!src/**/*.d.ts', '!src/index.ts', '!src/scripts/**'],
+    collectCoverageFrom: ['migrator/**/*.ts', '!migrator/**/*.d.ts', '!migrator/index.ts', '!migrator/scripts/**'],
     coverageDirectory: 'coverage',
     coverageReporters: ['text', 'lcov', 'html'],
     setupFilesAfterEnv: ['<rootDir>/tests/setup.ts'],
