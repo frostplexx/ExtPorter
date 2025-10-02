@@ -12,6 +12,7 @@ import { logger } from '../utils/logger';
  */
 export class BridgeInjector implements MigrationModule {
     private static readonly BRIDGE_FILENAME = 'ext_bridge.js';
+    private static readonly CALLBACK_PATTERN = /chrome(\.\w+){2,3}\([^)]*,\s*(?:\([^)]*\)\s*=>|function\s*\(|\w+\s*\))/;
 
     /**
      * Checks if an extension likely uses callback-based Chrome APIs
@@ -22,7 +23,7 @@ export class BridgeInjector implements MigrationModule {
         for (const file of extension.files) {
             if (file.filetype === ExtFileType.JS) {
                 const content = file.getContent();
-                if (content && BridgeInjector.hasCallbackPatterns(content)) {
+                if (content && this.CALLBACK_PATTERN.test(content)) {
                     return true;
                 }
             }
@@ -30,22 +31,6 @@ export class BridgeInjector implements MigrationModule {
         return false;
     }
 
-    /**
-     * Detects common callback patterns in JavaScript code.
-     */
-    private static hasCallbackPatterns(content: string): boolean {
-        // Common Chrome API callback patterns
-        const callbackPatterns = [
-            /chrome\.\w+\.\w+\([^)]*,\s*function\s*\(/,
-            /chrome\.\w+\.\w+\([^)]*,\s*\([^)]*\)\s*=>/,
-            /chrome\.\w+\.\w+\([^)]*,\s*callback\s*\)/,
-            /chrome\.runtime\.lastError/,
-            /chrome\.\w+\.\w+\.\w+\([^)]*,\s*function\s*\(/,
-            /chrome\.\w+\.\w+\.\w+\([^)]*,\s*\([^)]*\)\s*=>/,
-        ];
-
-        return callbackPatterns.some((pattern) => pattern.test(content));
-    }
 
     /**
      * Loads the bridge file content from the templates directory.
@@ -80,7 +65,7 @@ export class BridgeInjector implements MigrationModule {
             /* No-op for in-memory content */
         };
         bridgeFile.getAST = () => {
-            // Bridge file doesn't need AST parsing for this migration
+            // Bridge file doesn't need AST parsing 
             return undefined;
         };
 
@@ -91,20 +76,15 @@ export class BridgeInjector implements MigrationModule {
      * Injects the bridge file into the manifest's script arrays.
      */
     private static injectBridgeIntoManifest(manifest: any): any {
+
         const updatedManifest = JSON.parse(JSON.stringify(manifest));
 
-        // Inject into background scripts (MV2 style)
-        if (updatedManifest.background && updatedManifest.background.scripts) {
-            if (!updatedManifest.background.scripts.includes(BridgeInjector.BRIDGE_FILENAME)) {
-                updatedManifest.background.scripts.unshift(BridgeInjector.BRIDGE_FILENAME);
-            }
-        }
 
         // Inject into background service worker (MV3 style)
         if (updatedManifest.background && updatedManifest.background.service_worker) {
             // For service worker, we need to ensure the bridge is loaded
             // This might require additional handling depending on the service worker structure
-            logger.debug(
+            logger.warn(
                 null,
                 'Service worker detected, bridge injection may need additional handling',
                 {
@@ -166,6 +146,7 @@ export class BridgeInjector implements MigrationModule {
         const startTime = Date.now();
 
         try {
+
             // Validate extension input
             if (!extension || !extension.id || !extension.files || !extension.manifest) {
                 return new MigrationError(extension, new Error('Invalid extension structure'));
@@ -246,7 +227,6 @@ export class BridgeInjector implements MigrationModule {
      */
     public static testHelpers = {
         needsBridge: BridgeInjector.needsBridge,
-        hasCallbackPatterns: BridgeInjector.hasCallbackPatterns,
         injectBridgeIntoManifest: BridgeInjector.injectBridgeIntoManifest,
         createBridgeFile: BridgeInjector.createBridgeFile,
         loadBridgeContent: BridgeInjector.loadBridgeContent,
