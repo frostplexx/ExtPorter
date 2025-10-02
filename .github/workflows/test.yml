@@ -1,10 +1,11 @@
+---
 name: Tests
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
+    branches: [main]
 
 jobs:
   test:
@@ -52,11 +53,13 @@ jobs:
       run: yarn test:unit
       env:
         MONGODB_URI: mongodb://admin:password@localhost:27017/migrator?authSource=admin
+        DB_NAME: migrator
 
     - name: Run integration tests
       run: yarn test:integration
       env:
         MONGODB_URI: mongodb://admin:password@localhost:27017/migrator?authSource=admin
+        DB_NAME: migrator
 
     - name: Run Puppeteer tests
       run: yarn test:puppeteer
@@ -71,5 +74,6 @@ jobs:
       env:
         CI: true
         MONGODB_URI: mongodb://admin:password@localhost:27017/migrator?authSource=admin
+        DB_NAME: migrator
         PUPPETEER_HEADLESS: true
         PUPPETEER_EXECUTABLE_PATH: /usr/bin/google-chrome-stable
