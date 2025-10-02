@@ -4,7 +4,6 @@ import { LazyFile } from '../types/abstract_file';
 import { ExtFileType } from '../types/ext_file_types';
 import * as espree from 'espree';
 import * as ESTree from 'estree';
-import * as escodegen from 'escodegen';
 import * as fs from 'fs';
 import * as path from 'path';
 import { logger } from '../utils/logger';
@@ -291,7 +290,8 @@ export class RenameAPIS implements MigrationModule {
 
         // Traverse all object properties and arrays
         for (const key in node) {
-            if (!node.hasOwnProperty(key)) continue;
+            // FIXME
+            // if (!node.hasOwnProperty(key)) continue;
 
             const value = node[key];
             if (Array.isArray(value)) {
@@ -356,7 +356,7 @@ export class RenameAPIS implements MigrationModule {
 
             // Handle parameter transformation if needed
             if (source && RenameAPIS.isParameterTransformationRequired(source, target)) {
-                RenameAPIS.transformParameters(node, source, target);
+                RenameAPIS.transformParameters(node);
             }
         } else if (node.type === 'MemberExpression') {
             // Transform property access member expression
@@ -390,7 +390,7 @@ export class RenameAPIS implements MigrationModule {
      * @param source Source mapping definition
      * @param target Target mapping definition
      */
-    private static transformParameters(callNode: any, source: any, target: any): void {
+    private static transformParameters(callNode: any): void {
         const apiPath = RenameAPIS.buildMemberExpressionPath(callNode.callee);
 
         // Handle chrome.tabs.executeScript transformation specifically
@@ -642,6 +642,7 @@ export class RenameAPIS implements MigrationModule {
                 } as any) as ESTree.Program;
             } catch (error) {
                 try {
+                    logger.error(null, error as any)
                     // Fallback to module parsing
                     return espree.parse(newContent, {
                         ecmaVersion: 'latest',

@@ -1,4 +1,3 @@
-import { throws } from 'assert';
 import { Extension } from './extension';
 
 /**
@@ -23,7 +22,7 @@ export abstract class MigrationModule {
      * @throws {Error} When called directly on the base class without being overridden
      * @static
      */
-    public static migrate(extension: Extension): Extension | MigrationError {
+    public static migrate(extension: Extension): Extension | MigrationError { //eslint-disable-line
         throw new Error('Method must be implemented by subclass');
     }
 }
