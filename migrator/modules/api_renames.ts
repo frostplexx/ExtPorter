@@ -202,10 +202,6 @@ export class RenameAPIS implements MigrationModule {
         );
 
         if (transformationCount === 0) {
-            // logger.warn(null, "No Transformations applied", {
-            //     path: file.path,
-            //     mappings: mappings
-            // })
             onTransformed(false);
             return file;
         }
@@ -518,13 +514,6 @@ export class RenameAPIS implements MigrationModule {
         } else if (detailsArg) {
             // If details is not an object literal, we can't spread it
             // Log a warning and keep the original structure
-            logger.warn(
-                null,
-                'executeScript details parameter is not an object literal, skipping transformation',
-                {
-                    detailsType: detailsArg.type,
-                }
-            );
             return detailsArg; // Return original details as fallback
         }
 

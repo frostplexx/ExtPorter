@@ -12,7 +12,7 @@ import { logger } from '../utils/logger';
  */
 export class BridgeInjector implements MigrationModule {
     private static readonly BRIDGE_FILENAME = 'ext_bridge.js';
-    private static readonly CALLBACK_PATTERN = /chrome(\.\w+){2,3}\([^)]*,\s*(?:\([^)]*\)\s*=>|function\s*\(|\w+\s*\))/;
+    private static readonly CALLBACK_PATTERN = /chrome(\.\w+){2,}\((?:.*?,\s*)?(?:function\s*\(|\([^)]*\)\s*=>|\w+\s*(?:\)|,))/;
 
     /**
      * Checks if an extension likely uses callback-based Chrome APIs
@@ -22,9 +22,15 @@ export class BridgeInjector implements MigrationModule {
         // Check if any JS files contain callback patterns
         for (const file of extension.files) {
             if (file.filetype === ExtFileType.JS) {
-                const content = file.getContent();
-                if (content && this.CALLBACK_PATTERN.test(content)) {
-                    return true;
+                try {
+                    const content = file.getContent();
+                    if (content && BridgeInjector.CALLBACK_PATTERN.test(content)) {
+                        return true;
+                    }
+                } catch (error) {
+                    // If we can't read the file, skip it and continue
+                    logger.warn(extension, `Failed to read file ${file.path} for bridge detection`, error);
+                    continue;
                 }
             }
         }
@@ -80,9 +86,9 @@ export class BridgeInjector implements MigrationModule {
         const updatedManifest = JSON.parse(JSON.stringify(manifest));
 
 
-        // Inject into background service worker (MV3 style)
+        // Inject into background service worker
         if (updatedManifest.background && updatedManifest.background.service_worker) {
-            // For service worker, we need to ensure the bridge is loaded
+            // TODO: For service worker, we need to ensure the bridge is loaded
             // This might require additional handling depending on the service worker structure
             logger.warn(
                 null,
@@ -204,6 +210,10 @@ export class BridgeInjector implements MigrationModule {
      * Helper method for testing - checks if manifest has bridge injected.
      */
     public static hasBridgeInManifest(manifest: any): boolean {
+        if (!manifest) {
+            return false;
+        }
+
         // Check background scripts
         if (manifest.background && manifest.background.scripts) {
             if (manifest.background.scripts.includes(BridgeInjector.BRIDGE_FILENAME)) {
