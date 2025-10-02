@@ -4,6 +4,7 @@ import { Extension } from '../../../migrator/types/extension';
 import { MigrationError } from '../../../migrator/types/migration_module';
 import { LazyFile } from '../../../migrator/types/abstract_file';
 import { ExtFileType } from '../../../migrator/types/ext_file_types';
+import { FileContentUpdater } from '../../../migrator/utils/file_content_updater';
 import * as fs from 'fs';
 
 // Mock fs module
@@ -20,17 +21,29 @@ jest.mock('../../../migrator/utils/logger', () => ({
     },
 }));
 
+// Mock FileContentUpdater
+jest.mock('../../../migrator/utils/file_content_updater', () => ({
+    FileContentUpdater: {
+        updateFileContent: jest.fn(),
+        createNewFile: jest.fn(),
+    },
+}));
+
 describe('BridgeInjector', () => {
     let baseExtension: Extension;
     let mockJsFile: LazyFile;
     let mockNonJsFile: LazyFile;
+    const mockFileContentUpdater = FileContentUpdater as jest.Mocked<typeof FileContentUpdater>;
 
     beforeEach(() => {
         // Reset all mocks
         jest.clearAllMocks();
 
         // Mock file system
-        mockFs.readFileSync.mockReturnValue('// Mock bridge content\nconst bridge = {};');
+        mockFs.readFileSync.mockReturnValue('// Mock bridge content\nconst bridge = {}');
+
+        // Mock FileContentUpdater
+        mockFileContentUpdater.updateFileContent.mockReturnValue(true);
 
         // Create mock files
         mockJsFile = {
@@ -326,7 +339,7 @@ describe('BridgeInjector', () => {
                 ],
             };
 
-            const result = BridgeInjector.testHelpers.injectBridgeIntoManifest(manifest);
+            const result = BridgeInjector.testHelpers.injectBridgeIntoManifest(manifest, baseExtension);
 
             expect(result.content_scripts[0].js).toEqual([
                 BridgeInjector.testHelpers.BRIDGE_FILENAME,
@@ -349,7 +362,7 @@ describe('BridgeInjector', () => {
                 ],
             };
 
-            const result = BridgeInjector.testHelpers.injectBridgeIntoManifest(manifest);
+            const result = BridgeInjector.testHelpers.injectBridgeIntoManifest(manifest, baseExtension);
 
             expect(result.content_scripts[0].js).toEqual([
                 BridgeInjector.testHelpers.BRIDGE_FILENAME,
@@ -371,7 +384,7 @@ describe('BridgeInjector', () => {
                 ],
             };
 
-            const result = BridgeInjector.testHelpers.injectBridgeIntoManifest(manifest);
+            const result = BridgeInjector.testHelpers.injectBridgeIntoManifest(manifest, baseExtension);
 
             expect(result.content_scripts[0].js).toEqual([
                 BridgeInjector.testHelpers.BRIDGE_FILENAME,
@@ -389,7 +402,7 @@ describe('BridgeInjector', () => {
                 ],
             };
 
-            const result = BridgeInjector.testHelpers.injectBridgeIntoManifest(manifest);
+            const result = BridgeInjector.testHelpers.injectBridgeIntoManifest(manifest, baseExtension);
 
             expect(result.content_scripts[0]).toEqual({
                 matches: ['<all_urls>'],
@@ -408,7 +421,7 @@ describe('BridgeInjector', () => {
                 ],
             };
 
-            const result = BridgeInjector.testHelpers.injectBridgeIntoManifest(manifest);
+            const result = BridgeInjector.testHelpers.injectBridgeIntoManifest(manifest, baseExtension);
 
             expect(result.web_accessible_resources).toContainEqual({
                 resources: [BridgeInjector.testHelpers.BRIDGE_FILENAME],
@@ -427,7 +440,7 @@ describe('BridgeInjector', () => {
                 ],
             };
 
-            const result = BridgeInjector.testHelpers.injectBridgeIntoManifest(manifest);
+            const result = BridgeInjector.testHelpers.injectBridgeIntoManifest(manifest, baseExtension);
 
             expect(result.web_accessible_resources).toContain(BridgeInjector.testHelpers.BRIDGE_FILENAME);
         });
@@ -444,7 +457,7 @@ describe('BridgeInjector', () => {
                 ],
             };
 
-            const result = BridgeInjector.testHelpers.injectBridgeIntoManifest(manifest);
+            const result = BridgeInjector.testHelpers.injectBridgeIntoManifest(manifest, baseExtension);
 
             expect(result.web_accessible_resources).toHaveLength(1);
             expect(result.web_accessible_resources[0].resources).toContain(BridgeInjector.testHelpers.BRIDGE_FILENAME);
@@ -457,7 +470,7 @@ describe('BridgeInjector', () => {
                 web_accessible_resources: [BridgeInjector.testHelpers.BRIDGE_FILENAME, 'other.js'],
             };
 
-            const result = BridgeInjector.testHelpers.injectBridgeIntoManifest(manifest);
+            const result = BridgeInjector.testHelpers.injectBridgeIntoManifest(manifest, baseExtension);
 
             expect(result.web_accessible_resources).toEqual([
                 BridgeInjector.testHelpers.BRIDGE_FILENAME,
@@ -465,7 +478,38 @@ describe('BridgeInjector', () => {
             ]);
         });
 
-        it('should warn about service worker', () => {
+        it('should inject bridge into service worker when extension is provided', () => {
+            const mockServiceWorkerFile = {
+                path: 'background.js',
+                filetype: ExtFileType.JS,
+                getContent: jest.fn().mockReturnValue('console.log("Service worker");'),
+                getAST: jest.fn(),
+                getSize: jest.fn().mockReturnValue(800),
+                getBuffer: jest.fn(),
+                close: jest.fn(),
+            } as unknown as LazyFile;
+
+            const extensionWithServiceWorker = {
+                ...baseExtension,
+                files: [mockServiceWorkerFile],
+            };
+
+            const manifest = {
+                background: {
+                    service_worker: 'background.js',
+                },
+            };
+
+            const result = BridgeInjector.testHelpers.injectBridgeIntoManifest(manifest, extensionWithServiceWorker);
+
+            expect(result).toEqual(manifest); // Manifest shouldn't change
+            expect(mockFileContentUpdater.updateFileContent).toHaveBeenCalledWith(
+                mockServiceWorkerFile,
+                `importScripts('${BridgeInjector.testHelpers.BRIDGE_FILENAME}');\nconsole.log("Service worker");`
+            );
+        });
+
+        it('should warn about service worker when no extension is provided', () => {
             const manifest = {
                 background: {
                     service_worker: 'background.js',
@@ -477,13 +521,43 @@ describe('BridgeInjector', () => {
             // Should not throw, but warning should be logged (tested via logger mock)
         });
 
+        it('should handle service worker injection failure gracefully', () => {
+            const mockServiceWorkerFile = {
+                path: 'background.js',
+                filetype: ExtFileType.JS,
+                getContent: jest.fn().mockReturnValue('console.log("Service worker");'),
+                getAST: jest.fn(),
+                getSize: jest.fn().mockReturnValue(800),
+                getBuffer: jest.fn(),
+                close: jest.fn(),
+            } as unknown as LazyFile;
+
+            const extensionWithServiceWorker = {
+                ...baseExtension,
+                files: [mockServiceWorkerFile],
+            };
+
+            // Mock update failure
+            mockFileContentUpdater.updateFileContent.mockReturnValue(false);
+
+            const manifest = {
+                background: {
+                    service_worker: 'background.js',
+                },
+            };
+
+            const result = BridgeInjector.testHelpers.injectBridgeIntoManifest(manifest, extensionWithServiceWorker);
+
+            expect(result).toEqual(manifest); // Should still return manifest even if injection fails
+        });
+
         it('should handle manifest without content scripts', () => {
             const manifest = {
                 name: 'Test Extension',
                 version: '1.0',
             };
 
-            const result = BridgeInjector.testHelpers.injectBridgeIntoManifest(manifest);
+            const result = BridgeInjector.testHelpers.injectBridgeIntoManifest(manifest, baseExtension);
 
             expect(result).toEqual(manifest);
         });
@@ -498,7 +572,7 @@ describe('BridgeInjector', () => {
                 ],
             };
 
-            const result = BridgeInjector.testHelpers.injectBridgeIntoManifest(manifest);
+            const result = BridgeInjector.testHelpers.injectBridgeIntoManifest(manifest, baseExtension);
 
             expect(result).not.toBe(manifest);
             expect(result.content_scripts).not.toBe(manifest.content_scripts);
@@ -722,6 +796,146 @@ describe('BridgeInjector', () => {
         });
     });
 
+    describe('injectBridgeIntoServiceWorker helper', () => {
+        let mockServiceWorkerFile: LazyFile;
+
+        beforeEach(() => {
+            mockServiceWorkerFile = {
+                path: 'background.js',
+                filetype: ExtFileType.JS,
+                getContent: jest.fn(),
+                getAST: jest.fn(),
+                getSize: jest.fn().mockReturnValue(800),
+                getBuffer: jest.fn(),
+                close: jest.fn(),
+            } as unknown as LazyFile;
+        });
+
+        it('should inject importScripts into service worker', () => {
+            (mockServiceWorkerFile.getContent as jest.Mock).mockReturnValue(
+                'console.log("Service worker started");'
+            );
+
+            const testExtension = {
+                ...baseExtension,
+                files: [mockServiceWorkerFile],
+            };
+
+            const result = BridgeInjector.testHelpers.injectBridgeIntoServiceWorker(
+                testExtension,
+                'background.js'
+            );
+
+            expect(result).toBe(true);
+            expect(mockFileContentUpdater.updateFileContent).toHaveBeenCalledWith(
+                mockServiceWorkerFile,
+                `importScripts('${BridgeInjector.testHelpers.BRIDGE_FILENAME}');\nconsole.log("Service worker started");`
+            );
+        });
+
+        it('should not duplicate importScripts if already present', () => {
+            const existingContent = `importScripts('${BridgeInjector.testHelpers.BRIDGE_FILENAME}');\nconsole.log("Service worker started");`;
+            (mockServiceWorkerFile.getContent as jest.Mock).mockReturnValue(existingContent);
+
+            const testExtension = {
+                ...baseExtension,
+                files: [mockServiceWorkerFile],
+            };
+
+            const result = BridgeInjector.testHelpers.injectBridgeIntoServiceWorker(
+                testExtension,
+                'background.js'
+            );
+
+            expect(result).toBe(true);
+            expect(mockFileContentUpdater.updateFileContent).not.toHaveBeenCalled();
+        });
+
+        it('should return false when service worker file not found', () => {
+            const testExtension = {
+                ...baseExtension,
+                files: [mockJsFile], // Different file
+            };
+
+            const result = BridgeInjector.testHelpers.injectBridgeIntoServiceWorker(
+                testExtension,
+                'missing-background.js'
+            );
+
+            expect(result).toBe(false);
+            expect(mockFileContentUpdater.updateFileContent).not.toHaveBeenCalled();
+        });
+
+        it('should handle file content update failure', () => {
+            (mockServiceWorkerFile.getContent as jest.Mock).mockReturnValue(
+                'console.log("Service worker");'
+            );
+            mockFileContentUpdater.updateFileContent.mockReturnValue(false);
+
+            const testExtension = {
+                ...baseExtension,
+                files: [mockServiceWorkerFile],
+            };
+
+            const result = BridgeInjector.testHelpers.injectBridgeIntoServiceWorker(
+                testExtension,
+                'background.js'
+            );
+
+            expect(result).toBe(false);
+        });
+
+        it('should handle getContent throwing errors', () => {
+            (mockServiceWorkerFile.getContent as jest.Mock).mockImplementation(() => {
+                throw new Error('File read error');
+            });
+
+            const testExtension = {
+                ...baseExtension,
+                files: [mockServiceWorkerFile],
+            };
+
+            const result = BridgeInjector.testHelpers.injectBridgeIntoServiceWorker(
+                testExtension,
+                'background.js'
+            );
+
+            expect(result).toBe(false);
+            expect(mockFileContentUpdater.updateFileContent).not.toHaveBeenCalled();
+        });
+
+        it('should handle complex service worker content', () => {
+            const complexContent = `
+// Service Worker Registration
+self.addEventListener('install', function(event) {
+  console.log('Service Worker installing');
+});
+
+chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
+  // Handle messages
+});
+            `.trim();
+
+            (mockServiceWorkerFile.getContent as jest.Mock).mockReturnValue(complexContent);
+
+            const testExtension = {
+                ...baseExtension,
+                files: [mockServiceWorkerFile],
+            };
+
+            const result = BridgeInjector.testHelpers.injectBridgeIntoServiceWorker(
+                testExtension,
+                'background.js'
+            );
+
+            expect(result).toBe(true);
+            expect(mockFileContentUpdater.updateFileContent).toHaveBeenCalledWith(
+                mockServiceWorkerFile,
+                `importScripts('${BridgeInjector.testHelpers.BRIDGE_FILENAME}');\n${complexContent}`
+            );
+        });
+    });
+
     describe('error handling and edge cases', () => {
         it('should handle extension with no files', () => {
             const extensionNoFiles = {
@@ -754,7 +968,7 @@ describe('BridgeInjector', () => {
             };
 
             expect(() =>
-                BridgeInjector.testHelpers.injectBridgeIntoManifest(malformedManifest)
+                BridgeInjector.testHelpers.injectBridgeIntoManifest(malformedManifest, baseExtension)
             ).not.toThrow();
         });
 
@@ -769,7 +983,7 @@ describe('BridgeInjector', () => {
             };
 
             expect(() =>
-                BridgeInjector.testHelpers.injectBridgeIntoManifest(manifest)
+                BridgeInjector.testHelpers.injectBridgeIntoManifest(manifest, baseExtension)
             ).not.toThrow();
         });
 
@@ -800,7 +1014,7 @@ describe('BridgeInjector', () => {
 
             // Circular references will cause JSON.stringify to throw
             expect(() =>
-                BridgeInjector.testHelpers.injectBridgeIntoManifest(circularManifest)
+                BridgeInjector.testHelpers.injectBridgeIntoManifest(circularManifest, baseExtension)
             ).toThrow('Converting circular structure to JSON');
         });
     });
@@ -957,6 +1171,64 @@ describe('BridgeInjector', () => {
                     resources: [BridgeInjector.testHelpers.BRIDGE_FILENAME],
                     matches: ['<all_urls>'],
                 });
+            }
+        });
+
+        it('should handle extension with service worker and content scripts', () => {
+            const mockServiceWorkerFile = {
+                path: 'background.js',
+                filetype: ExtFileType.JS,
+                getContent: jest.fn().mockReturnValue(`
+chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
+  // Handle messages
+});
+                `.trim()),
+                getAST: jest.fn(),
+                getSize: jest.fn().mockReturnValue(500),
+                getBuffer: jest.fn(),
+                close: jest.fn(),
+            } as unknown as LazyFile;
+
+            const serviceWorkerExtension = {
+                ...baseExtension,
+                manifest: {
+                    ...baseExtension.manifest,
+                    manifest_version: 3,
+                    background: {
+                        service_worker: 'background.js',
+                    },
+                    content_scripts: [
+                        {
+                            matches: ['<all_urls>'],
+                            js: ['content.js'],
+                        },
+                    ],
+                },
+                files: [mockJsFile, mockServiceWorkerFile],
+            };
+
+            (mockJsFile.getContent as jest.Mock).mockReturnValue(
+                'chrome.tabs.query({}, function(tabs) {});'
+            );
+
+            const result = BridgeInjector.migrate(serviceWorkerExtension);
+
+            expect(result).not.toBeInstanceOf(MigrationError);
+            if (!(result instanceof MigrationError)) {
+                // Should inject bridge into service worker
+                expect(mockFileContentUpdater.updateFileContent).toHaveBeenCalledWith(
+                    mockServiceWorkerFile,
+                    expect.stringContaining(`importScripts('${BridgeInjector.testHelpers.BRIDGE_FILENAME}');`)
+                );
+
+                // Should inject bridge into content scripts
+                expect(result.manifest.content_scripts[0].js).toEqual([
+                    BridgeInjector.testHelpers.BRIDGE_FILENAME,
+                    'content.js',
+                ]);
+
+                // Should add bridge file to files
+                expect(result.files).toHaveLength(3); // Original 2 + bridge
             }
         });
 

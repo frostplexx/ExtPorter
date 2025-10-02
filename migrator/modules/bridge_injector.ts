@@ -5,6 +5,7 @@ import { ExtFileType } from '../types/ext_file_types';
 import * as fs from 'fs';
 import * as path from 'path';
 import { logger } from '../utils/logger';
+import { FileContentUpdater } from '../utils/file_content_updater';
 
 /**
  * This module injects the ext_bridge.js compatibility layer into Chrome extensions
@@ -79,24 +80,76 @@ export class BridgeInjector implements MigrationModule {
     }
 
     /**
+     * Injects importScripts call into a service worker file.
+     */
+    private static injectBridgeIntoServiceWorker(extension: Extension, serviceWorkerPath: string): boolean {
+        // Find the service worker file in the extension
+        const serviceWorkerFile = extension.files.find(file => file.path === serviceWorkerPath);
+
+        if (!serviceWorkerFile) {
+            logger.warn(extension, `Service worker file not found: ${serviceWorkerPath}`);
+            return false;
+        }
+
+        try {
+            // Get the current content
+            const currentContent = serviceWorkerFile.getContent();
+
+            // Check if the bridge import is already present
+            const importStatement = `importScripts('${BridgeInjector.BRIDGE_FILENAME}');`;
+            if (currentContent.includes(importStatement)) {
+                logger.debug(extension, 'Bridge import already present in service worker');
+                return true;
+            }
+
+            // Prepend the import statement
+            const newContent = `${importStatement}\n${currentContent}`;
+
+            // Update the file content
+            const success = FileContentUpdater.updateFileContent(serviceWorkerFile, newContent);
+
+            if (success) {
+                logger.info(extension, `Bridge injected into service worker: ${serviceWorkerPath}`);
+            } else {
+                logger.error(extension, `Failed to inject bridge into service worker: ${serviceWorkerPath}`);
+            }
+
+            return success;
+        } catch (error) {
+            logger.error(extension, `Error injecting bridge into service worker ${serviceWorkerPath}:`, error);
+            return false;
+        }
+    }
+
+    /**
      * Injects the bridge file into the manifest's script arrays.
      */
-    private static injectBridgeIntoManifest(manifest: any): any {
+    private static injectBridgeIntoManifest(manifest: any, extension?: Extension): any {
 
         const updatedManifest = JSON.parse(JSON.stringify(manifest));
 
 
         // Inject into background service worker
         if (updatedManifest.background && updatedManifest.background.service_worker) {
-            // TODO: For service worker, we need to ensure the bridge is loaded
-            // This might require additional handling depending on the service worker structure
-            logger.warn(
-                null,
-                'Service worker detected, bridge injection may need additional handling',
-                {
-                    service_worker: updatedManifest.background.service_worker,
+            if (extension) {
+                const success = BridgeInjector.injectBridgeIntoServiceWorker(
+                    extension,
+                    updatedManifest.background.service_worker
+                );
+                if (success) {
+                    logger.info(extension, 'Bridge successfully injected into service worker');
+                } else {
+                    logger.warn(extension, 'Failed to inject bridge into service worker, bridge may not work in background context');
                 }
-            );
+            } else {
+                logger.warn(
+                    null,
+                    'Service worker detected but no extension context provided for bridge injection',
+                    {
+                        service_worker: updatedManifest.background.service_worker,
+                    }
+                );
+            }
         }
 
         // Inject into content scripts
@@ -179,7 +232,7 @@ export class BridgeInjector implements MigrationModule {
             const bridgeFile = BridgeInjector.createBridgeFile();
 
             // Update manifest to include bridge
-            const updatedManifest = BridgeInjector.injectBridgeIntoManifest(extension.manifest);
+            const updatedManifest = BridgeInjector.injectBridgeIntoManifest(extension.manifest, extension);
 
             // Add bridge file to extension files
             const updatedFiles = [...extension.files, bridgeFile];
@@ -238,6 +291,7 @@ export class BridgeInjector implements MigrationModule {
     public static testHelpers = {
         needsBridge: BridgeInjector.needsBridge,
         injectBridgeIntoManifest: BridgeInjector.injectBridgeIntoManifest,
+        injectBridgeIntoServiceWorker: BridgeInjector.injectBridgeIntoServiceWorker,
         createBridgeFile: BridgeInjector.createBridgeFile,
         loadBridgeContent: BridgeInjector.loadBridgeContent,
         hasBridgeInManifest: BridgeInjector.hasBridgeInManifest,
