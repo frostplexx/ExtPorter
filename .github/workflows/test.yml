@@ -50,6 +50,8 @@ jobs:
 
     - name: Run unit tests
       run: yarn test:unit
+      env:
+        MONGODB_URI: mongodb://admin:password@localhost:27017/migrator?authSource=admin
 
     - name: Run integration tests
       run: yarn test:integration
