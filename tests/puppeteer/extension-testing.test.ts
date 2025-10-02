@@ -44,7 +44,7 @@ describe('Mock Extensions Puppeteer Tests', () => {
     beforeAll(async () => {
         // Launch browser with extension loading
         browser = await puppeteer.launch({
-            headless: false, // Set to true for CI
+            headless: (process.env.PUPPETEER_HEADLESS as boolean | undefined) || false, // Set to true for CI
             executablePath: getChromePath(),
             pipe: true,
             devtools: true,
