@@ -137,7 +137,7 @@ export class ChromeTester {
                         ? false
                         : ENV_LOG_LEVEL.toLowerCase() == 'debug'
                           ? false
-                          : true,
+                          :  (process.env.PUPPETEER_HEADLESS as boolean | undefined) || true,
                     pipe: true,
                     devtools: true,
                     executablePath: this.getChromePath(),
