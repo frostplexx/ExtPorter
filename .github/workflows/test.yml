@@ -35,13 +35,19 @@ jobs:
         node-version: '24'
         cache: 'yarn'
 
-    - name: Install Chrome
+    - name: Install Chrome and dependencies in parallel
       run: |
-        sudo apt-get update
-        sudo apt-get install -y google-chrome-stable
+        # Install Chrome in background
+        (sudo apt-get update && sudo apt-get install -y google-chrome-stable) &
+        CHROME_PID=$!
 
-    - name: Install dependencies
-      run: yarn install --frozen-lockfile
+        # Install Node dependencies in parallel
+        yarn install --frozen-lockfile &
+        YARN_PID=$!
+
+        # Wait for both to complete
+        wait $CHROME_PID
+        wait $YARN_PID
 
     - name: Build project
       run: yarn build
