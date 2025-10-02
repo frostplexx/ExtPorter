@@ -37,8 +37,8 @@ jobs:
 
     - name: Install Chrome and dependencies in parallel
       run: |
-        # Install Chrome 138 in background
-        (sudo apt-get update && wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | sudo apt-key add - && echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" | sudo tee /etc/apt/sources.list.d/google-chrome.list && sudo apt-get update && sudo apt-get install -y google-chrome-stable=138.0.6478.182-1) &
+        # Install Chrome 138 via direct download in background
+        (wget -q https://github.com/NDViet/google-chrome-stable/releases/download/138.0.7204.183-1/google-chrome-stable_138.0.7204.183-1_amd64.deb && sudo dpkg -i google-chrome-stable_138.0.7204.183-1_amd64.deb || sudo apt-get install -f -y) &
         CHROME_PID=$!
 
         # Install Node dependencies in parallel
