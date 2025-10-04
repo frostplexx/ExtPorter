@@ -112,7 +112,6 @@ describe('InterestingnessScorer', () => {
 
         it('should calculate scores for HTML content', () => {
             mockFile.getContent.mockReturnValue('<html>\n<body>\n<div>Test</div>\n</body>\n</html>');
-            mockFile.getType.mockReturnValue('html' as any);
 
             const result = InterestingnessScorer.migrate(mockExtension);
             const breakdown = (result as any).interestingness_breakdown;

@@ -1,10 +1,8 @@
 import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals';
 import { MigrationWriter } from '../../../migrator/modules/migration_writer';
-import { logger } from '../../../migrator/utils/logger';
 import { Extension } from '../../../migrator/types/extension';
 import { AbstractFile } from '../../../migrator/types/abstract_file';
 import * as fs from 'fs/promises';
-import * as path from 'path';
 
 // Mock dependencies
 jest.mock('../../../migrator/utils/logger');
@@ -34,7 +32,7 @@ describe('MigrationWriter', () => {
             name: 'Test Extension',
             manifest_v2_path: '/test/path',
             manifest: {},
-            files: [mockFile]
+            files: [mockFile as any]
         } as Extension;
 
         // Mock fs methods

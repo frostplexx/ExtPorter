@@ -618,7 +618,6 @@ export class RenameAPIS implements MigrationModule {
                 } as any) as ESTree.Program;
             } catch {
                 try {
-                    logger.error(null, error as any)
                     // Fallback to module parsing
                     return espree.parse(newContent, {
                         ecmaVersion: 'latest',
