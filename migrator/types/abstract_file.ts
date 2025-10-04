@@ -3,6 +3,7 @@ import * as ESTree from 'estree';
 import { ExtFileType } from './ext_file_types';
 import { MMapFile } from '../utils/memory_mapped_file';
 import { logger } from '../utils/logger';
+import { lstatSync } from 'fs';
 
 export interface AbstractFile {
     path: string;
@@ -68,13 +69,13 @@ export class LazyFile implements AbstractFile {
                         loc: true,
                         range: true,
                     } as any) as ESTree.Program;
-                } catch (moduleError) {
-                    logger.error(null, moduleError as any)
+                } catch {
                     throw scriptError; // Throw original error
                 }
             }
         } catch (error) {
             // Log parsing errors for thesis experiment
+            lstatSync(this._absolutePath);
             logger.error(null, this.path, String(error));
 
             // Reduce verbose error logging for performance

@@ -172,7 +172,6 @@ export class RenameAPIS implements MigrationModule {
                     }
                 );
 
-                // Log user-visible warning
             } else if (potentialTransformations > 0) {
                 // Smaller file that failed to parse
                 logger.error(null, 'AST parsing failed for file with API transformations needed', {
@@ -202,10 +201,6 @@ export class RenameAPIS implements MigrationModule {
         );
 
         if (transformationCount === 0) {
-            // logger.warn(null, "No Transformations applied", {
-            //     path: file.path,
-            //     mappings: mappings
-            // })
             onTransformed(false);
             return file;
         }
@@ -281,6 +276,7 @@ export class RenameAPIS implements MigrationModule {
         for (const key in node) {
             // FIXME
             // if (!node.hasOwnProperty(key)) continue;
+            if (!Object.prototype.hasOwnProperty.call(node, key)) continue;
 
             const value = node[key];
             if (Array.isArray(value)) {
@@ -376,8 +372,6 @@ export class RenameAPIS implements MigrationModule {
      * Currently handles the chrome.tabs.executeScript -> chrome.scripting.executeScript transformation.
      *
      * @param callNode CallExpression AST node
-     * @param source Source mapping definition
-     * @param target Target mapping definition
      */
     private static transformParameters(callNode: any): void {
         const apiPath = RenameAPIS.buildMemberExpressionPath(callNode.callee);
@@ -519,13 +513,6 @@ export class RenameAPIS implements MigrationModule {
         } else if (detailsArg) {
             // If details is not an object literal, we can't spread it
             // Log a warning and keep the original structure
-            logger.warn(
-                null,
-                'executeScript details parameter is not an object literal, skipping transformation',
-                {
-                    detailsType: detailsArg.type,
-                }
-            );
             return detailsArg; // Return original details as fallback
         }
 
@@ -629,9 +616,8 @@ export class RenameAPIS implements MigrationModule {
                     loc: true,
                     range: true,
                 } as any) as ESTree.Program;
-            } catch (error) {
+            } catch {
                 try {
-                    logger.error(null, error as any)
                     // Fallback to module parsing
                     return espree.parse(newContent, {
                         ecmaVersion: 'latest',
