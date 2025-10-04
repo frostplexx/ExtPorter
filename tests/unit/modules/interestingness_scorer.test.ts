@@ -4,6 +4,7 @@ import { logger } from '../../../migrator/utils/logger';
 import { Extension } from '../../../migrator/types/extension';
 import { MigrationError } from '../../../migrator/types/migration_module';
 import { AbstractFile } from '../../../migrator/types/abstract_file';
+import { ExtFileType } from '../../../migrator/types/ext_file_types';
 
 // Mock dependencies
 jest.mock('../../../migrator/utils/logger');
@@ -16,7 +17,10 @@ describe('InterestingnessScorer', () => {
         jest.clearAllMocks();
 
         mockFile = {
+            path: 'test.js',
+            filetype: ExtFileType.JS,
             getContent: jest.fn().mockReturnValue('console.log("test");'),
+            getBuffer: jest.fn().mockReturnValue(Buffer.from('console.log("test");')),
             getPath: jest.fn().mockReturnValue('test.js'),
             getSize: jest.fn().mockReturnValue(100),
             getType: jest.fn().mockReturnValue('js' as any)
@@ -53,16 +57,20 @@ describe('InterestingnessScorer', () => {
 
         it('should handle errors and return MigrationError', () => {
             const error = new Error('Calculation failed');
-            mockFile.getContent.mockImplementation(() => {
-                throw error;
-            });
+            // Make extension.files throw an error when accessed to trigger outer error handler
+            const brokenExtension = {
+                ...mockExtension,
+                get files(): any {
+                    throw error;
+                }
+            };
 
-            const result = InterestingnessScorer.migrate(mockExtension);
+            const result = InterestingnessScorer.migrate(brokenExtension);
 
             expect(result).toBeInstanceOf(MigrationError);
-            expect((result as MigrationError).extension).toBe(mockExtension);
+            expect((result as MigrationError).extension).toBe(brokenExtension);
             expect(logger.error).toHaveBeenCalledWith(
-                mockExtension,
+                brokenExtension,
                 'Failed to calculate interestingness score',
                 expect.objectContaining({
                     error
@@ -111,6 +119,7 @@ describe('InterestingnessScorer', () => {
         });
 
         it('should calculate scores for HTML content', () => {
+            mockFile.filetype = ExtFileType.HTML;
             mockFile.getContent.mockReturnValue('<html>\n<body>\n<div>Test</div>\n</body>\n</html>');
 
             const result = InterestingnessScorer.migrate(mockExtension);
@@ -166,7 +175,10 @@ describe('InterestingnessScorer', () => {
         });
 
         it('should calculate extension size contribution', () => {
-            mockFile.getSize.mockReturnValue(150000); // 150KB
+            // Create a large content to exceed 100KB threshold (score is per 100KB)
+            const largeContent = 'x'.repeat(150 * 1024); // 150KB of content
+            mockFile.getContent.mockReturnValue(largeContent);
+            mockFile.getBuffer.mockReturnValue(Buffer.from(largeContent));
 
             const result = InterestingnessScorer.migrate(mockExtension);
             const breakdown = (result as any).interestingness_breakdown;

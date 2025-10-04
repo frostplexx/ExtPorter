@@ -51,7 +51,7 @@
                     const wrappedCallback = function(result) {
                         if (!callbackCalled) {
                             callbackCalled = true;
-                            callbackWithError(undefined, result);
+                            callbackWithError(null, result);
                         }
                     };
 

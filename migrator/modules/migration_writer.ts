@@ -16,6 +16,7 @@ export class MigrationWriter {
     private isProcessing = false;
     private readonly concurrentWrites = 3;
     private activeWriters = 0;
+    private autoPro = true; // Auto-process queue (can be disabled for testing)
 
     private constructor() {
         // Handle graceful shutdown
@@ -55,9 +56,16 @@ export class MigrationWriter {
             priority,
         });
 
-        if (!this.isProcessing) {
+        if (!this.isProcessing && this.autoPro) {
             this.processQueue();
         }
+    }
+
+    /**
+     * Enable or disable auto-processing (for testing)
+     */
+    public setAutoProcess(enabled: boolean): void {
+        this.autoPro = enabled;
     }
 
     private insertTaskByPriority(task: WriteTask): void {
