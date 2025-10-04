@@ -1,3 +1,4 @@
+/* global chrome, module */
 (function () {
     'use strict';
 

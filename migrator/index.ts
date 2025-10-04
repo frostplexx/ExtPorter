@@ -109,7 +109,6 @@ function clearExtensionMemory(extension: Extension): void {
 
     // Clear large manifest data (keep minimal info for logging)
     const extensionName = extension.name;
-    // const extensionId = extension.id;
 
     // Clear manifest but keep essential fields for potential logging
     extension.manifest = {

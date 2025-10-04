@@ -276,6 +276,7 @@ export class RenameAPIS implements MigrationModule {
         for (const key in node) {
             // FIXME
             // if (!node.hasOwnProperty(key)) continue;
+            if (!Object.prototype.hasOwnProperty.call(node, key)) continue;
 
             const value = node[key];
             if (Array.isArray(value)) {
@@ -371,8 +372,6 @@ export class RenameAPIS implements MigrationModule {
      * Currently handles the chrome.tabs.executeScript -> chrome.scripting.executeScript transformation.
      *
      * @param callNode CallExpression AST node
-     * @param source Source mapping definition
-     * @param target Target mapping definition
      */
     private static transformParameters(callNode: any): void {
         const apiPath = RenameAPIS.buildMemberExpressionPath(callNode.callee);
@@ -617,7 +616,7 @@ export class RenameAPIS implements MigrationModule {
                     loc: true,
                     range: true,
                 } as any) as ESTree.Program;
-            } catch (error) {
+            } catch {
                 try {
                     logger.error(null, error as any)
                     // Fallback to module parsing

@@ -285,6 +285,8 @@ export class ResourceDownloader extends MigrationModule {
     } {
         try {
             // Use curl for synchronous download with timeout and size limits
+            // eslint-disable-next-line @typescript-eslint/no-require-imports
+            const os = require('os');
             const tempFile = path.join(
                 os.tmpdir(),
                 `download_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`

@@ -90,7 +90,7 @@ function sanitizeMeta(meta: any): any {
             _originalSize: byteSize,
             data: truncated,
         };
-    } catch (error) {
+    } catch {
         // If serialization fails, convert to string safely
         console.error(error as any)
         return {
