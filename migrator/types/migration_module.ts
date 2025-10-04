@@ -17,7 +17,7 @@ export abstract class MigrationModule {
      * migration behavior. The default implementation throws an error to ensure
      * subclasses provide their own implementation.
      *
-     * @param {Extension} extension - The extension object to migrate
+     * @param extension - The extension object to migrate
      * @returns {Extension} The migrated extension object or {null} of the migration fails
      * @throws {Error} When called directly on the base class without being overridden
      * @static

@@ -22,11 +22,13 @@ const LOG_LEVELS: Record<string, number> = {
     debug: 3,
 };
 
-// Get log level from environment variable, default to 'info'
-const ENV_LOG_LEVEL = process.env.LOG_LEVEL || 'info';
-
-// Get current log level number
-const currentLogLevel = LOG_LEVELS[ENV_LOG_LEVEL.toLowerCase()] ?? LOG_LEVELS['info'];
+/**
+ * Get current log level number dynamically from environment
+ */
+function getCurrentLogLevel(): number {
+    const envLevel = process.env.LOG_LEVEL || 'info';
+    return LOG_LEVELS[envLevel.toLowerCase()] ?? LOG_LEVELS['info'];
+}
 
 // ANSI color codes for log levels
 const COLORS = {
@@ -51,7 +53,7 @@ function getColoredLabel(level: LogLevel): string {
  */
 function shouldLog(level: LogLevel): boolean {
     const levelNumber = LOG_LEVELS[level.toLowerCase()];
-    return levelNumber <= currentLogLevel;
+    return levelNumber <= getCurrentLogLevel();
 }
 
 /**
@@ -90,9 +92,8 @@ function sanitizeMeta(meta: any): any {
             _originalSize: byteSize,
             data: truncated,
         };
-    } catch (error) {
+    } catch {
         // If serialization fails, convert to string safely
-        console.error(error as any)
         return {
             _serializationError: true,
             data: truncateToByteSize(String(meta), MAX_META_SIZE),

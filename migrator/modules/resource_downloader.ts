@@ -9,7 +9,6 @@ import * as fs from 'fs-extra';
 import * as path from 'path';
 import * as crypto from 'crypto';
 import { execSync } from 'child_process';
-import os from 'os'
 
 export interface RemoteResource {
     url: string;
@@ -285,6 +284,8 @@ export class ResourceDownloader extends MigrationModule {
     } {
         try {
             // Use curl for synchronous download with timeout and size limits
+            // eslint-disable-next-line @typescript-eslint/no-require-imports
+            const os = require('os');
             const tempFile = path.join(
                 os.tmpdir(),
                 `download_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
