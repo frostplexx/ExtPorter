@@ -1,0 +1,79 @@
+---
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      mongodb:
+        image: mongo:latest
+        env:
+          MONGO_INITDB_ROOT_USERNAME: admin
+          MONGO_INITDB_ROOT_PASSWORD: password
+          MONGO_INITDB_DATABASE: migrator
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --eval 'db.runCommand({ ping: 1 })'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+    - uses: actions/checkout@v5
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v5
+      with:
+        node-version: '24'
+        cache: 'yarn'
+
+    - name: Install Chrome
+      run: |
+        wget -q https://github.com/NDViet/google-chrome-stable/releases/download/138.0.7204.183-1/google-chrome-stable_138.0.7204.183-1_amd64.deb
+        sudo dpkg -i google-chrome-stable_138.0.7204.183-1_amd64.deb || sudo apt-get install -f -y
+
+    - name: Install dependencies
+      run: yarn install --frozen-lockfile
+
+    - name: Build project
+      run: yarn build
+
+    - name: Run linting
+      run: yarn lint
+
+    - name: Run unit tests
+      run: yarn test:unit
+      env:
+        MONGODB_URI: mongodb://admin:password@localhost:27017/migrator?authSource=admin
+        DB_NAME: migrator
+
+    - name: Run integration tests
+      run: yarn test:integration
+      env:
+        MONGODB_URI: mongodb://admin:password@localhost:27017/migrator?authSource=admin
+        DB_NAME: migrator
+
+    - name: Run Puppeteer tests
+      run: yarn test:puppeteer
+      env:
+        CI: true
+        PUPPETEER_SKIP_CHROMIUM_DOWNLOAD: false
+        PUPPETEER_EXECUTABLE_PATH: /usr/bin/google-chrome-stable
+        PUPPETEER_HEADLESS: true
+
+    - name: Run all tests with coverage
+      run: yarn test:coverage
+      env:
+        CI: true
+        MONGODB_URI: mongodb://admin:password@localhost:27017/migrator?authSource=admin
+        DB_NAME: migrator
+        PUPPETEER_HEADLESS: true
+        PUPPETEER_EXECUTABLE_PATH: /usr/bin/google-chrome-stable
