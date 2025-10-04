@@ -24,15 +24,19 @@ function createTestIndicator() {
 
 // Test messaging with background script
 function testBackgroundCommunication(indicator) {
-    chrome.runtime.sendMessage(
-        { type: 'RUN_TESTS' },
-        function(response) {
-            if (chrome.runtime.lastError) {
-                indicator.textContent = 'Bridge Test: Error';
-                indicator.style.background = '#d32f2f';
-                indicator.setAttribute('data-test-status', 'error');
-                indicator.setAttribute('data-error', chrome.runtime.lastError.message);
-            } else if (response && response.success) {
+    try {
+        indicator.textContent = 'Bridge Test: Sending...';
+        indicator.setAttribute('data-test-status', 'sending');
+
+        chrome.runtime.sendMessage(
+            { type: 'RUN_TESTS' },
+            function(response) {
+                if (chrome.runtime.lastError) {
+                    indicator.textContent = 'Bridge Test: Error';
+                    indicator.style.background = '#d32f2f';
+                    indicator.setAttribute('data-test-status', 'error');
+                    indicator.setAttribute('data-error', chrome.runtime.lastError.message);
+                } else if (response && response.success) {
                 indicator.textContent = 'Bridge Test: Active';
                 indicator.style.background = '#388e3c';
                 indicator.setAttribute('data-test-status', 'success');
@@ -69,8 +73,14 @@ function testBackgroundCommunication(indicator) {
                 indicator.style.background = '#f57c00';
                 indicator.setAttribute('data-test-status', 'no-response');
             }
-        }
-    );
+            }
+        );
+    } catch (error) {
+        indicator.textContent = 'Bridge Test: Exception';
+        indicator.style.background = '#d32f2f';
+        indicator.setAttribute('data-test-status', 'exception');
+        indicator.setAttribute('data-error', error.message);
+    }
 }
 
 // Storage test in content script

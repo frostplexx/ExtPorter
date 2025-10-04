@@ -58,29 +58,31 @@ describe('Bridge Functionality Test', () => {
         const bridgeTemplatePath = path.join(__dirname, '../../migrator/templates/ext_bridge.js');
         const bridgeContent = fs.readFileSync(bridgeTemplatePath, 'utf8');
 
-        // Inject the bridge into a test page and verify it works
+        // Navigate to a blank page first
         await page.goto('data:text/html,<html><body><h1>Bridge Test</h1></body></html>');
 
-        // Mock Chrome APIs for testing
-        await page.evaluateOnNewDocument(() => {
-            // Mock Chrome storage API with promise support
-            (window as any).chrome = {
+        // Inject everything in a single evaluate call to ensure chrome API is available when bridge runs
+        const testResult = await page.evaluate((bridgeCode) => {
+            // Mock Chrome storage API with callback support
+            const storageData: any = {};
+
+            const mockChrome = {
                 storage: {
                     local: {
-                        set: (data: any, callback: (error?: any) => void) => {
-                            // Simulate async storage operation
-                            setTimeout(() => {
-                                (window as any).__storageData = { ...(window as any).__storageData, ...data };
+                        set: function(data: any, callback: (error?: any) => void) {
+                            // Simulate async storage operation - use regular function to preserve this
+                            setTimeout(function() {
+                                Object.assign(storageData, data);
                                 callback();
                             }, 2);
                         },
-                        get: (keys: string[], callback: (result: any) => void) => {
-                            // Simulate async storage retrieval
-                            setTimeout(() => {
+                        get: function(keys: string[], callback: (result: any) => void) {
+                            // Simulate async storage retrieval - use regular function to preserve this
+                            setTimeout(function() {
                                 const result: any = {};
                                 keys.forEach(key => {
-                                    if ((window as any).__storageData && (window as any).__storageData[key] !== undefined) {
-                                        result[key] = (window as any).__storageData[key];
+                                    if (storageData[key] !== undefined) {
+                                        result[key] = storageData[key];
                                     }
                                 });
                                 callback(result);
@@ -92,14 +94,13 @@ describe('Bridge Functionality Test', () => {
                     lastError: undefined
                 }
             };
-            (window as any).__storageData = {};
-        });
 
-        // Inject the bridge
-        await page.evaluate(bridgeContent);
+            (window as any).chrome = mockChrome;
 
-        // Test that the bridge correctly handles callback APIs
-        const testResult = await page.evaluate(() => {
+            // Inject the bridge by executing it
+            eval(bridgeCode);
+
+            // Test that the bridge correctly handles callback APIs
             return new Promise((resolve) => {
                 // Test callback-style API
                 (window as any).chrome.storage.local.set({ testKey: 'testValue' }, function() {
@@ -111,17 +112,24 @@ describe('Bridge Functionality Test', () => {
                             if ((window as any).chrome.runtime.lastError) {
                                 resolve({ success: false, error: (window as any).chrome.runtime.lastError.message });
                             } else {
-                                resolve({
-                                    success: true,
-                                    value: result.testKey,
-                                    matches: result.testKey === 'testValue'
-                                });
+                                // Check if result is defined
+                                if (!result) {
+                                    resolve({ success: false, error: 'Result is undefined' });
+                                } else if (result.testKey === undefined) {
+                                    resolve({ success: false, error: `Cannot read properties of undefined (reading 'testKey')` });
+                                } else {
+                                    resolve({
+                                        success: true,
+                                        value: result.testKey,
+                                        matches: result.testKey === 'testValue'
+                                    });
+                                }
                             }
                         });
                     }
                 });
             });
-        });
+        }, bridgeContent);
 
         expect(testResult).toEqual({
             success: true,

@@ -3,12 +3,14 @@ importScripts('ext_bridge.js');
 
 // Global test results storage
 const testResults = {};
+let testsCompleted = false;
 
 // Storage API test with callback
-function testStorageAPI() {
+function testStorageAPI(onComplete) {
     chrome.storage.local.set({ testKey: 'testValue' }, function() {
         if (chrome.runtime.lastError) {
             testResults.storageSet = { success: false, error: chrome.runtime.lastError.message };
+            if (onComplete) onComplete();
         } else {
             testResults.storageSet = { success: true };
 
@@ -23,13 +25,14 @@ function testStorageAPI() {
                         matches: result.testKey === 'testValue'
                     };
                 }
+                if (onComplete) onComplete();
             });
         }
     });
 }
 
 // Tabs API test with callback
-function testTabsAPI() {
+function testTabsAPI(onComplete) {
     chrome.tabs.query({ active: true, currentWindow: true }, function(tabs) {
         if (chrome.runtime.lastError) {
             testResults.tabsQuery = { success: false, error: chrome.runtime.lastError.message };
@@ -40,12 +43,16 @@ function testTabsAPI() {
                 hasActiveTab: tabs.length > 0 && tabs[0].active
             };
         }
+        if (onComplete) onComplete();
     });
 }
 
 // Message handling with callback response
 chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
+    console.log('Background received message:', request.type);
+
     if (request.type === 'GET_TEST_RESULTS') {
+        console.log('Sending test results:', testResults);
         sendResponse({
             success: true,
             results: testResults,
@@ -55,29 +62,43 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
     }
 
     if (request.type === 'RUN_TESTS') {
+        console.log('Running tests in background...');
         // Clear previous results
         Object.keys(testResults).forEach(key => delete testResults[key]);
+        testsCompleted = false;
 
-        // Run tests
-        testStorageAPI();
-        testTabsAPI();
+        // Run tests with completion tracking
+        let completedCount = 0;
+        const onTestComplete = () => {
+            completedCount++;
+            if (completedCount === 2) {
+                testsCompleted = true;
+                sendResponse({
+                    success: true,
+                    message: 'Tests completed',
+                    results: testResults
+                });
+            }
+        };
 
-        // Send response after a delay to allow tests to complete
-        setTimeout(() => {
-            sendResponse({
-                success: true,
-                message: 'Tests started',
-                results: testResults
-            });
-        }, 500);
+        testStorageAPI(onTestComplete);
+        testTabsAPI(onTestComplete);
 
         return true; // Async response
     }
 });
 
 // Initialize tests when service worker starts
-testStorageAPI();
-testTabsAPI();
+let initCompletedCount = 0;
+const onInitComplete = () => {
+    initCompletedCount++;
+    if (initCompletedCount === 2) {
+        testsCompleted = true;
+    }
+};
+
+testStorageAPI(onInitComplete);
+testTabsAPI(onInitComplete);
 
 // Export for testing
 if (typeof globalThis !== 'undefined') {
