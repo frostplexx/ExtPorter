@@ -290,8 +290,7 @@ export class InterestingnessScorer implements MigrationModule {
                     ) {
                         modifiedFileCount++;
                     }
-                } catch (error) {
-                    logger.error(null, error as any)
+                } catch {
                     // Ignore errors in content analysis
                 }
             }

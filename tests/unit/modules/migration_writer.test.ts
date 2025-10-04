@@ -1,10 +1,9 @@
 import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals';
 import { MigrationWriter } from '../../../migrator/modules/migration_writer';
-import { logger } from '../../../migrator/utils/logger';
 import { Extension } from '../../../migrator/types/extension';
 import { AbstractFile } from '../../../migrator/types/abstract_file';
+import { ExtFileType } from '../../../migrator/types/ext_file_types';
 import * as fs from 'fs/promises';
-import * as path from 'path';
 
 // Mock dependencies
 jest.mock('../../../migrator/utils/logger');
@@ -23,7 +22,10 @@ describe('MigrationWriter', () => {
         jest.clearAllMocks();
 
         mockFile = {
+            path: 'test.js',
+            filetype: ExtFileType.JS,
             getContent: jest.fn().mockReturnValue('test content'),
+            getBuffer: jest.fn().mockReturnValue(Buffer.from('test content')),
             getPath: jest.fn().mockReturnValue('test.js'),
             getSize: jest.fn().mockReturnValue(100),
             getType: jest.fn().mockReturnValue('js' as any)
@@ -34,16 +36,21 @@ describe('MigrationWriter', () => {
             name: 'Test Extension',
             manifest_v2_path: '/test/path',
             manifest: {},
-            files: [mockFile]
+            files: [mockFile as any]
         } as Extension;
 
         // Mock fs methods
         (fs.mkdir as any).mockResolvedValue(void 0);
         (fs.writeFile as any).mockResolvedValue(void 0);
         (fs.access as any).mockResolvedValue(void 0);
+
+        // Disable auto-processing for tests so we can check queue length
+        MigrationWriter.shared.setAutoProcess(false);
     });
 
     afterEach(() => {
+        // Re-enable auto-processing
+        MigrationWriter.shared.setAutoProcess(true);
         // Reset singleton instance for each test
         (MigrationWriter as any).instance = null;
     });
@@ -138,7 +145,8 @@ describe('MigrationWriter', () => {
 
             expect(fs.writeFile).toHaveBeenCalledWith(
                 expect.stringContaining('manifest.json'),
-                expect.stringContaining(JSON.stringify(mockExtension.manifest, null, 2))
+                expect.stringContaining(JSON.stringify(mockExtension.manifest, null, 2)),
+                'utf8'
             );
         });
     });
