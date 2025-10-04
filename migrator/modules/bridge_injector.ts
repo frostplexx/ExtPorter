@@ -72,7 +72,7 @@ export class BridgeInjector implements MigrationModule {
             /* No-op for in-memory content */
         };
         bridgeFile.getAST = () => {
-            // Bridge file doesn't need AST parsing 
+            // Bridge file doesn't need AST parsing
             return undefined;
         };
 
