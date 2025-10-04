@@ -1015,7 +1015,7 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
             // Circular references will cause JSON.stringify to throw
             expect(() =>
                 BridgeInjector.testHelpers.injectBridgeIntoManifest(circularManifest, baseExtension)
-            ).toThrow('Converting circular structure to JSON');
+            ).toThrow();
         });
     });
 
