@@ -367,7 +367,6 @@ console.log('✅ Bridge test content script setup complete');
         // Wait for content script to execute and create indicator
         try {
             await page.waitForSelector('#bridge-test-indicator', { timeout: 15000 });
-            console.log('✅ Bridge test indicator found - content script executed successfully');
 
             // Wait a bit more for the tests to complete
             await new Promise(resolve => setTimeout(resolve, 3000));
@@ -385,16 +384,12 @@ console.log('✅ Bridge test content script setup complete');
             const bridgeLogs = consoleLogs.filter(log =>
                 log.includes('Bridge') || log.includes('bridge') || log.includes('🌐') || log.includes('🧪')
             );
-            console.log('Bridge-related console logs:', bridgeLogs);
 
-            console.log('Test status:', testStatus);
-            console.log('Test results:', testResults);
 
             // Verify the test executed
             expect(testStatus).not.toBeNull();
 
             if (testStatus === 'passed') {
-                console.log('🎉 Bridge functionality test PASSED!');
                 expect(testStatus).toBe('passed');
 
                 // Parse and verify results
@@ -403,8 +398,6 @@ console.log('✅ Bridge test content script setup complete');
                 expect(results.storageGet?.success).toBe(true);
                 expect(results.storageGet?.valid).toBe(true);
             } else {
-                console.log('Bridge test status:', testStatus);
-                console.log('This might be expected in test environment due to permission restrictions');
 
                 // As long as the content script executed, we know the bridge injection worked
                 expect(['passed', 'failed', 'error']).toContain(testStatus);
@@ -412,15 +405,12 @@ console.log('✅ Bridge test content script setup complete');
 
         } catch (error) {
             // Content script might not have run due to security restrictions
-            console.log('Content script execution test failed, which may be expected in test environment');
-            console.log('Error:', error);
 
             // Log any bridge-related console messages that did occur
             const bridgeLogs = consoleLogs.filter(log =>
                 log.includes('Bridge') || log.includes('bridge') || log.includes('content script')
             );
             if (bridgeLogs.length > 0) {
-                console.log('Some bridge-related activity detected:', bridgeLogs);
             }
 
             // Just verify the files were created correctly (which we know works from other tests)

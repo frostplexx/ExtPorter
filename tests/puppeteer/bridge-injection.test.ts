@@ -323,13 +323,6 @@ describe('Bridge Injection Puppeteer Tests', () => {
             const testStatus = await page.$eval('#bridge-test-indicator', (el) => el.getAttribute('data-test-status'));
             const errorAttribute = await page.$eval('#bridge-test-indicator', (el) => el.getAttribute('data-error'));
 
-            console.log('Final text:', finalText);
-            console.log('Test status:', testStatus);
-            console.log('Error:', errorAttribute);
-            console.log('Console logs:', consoleLogs.filter(log =>
-                log.includes('Background') || log.includes('sendMessage') || log.includes('Bridge Test')
-            ));
-
             expect(finalText).toMatch(/Bridge Test: (Passed|Active)/);
 
             // Verify no errors in lastError handling
@@ -398,7 +391,6 @@ describe('Bridge Injection Puppeteer Tests', () => {
                     expect(['success', 'error']).toContain(testStatus);
                 } catch (error) {
                     // Some domains might block extension injection, that's okay
-                    console.log(`Extension not injected on ${domain}, which is expected`);
                 }
             }
         });
