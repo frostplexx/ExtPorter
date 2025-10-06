@@ -171,7 +171,7 @@ export class BlacklistChecker {
      */
     private isWebpackBundle(content: string): boolean {
         // Performance optimization: only check first 10KB for signatures
-        const contentToCheck = content.substring(0, 10000);
+        const contentToCheck = content.substring(0, BlacklistChecker.MAX_FILE_SIZE);
 
         // Common webpack signatures
         const webpackSignatures = [
