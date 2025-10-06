@@ -76,8 +76,8 @@ function checkMemoryThreshold(): boolean {
     const heapUsedGB = memUsage.heapUsed / 1024 / 1024 / 1024;
     const rssGB = memUsage.rss / 1024 / 1024 / 1024;
 
-    // Warning at 3GB, critical at 3.5GB
-    if (heapUsedGB > 3.5 || rssGB > 3.5) {
+    // Warning at 3GB, critical at 3.7GB
+    if (heapUsedGB > 3.7 || rssGB > 3.7) {
         logger.error(
             null,
             `CRITICAL: Memory usage too high! Heap: ${heapUsedGB.toFixed(2)}GB, RSS: ${rssGB.toFixed(2)}GB`
