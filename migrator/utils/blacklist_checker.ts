@@ -23,7 +23,7 @@ interface BlacklistConfig {
  */
 export class BlacklistChecker {
     private static instance: BlacklistChecker;
-    private static MAX_FILE_SIZE = 10000;
+    public static MAX_FILE_SIZE = 10000;
     private config: BlacklistConfig | null = null;
     private compiledPatterns: { regex: RegExp; reason: string }[] = [];
 
@@ -241,85 +241,4 @@ export class BlacklistChecker {
 
         return false;
     }
-<<<<<<< HEAD
-
-    /**
-     * Detect if file content contains webpack bundle signatures
-     * @param content File content to analyze
-     * @returns True if webpack signatures are detected
-     */
-    private isWebpackBundle(content: string): boolean {
-        // Performance optimization: only check first 10KB for signatures
-        const contentToCheck = content.substring(0, BlacklistChecker.MAX_FILE_SIZE);
-
-        // Common webpack signatures
-        const webpackSignatures = [
-            // Webpack runtime functions
-            '__webpack_require__',
-            '__webpack_modules__',
-            '__webpack_module_cache__',
-            '__webpack_require__.cache',
-
-            // Webpack chunk loading
-            '__webpack_require__.e',
-            '__webpack_require__.f',
-            'webpackChunkName',
-            'webpackChunk',
-
-            // Module systems
-            '__webpack_require__.d',  // define getter
-            '__webpack_require__.o',  // object prototype hasOwnProperty
-            '__webpack_require__.r',  // define __esModule
-            '__webpack_require__.n',  // getDefaultExport
-
-            // Common webpack runtime patterns
-            'window["webpackJsonp"]',
-            'self["webpackChunk"]',
-            '/******/ (function()',
-            '/******/ (() => {',
-
-            // Webpack manifest and hot module replacement
-            '__webpack_require__.hmrF',
-            '__webpack_require__.hmrC',
-            'webpackHotUpdate',
-
-            // Minified webpack patterns (often in production builds)
-            ')&&(this||self)[',
-            '("number"==typeof __webpack_require__)',
-            '.push([['
-        ];
-
-        // Check for multiple signatures to reduce false positives
-        let signatureCount = 0;
-        for (const signature of webpackSignatures) {
-            if (contentToCheck.includes(signature)) {
-                signatureCount++;
-                // If we find 2+ signatures, it's very likely a webpack bundle
-                if (signatureCount >= 2) {
-                    return true;
-                }
-            }
-        }
-
-        // Additional checks for common webpack bundle patterns
-        if (signatureCount >= 1) {
-            // Look for module definition patterns common in webpack
-            const modulePatterns = [
-                /\(\d+,\s*function\s*\(\s*\w+,\s*\w+,\s*\w+\s*\)/,  // (123, function(e, t, n))
-                /\[\d+\]:\s*function\s*\(\s*\w+,\s*\w+,\s*\w+\s*\)/, // [123]: function(e, t, n)
-                /module\.exports\s*=\s*__webpack_require__/,         // CommonJS exports
-                /Object\.defineProperty\(\w+,\s*"__esModule"/        // ES module marker
-            ];
-
-            for (const pattern of modulePatterns) {
-                if (pattern.test(contentToCheck)) {
-                    return true;
-                }
-            }
-        }
-
-        return false;
-    }
-=======
->>>>>>> 0f44e87e (chore: fix formatting)
 }
