@@ -77,13 +77,13 @@ function checkMemoryThreshold(): boolean {
     const rssGB = memUsage.rss / 1024 / 1024 / 1024;
 
     // Warning at 3GB, critical at 3.7GB
-    if (heapUsedGB > 3.7 || rssGB > 3.7) {
+    if (heapUsedGB > ((process.env.MEMORY_CRIT_LIMIT || 1.0) as number)|| rssGB > ((process.env.MEMORY_CRIT_LIMIT || 1.0) as number)) {
         logger.error(
             null,
             `CRITICAL: Memory usage too high! Heap: ${heapUsedGB.toFixed(2)}GB, RSS: ${rssGB.toFixed(2)}GB`
         );
         return false;
-    } else if (heapUsedGB > 3.0 || rssGB > 3.0) {
+    } else if (heapUsedGB > ((process.env.MEMORY_WARN_LIMIT || 1.0) as number) || rssGB > ((process.env.MEMORY_WARN_LIMIT || 1.0) as number)) {
         logger.warn(
             null,
             `WARNING: High memory usage detected! Heap: ${heapUsedGB.toFixed(2)}GB, RSS: ${rssGB.toFixed(2)}GB`
