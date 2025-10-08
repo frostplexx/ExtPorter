@@ -160,7 +160,7 @@ describe('BlacklistChecker', () => {
     describe('performance optimization', () => {
         it('should only check first 10KB of content for webpack signatures', () => {
             // Create content where webpack signatures appear after 10KB
-            const padding = 'a'.repeat(10500); // More than 10KB
+            const padding = 'a'.repeat(BlacklistChecker.MAX_FILE_SIZE + 500); // More than 10KB
             const webpackContent = padding + `
                 __webpack_require__("module");
                 webpackChunk.push([123]);
