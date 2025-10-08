@@ -163,7 +163,6 @@ export class RenameAPIS implements MigrationModule {
             );
 
             // Check if this is a webpack bundle
-            const blacklistChecker = BlacklistChecker.getInstance();
             const isWebpackBundle = content.includes('__webpack_require__') ||
                                    content.includes('webpackChunk') ||
                                    /\(\d+,\s*function\s*\(\s*\w+,\s*\w+,\s*\w+\s*\)/.test(content.substring(0, 10000));
