@@ -86,8 +86,9 @@ export class RenameAPIS implements MigrationModule {
                     return file;
                 }
 
-                // Check if file is blacklisted from transformation
-                const blacklistResult = blacklistChecker.isFileBlacklisted(file.path);
+                // Check if file is blacklisted from transformation (with content signature detection)
+                const fileContent = file.getContent();
+                const blacklistResult = blacklistChecker.isFileBlacklisted(file.path, fileContent);
                 if (blacklistResult.isBlacklisted) {
                     blacklistedFiles++;
                     logger.debug(extension, 'File blacklisted from transformation', {
@@ -98,7 +99,7 @@ export class RenameAPIS implements MigrationModule {
                 }
 
                 processedFiles++;
-                return RenameAPIS.processJavaScriptFile(file, mappings, (transformed) => {
+                return RenameAPIS.processJavaScriptFile(file, mappings, extension, (transformed) => {
                     if (transformed) {
                         hasChanges = true;
                         transformedFiles++;
@@ -135,12 +136,14 @@ export class RenameAPIS implements MigrationModule {
      *
      * @param file The file to process
      * @param mappings API transformation mappings
+     * @param extension Extension context for logging
      * @param onTransformed Callback to track if transformation occurred
      * @returns Original file or transformed file
      */
     private static processJavaScriptFile(
         file: LazyFile,
         mappings: TwinningMapping,
+        extension: Extension | undefined,
         onTransformed: (transformed: boolean) => void
     ): LazyFile {
         const ast = file.getAST();
@@ -159,7 +162,13 @@ export class RenameAPIS implements MigrationModule {
                 mappings
             );
 
+            // Check if this is a webpack bundle
+            const isWebpackBundle = content.includes('__webpack_require__') ||
+                                   content.includes('webpackChunk') ||
+                                   /\(\d+,\s*function\s*\(\s*\w+,\s*\w+,\s*\w+\s*\)/.test(content.substring(0, 10000));
+
             if (isLargeFile && potentialTransformations > 0) {
+                if (isWebpackBundle) {
                 // This is a critical issue - large file with APIs that need transformation
                 logger.error(
                     null,
@@ -172,21 +181,58 @@ export class RenameAPIS implements MigrationModule {
                     }
                 );
 
+                    // Enhanced user-visible warning for webpack bundles
+                    logger.warn(extension, "Webpack bundle detected with API transformations needed", {
+                        path: file.path,
+                        fileSizeKB: fileSizeKB,
+                        potentialTransformations: potentialTransformations,
+                        solutions: [
+                            "Use development/unminified build for migration",
+                            "Migrate source files before webpack bundling",
+                            "Manual migration may be required"
+                        ]
+                    });
+                } else {
+                    // Large non-webpack file with APIs that need transformation
+                    logger.error(null, "AST parsing failed for large file with API transformations needed", {
+                        path: file.path,
+                        fileSizeKB: fileSizeKB,
+                        potentialTransformations: potentialTransformations,
+                        issue: "Large files (>100KB) cannot be parsed for API transformations"
+                    });
+
+                    // Log user-visible warning
+                    logger.warn(extension, "Large file API transformations skipped - may cause MV3 runtime errors", {
+                        path: file.path,
+                        fileSizeKB: fileSizeKB,
+                        potentialTransformations: potentialTransformations,
+                        issue: "File exceeds 100KB AST parsing limit",
+                        impact: "May cause runtime errors in Manifest V3"
+                    });
+                }
             } else if (potentialTransformations > 0) {
-                // Smaller file that failed to parse
-                logger.error(null, 'AST parsing failed for file with API transformations needed', {
-                    path: file.path,
-                    fileSizeKB: fileSizeKB,
-                    potentialTransformations: potentialTransformations,
-                    issue: 'JavaScript syntax error or unsupported language features',
+                    // Smaller webpack bundle that failed to parse
+                    logger.error(null, "Webpack bundle detected with API transformations needed", {
+                        path: file.path,
+                        fileSizeKB: fileSizeKB,
+                        potentialTransformations: potentialTransformations,
+                        issue: "Webpack bundles cannot be automatically migrated",
                 });
 
             } else {
                 // File failed to parse but no APIs detected
-                logger.debug(null, 'AST parsing failed but no API transformations needed', {
-                    path: file.path,
-                    fileSizeKB: fileSizeKB,
-                });
+                if (isWebpackBundle) {
+                    logger.debug(null, "Webpack bundle detected but no API transformations needed", {
+                        path: file.path,
+                        fileSizeKB: fileSizeKB,
+                        bundleType: "webpack"
+                    });
+                } else {
+                    logger.debug(null, "AST parsing failed but no API transformations needed", {
+                        path: file.path,
+                        fileSizeKB: fileSizeKB
+                    });
+                }
             }
 
             onTransformed(false);
@@ -664,6 +710,9 @@ export class RenameAPIS implements MigrationModule {
                     processedFiles,
                     duration,
                 });
+
+                // Check if blacklisted files include webpack bundles and provide guidance
+                RenameAPIS.logWebpackGuidance(extension, blacklistedFiles);
             } else {
                 logger.info(extension, 'No API changes required');
             }
@@ -673,6 +722,67 @@ export class RenameAPIS implements MigrationModule {
                 processedFiles,
                 blacklistedFiles,
                 duration,
+            });
+
+            if (blacklistedFiles > 0) {
+                RenameAPIS.logWebpackGuidance(extension, blacklistedFiles);
+            }
+        }
+    }
+
+    /**
+     * Provides user guidance for webpack-based extensions
+     */
+    private static logWebpackGuidance(extension: Extension | undefined, blacklistedFiles: number): void {
+        // Check if any blacklisted files are likely webpack bundles
+        const hasWebpackFiles = extension?.files?.some(file => {
+            if (file.filetype !== ExtFileType.JS) return false;
+            const content = file.getContent();
+            return content.includes('__webpack_require__') ||
+                   content.includes('webpackChunk') ||
+                   file.path.includes('bundle') ||
+                   file.path.includes('webpack');
+        });
+
+        if (hasWebpackFiles) {
+            logger.info(extension, "Webpack extension detected - providing migration guidance", {
+                blacklistedFiles,
+                guidance: "webpack-specific migration workflow recommended"
+            });
+
+            const guidanceMessages = [
+                '',
+                '📦 WEBPACK EXTENSION DETECTED',
+                '═══════════════════════════════════════════════════',
+                'This extension appears to use webpack for bundling.',
+                'For optimal Manifest V3 migration:',
+                '',
+                '🔄 RECOMMENDED WORKFLOW:',
+                '  1. Migrate source files BEFORE webpack bundling',
+                '  2. Update webpack config for Manifest V3:',
+                '     • Set service worker as single entry point',
+                '     • Configure proper output for content scripts',
+                '     • Update any chrome.* API references',
+                '  3. Re-bundle with updated webpack config',
+                '',
+                '⚙️  WEBPACK V3 CONSIDERATIONS:',
+                '  • Background scripts → Service worker (single file)',
+                '  • Update CSP for stricter V3 requirements',
+                '  • Remove dynamic eval() and similar patterns',
+                '  • Test hot reload and development workflows',
+                '',
+                '📚 RESOURCES:',
+                '  • Chrome MV3 Migration Guide: https://developer.chrome.com/docs/extensions/develop/migrate',
+                '  • Webpack Chrome Extension Templates: Search for "webpack chrome extension manifest v3"',
+                '',
+                `${blacklistedFiles} bundled files were skipped during migration.`,
+                '═══════════════════════════════════════════════════',
+                ''
+            ];
+
+            // Log guidance messages as user-visible info
+            guidanceMessages.forEach(message => {
+                logger.info(extension, message);
             });
         }
     }

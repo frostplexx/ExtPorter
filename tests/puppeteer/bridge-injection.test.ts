@@ -374,9 +374,9 @@ describe('Bridge Injection Puppeteer Tests', () => {
             const testDomains = ['https://example.com', 'https://httpbin.org/html'];
 
             for (const domain of testDomains) {
-                await page.goto(domain);
-
                 try {
+                    await page.goto(domain, { timeout: 60000 });
+
                     await page.waitForSelector('#bridge-test-indicator', { timeout: 5000 });
 
                     // Wait for tests to complete
@@ -390,7 +390,7 @@ describe('Bridge Injection Puppeteer Tests', () => {
                     // Should work on all domains (though some might have restrictions)
                     expect(['success', 'error']).toContain(testStatus);
                 } catch (error) {
-                    // Some domains might block extension injection, that's okay
+                    // Some domains might block extension injection or timeout, that's okay
                 }
             }
         }, 60000);
