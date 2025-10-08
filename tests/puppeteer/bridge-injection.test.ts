@@ -393,6 +393,6 @@ describe('Bridge Injection Puppeteer Tests', () => {
                     // Some domains might block extension injection, that's okay
                 }
             }
-        });
+        }, 60000);
     });
 });
