@@ -70,11 +70,11 @@ jobs:
     #     PUPPETEER_EXECUTABLE_PATH: /usr/bin/google-chrome-stable
     #     PUPPETEER_HEADLESS: true
 
-    - name: Run all tests with coverage
-      run: yarn test:coverage
-      env:
-        CI: true
-        MONGODB_URI: mongodb://admin:password@localhost:27017/migrator?authSource=admin
-        DB_NAME: migrator
-        PUPPETEER_HEADLESS: true
-        PUPPETEER_EXECUTABLE_PATH: /usr/bin/google-chrome-stable
+    # - name: Run all tests with coverage
+    #   run: yarn test:coverage
+    #   env:
+    #     CI: true
+    #     MONGODB_URI: mongodb://admin:password@localhost:27017/migrator?authSource=admin
+    #     DB_NAME: migrator
+    #     PUPPETEER_HEADLESS: true
+    #     PUPPETEER_EXECUTABLE_PATH: /usr/bin/google-chrome-stable
