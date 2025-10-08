@@ -373,7 +373,10 @@ process.on('unhandledRejection', (reason, promise) => {
     // Don't exit - continue processing
 });
 
-main().catch((error) => {
-    console.error('[MAIN FAILED]', error);
-    process.exit(1);
-});
+// Only run main if not in test environment and file is run directly
+if (process.env.NODE_ENV !== 'test' && require.main === module) {
+    main().catch((error) => {
+        console.error('[MAIN FAILED]', error);
+        process.exit(1);
+    });
+}
