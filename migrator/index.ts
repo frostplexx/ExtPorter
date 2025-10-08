@@ -17,6 +17,7 @@ import { BridgeInjector } from './modules/bridge_injector';
 // Load environment variables once at application startup
 dotenv.config();
 
+
 // set global constants to be used accross the project
 // its ugly but it works
 export const globals: Globals = {
