@@ -429,6 +429,7 @@ export class MigrateManifest implements MigrationModule {
     private static sanitizeHashDirectives(csp: string): string {
         // List of known insecure patterns (including specific problematic values)
         // FIXME: make this generic
+        // TODO: recalculate hashes
         const insecurePatterns = [
             "'sha256-iZBJenro+ON4QTZuWnyvHk3Yj9s/TfHgJLTCP8EJzhE='",
             'remote_resources/f3d11240_ga.js', // Specific file path that causes Chrome MV3 errors
