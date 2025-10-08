@@ -12,7 +12,7 @@
         "dev": "yarn run clean; NODE_OPTIONS=\"$NODE_OPTIONS\" ts-node migrator/index.ts",
         "clean": "rm -rf tmp/output/* 2>/dev/null || true; docker exec migrator-mongodb mongosh -u admin -p password --authenticationDatabase admin migrator --eval 'db.dropDatabase()' 2>/dev/null || true",
         "debug": "yarn run build; node --inspect-brk dist/index.js",
-        "test": "aerospace enable off || true; jest; aerospace enable on || true",
+        "test": "jest",
         "check_full": "set -e pipefail; yarn build; yarn lint; yarn test",
         "test:watch": "jest --watch",
         "test:coverage": "aerospace enable off; jest --coverage; aerospace enable on",
