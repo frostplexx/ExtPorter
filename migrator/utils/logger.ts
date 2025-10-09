@@ -197,6 +197,12 @@ async function flushLogBatch() {
     const failedLogs = [];
 
     for (const chunk of chunks) {
+        // Check shutdown status before each chunk to handle mid-flush shutdowns
+        if ((Database.shared as any).isShuttingDown) {
+            console.warn(`Database shutting down, discarding ${chunk.length} logs`);
+            continue;
+        }
+
         try {
             if (chunk.length === 1) {
                 // Use single insert for individual documents
@@ -221,7 +227,7 @@ async function flushLogBatch() {
     }
 
     // Re-add failed logs to the front of the batch for retry (only if not database closure)
-    if (failedLogs.length > 0) {
+    if (failedLogs.length > 0 && !(Database.shared as any).isShuttingDown) {
         logBatch = [...failedLogs, ...logBatch];
     }
 }

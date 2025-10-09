@@ -53,7 +53,6 @@ export function checkMemoryThreshold(): boolean {
     const heapUsedGB = memUsage.heapUsed / 1024 / 1024 / 1024;
     const rssGB = memUsage.rss / 1024 / 1024 / 1024;
 
-    // Warning at 3GB, critical at 3.7GB
     if (heapUsedGB > ((process.env.MEMORY_CRIT_LIMIT || 1.0) as number)|| rssGB > ((process.env.MEMORY_CRIT_LIMIT || 1.0) as number)) {
         logger.error(
             null,

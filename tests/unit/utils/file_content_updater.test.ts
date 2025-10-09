@@ -32,9 +32,7 @@ describe('FileContentUpdater', () => {
             expect(lazyFile.getContent()).toBe(originalContent);
 
             // Update content
-            const result = FileContentUpdater.updateFileContent(lazyFile, newContent);
-
-            expect(result).toBe(true);
+            expect(() => FileContentUpdater.updateFileContent(lazyFile, newContent)).not.toThrow();
 
             // Verify file was updated on disk
             const diskContent = fs.readFileSync(testFile, 'utf8');
@@ -60,9 +58,7 @@ describe('FileContentUpdater', () => {
                 testFile,
                 ExtFileType.JS
             );
-            const result = FileContentUpdater.updateFileContent(lazyFile, content);
-
-            expect(result).toBe(true);
+            expect(() => FileContentUpdater.updateFileContent(lazyFile, content)).not.toThrow();
             expect(fs.existsSync(subDir)).toBe(true);
             expect(fs.readFileSync(testFile, 'utf8')).toBe(content);
 
@@ -77,9 +73,7 @@ describe('FileContentUpdater', () => {
             fs.writeFileSync(testFile, originalContent);
 
             const lazyFile = new LazyFile('unicode.js', testFile, ExtFileType.JS);
-            const result = FileContentUpdater.updateFileContent(lazyFile, unicodeContent);
-
-            expect(result).toBe(true);
+            expect(() => FileContentUpdater.updateFileContent(lazyFile, unicodeContent)).not.toThrow();
 
             const diskContent = fs.readFileSync(testFile, 'utf8');
             expect(diskContent).toBe(unicodeContent);
@@ -87,7 +81,7 @@ describe('FileContentUpdater', () => {
             lazyFile.close();
         });
 
-        it('should return false when LazyFile has no absolute path', () => {
+        it('should throw error when LazyFile has no absolute path', () => {
             // Create a mock LazyFile without _absolutePath
             const mockLazyFile = {
                 path: 'mock-file.js',
@@ -97,12 +91,10 @@ describe('FileContentUpdater', () => {
                 close: () => {},
             } as any;
 
-            const result = FileContentUpdater.updateFileContent(mockLazyFile, 'new content');
-
-            expect(result).toBe(false);
+            expect(() => FileContentUpdater.updateFileContent(mockLazyFile, 'new content')).toThrow('no absolute path found');
         });
 
-        it('should handle file write errors gracefully', () => {
+        it('should throw error on file write errors', () => {
             const testFile = path.join(testDir, 'readonly.js');
             fs.writeFileSync(testFile, 'original content');
 
@@ -112,10 +104,8 @@ describe('FileContentUpdater', () => {
             try {
                 fs.chmodSync(testFile, 0o444); // Read-only
 
-                const result = FileContentUpdater.updateFileContent(lazyFile, 'new content');
-
-                // Should return false due to permission error
-                expect(result).toBe(false);
+                // Should throw error due to permission error
+                expect(() => FileContentUpdater.updateFileContent(lazyFile, 'new content')).toThrow();
 
                 // Restore permissions for cleanup
                 fs.chmodSync(testFile, 0o644);

@@ -443,14 +443,19 @@ export class ResourceDownloader extends MigrationModule {
                         logger.debug(extension, `Updated resource references in: ${file.path}`);
 
                         // Update the file content using our utility
-                        const updateSuccess = FileContentUpdater.updateFileContent(
-                            file,
-                            updatedContent
-                        );
-                        if (!updateSuccess) {
+                        try {
+                            FileContentUpdater.updateFileContent(file, updatedContent);
+                        } catch (updateError) {
                             logger.warn(
                                 extension,
-                                `Failed to write updated content to file: ${file.path}`
+                                `Failed to write updated content to file: ${file.path}: ${updateError instanceof Error ? updateError.message : String(updateError)}`,
+                                {
+                                    error: updateError instanceof Error ? {
+                                        message: updateError.message,
+                                        stack: updateError.stack,
+                                        name: updateError.name
+                                    } : String(updateError)
+                                }
                             );
                         }
                     }
