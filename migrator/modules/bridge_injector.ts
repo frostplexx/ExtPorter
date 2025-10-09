@@ -106,17 +106,22 @@ export class BridgeInjector implements MigrationModule {
             const newContent = `${importStatement}\n${currentContent}`;
 
             // Update the file content
-            const success = FileContentUpdater.updateFileContent(serviceWorkerFile, newContent);
+            FileContentUpdater.updateFileContent(serviceWorkerFile, newContent);
 
-            if (success) {
-                logger.info(extension, `Bridge injected into service worker: ${serviceWorkerPath}`);
-            } else {
-                logger.error(extension, `Failed to inject bridge into service worker: ${serviceWorkerPath}`);
-            }
-
-            return success;
+            logger.info(extension, `Bridge injected into service worker: ${serviceWorkerPath}`);
+            return true;
         } catch (error) {
-            logger.error(extension, `Error injecting bridge into service worker ${serviceWorkerPath}:`, error);
+            logger.error(
+                extension,
+                `Error injecting bridge into service worker ${serviceWorkerPath}: ${error instanceof Error ? error.message : String(error)}`,
+                {
+                    error: error instanceof Error ? {
+                        message: error.message,
+                        stack: error.stack,
+                        name: error.name
+                    } : String(error)
+                }
+            );
             return false;
         }
     }

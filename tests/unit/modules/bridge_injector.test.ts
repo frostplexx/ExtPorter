@@ -43,7 +43,7 @@ describe('BridgeInjector', () => {
         mockFs.readFileSync.mockReturnValue('// Mock bridge content\nconst bridge = {}');
 
         // Mock FileContentUpdater
-        mockFileContentUpdater.updateFileContent.mockReturnValue(true);
+        mockFileContentUpdater.updateFileContent.mockImplementation(() => {});
 
         // Create mock files
         mockJsFile = {
@@ -538,7 +538,9 @@ describe('BridgeInjector', () => {
             };
 
             // Mock update failure
-            mockFileContentUpdater.updateFileContent.mockReturnValue(false);
+            mockFileContentUpdater.updateFileContent.mockImplementation(() => {
+                throw new Error('Failed to write file');
+            });
 
             const manifest = {
                 background: {
@@ -870,7 +872,9 @@ describe('BridgeInjector', () => {
             (mockServiceWorkerFile.getContent as jest.Mock).mockReturnValue(
                 'console.log("Service worker");'
             );
-            mockFileContentUpdater.updateFileContent.mockReturnValue(false);
+            mockFileContentUpdater.updateFileContent.mockImplementation(() => {
+                throw new Error('Failed to write file');
+            });
 
             const testExtension = {
                 ...baseExtension,
