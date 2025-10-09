@@ -148,8 +148,10 @@ export class ResourceDownloader extends MigrationModule {
             const matches = content.match(pattern);
             if (matches) {
                 matches.forEach((url) => {
-                    // Clean up URL (remove quotes, etc.)
-                    const cleanUrl = url.replace(/['"]/g, '').trim();
+                    // Clean up URL (remove quotes, trailing punctuation, etc.)
+                    let cleanUrl = url.replace(/['"]/g, '').trim();
+                    // Remove trailing semicolons, commas, and other punctuation
+                    cleanUrl = cleanUrl.replace(/[;,)}\]]+$/, '');
                     if (this.isValidResourceUrl(cleanUrl)) {
                         resources.add(cleanUrl);
                     }
