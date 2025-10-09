@@ -60,6 +60,17 @@ export class ResourceDownloader extends MigrationModule {
 
             logger.info(extension, 'Starting remote resource download');
 
+            // Close all file descriptors before downloading to prevent EBADF errors
+            // This is necessary because downloading uses execSync which needs file descriptors
+            logger.debug(extension, 'Closing file descriptors before download');
+            extension.files.forEach(file => {
+                try {
+                    file.close();
+                } catch (error) {
+                    // Ignore errors when closing files
+                }
+            });
+
             const downloader = new ResourceDownloader();
             const result = downloader.processExtension(extension);
 
@@ -209,13 +220,22 @@ export class ResourceDownloader extends MigrationModule {
                     this.addDownloadedFileToExtension(extension, result.localPath, resource.url);
                 }
             } catch (error) {
-                logger.warn(extension, `Failed to download resource: ${resource.url}`, {
-                    error,
-                });
+                const errorMessage = error instanceof Error ? error.message : String(error);
+                logger.warn(
+                    extension,
+                    `Failed to download resource: ${resource.url}: ${errorMessage}`,
+                    {
+                        error: error instanceof Error ? {
+                            message: error.message,
+                            stack: error.stack,
+                            name: error.name
+                        } : String(error)
+                    }
+                );
                 results.push({
                     success: false,
                     url: resource.url,
-                    error: error instanceof Error ? error.message : String(error),
+                    error: errorMessage,
                 });
             }
         }
@@ -269,13 +289,22 @@ export class ResourceDownloader extends MigrationModule {
                 size: downloadedData.content.length,
             };
         } catch (error) {
-            logger.warn(extension, `Failed to download resource: ${resource.url}`, {
-                error,
-            });
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            logger.warn(
+                extension,
+                `Failed to download resource: ${resource.url}: ${errorMessage}`,
+                {
+                    error: error instanceof Error ? {
+                        message: error.message,
+                        stack: error.stack,
+                        name: error.name
+                    } : String(error)
+                }
+            );
             return {
                 success: false,
                 url: resource.url,
-                error: error instanceof Error ? error.message : String(error),
+                error: errorMessage,
             };
         }
     }
@@ -309,10 +338,16 @@ export class ResourceDownloader extends MigrationModule {
                 `"${url}"`,
             ].join(' ');
 
-            execSync(curlCommand, {
+            const result = execSync(curlCommand, {
                 stdio: 'pipe',
                 timeout: ResourceDownloader.TIMEOUT_MS + 5000, // Extra 5s buffer
+                encoding: 'utf8',
             });
+
+            // Check if temp file was created
+            if (!fs.existsSync(tempFile)) {
+                throw new Error(`Curl completed but temp file was not created. Curl output: ${result}`);
+            }
 
             // Read the downloaded content
             const content = fs.readFileSync(tempFile);
@@ -320,13 +355,23 @@ export class ResourceDownloader extends MigrationModule {
             // Clean up temp file
             fs.unlinkSync(tempFile);
 
+            // Verify we got actual content
+            if (content.length === 0) {
+                throw new Error('Downloaded file is empty');
+            }
+
             // Try to determine content type from URL
             const contentType = this.inferContentType(url);
 
             return { content, contentType };
         } catch (error) {
+            // Include curl exit code and stderr if available
+            const errorDetails = error instanceof Error ? error.message : String(error);
+            const exitCode = (error as any).status || (error as any).code;
+            const stderr = (error as any).stderr?.toString() || '';
+
             throw new Error(
-                `Failed to download ${url}: ${error instanceof Error ? error.message : String(error)}`
+                `Failed to download ${url}: ${errorDetails}${exitCode ? ` (exit code: ${exitCode})` : ''}${stderr ? ` - ${stderr}` : ''}`
             );
         }
     }
