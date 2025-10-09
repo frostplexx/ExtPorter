@@ -644,6 +644,8 @@ export class RenameAPIS implements MigrationModule {
         transformedFile.path = originalFile.path;
         transformedFile.filetype = originalFile.filetype;
         transformedFile._transformedContent = newContent;
+        // Copy absolute path so file can be updated later
+        transformedFile._absolutePath = (originalFile as any)._absolutePath;
 
         // Override methods to work with transformed content
         transformedFile.getContent = () => newContent;
