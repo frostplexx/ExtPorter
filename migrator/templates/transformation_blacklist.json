@@ -2,6 +2,11 @@
   "description": "File patterns that should be excluded from transformation and copied 1:1",
   "blacklist_patterns": [
     {
+      "pattern": "content-mathml.*\\.js$",
+      "reason": "Mathjax file",
+      "case_sensitive": false
+    },
+    {
       "pattern": "jquery.*\\.js$",
       "reason": "jQuery library files should not be transformed",
       "case_sensitive": false
