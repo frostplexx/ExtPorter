@@ -225,16 +225,16 @@ class ExtensionExplorer {
         console.log('');
 
         const menuItems = [
-            { icon: chalk.blue('  '), label: 'View Source', key: 'v' },
-            { icon: chalk.magenta('  '), label: 'Compare Versions', key: 'c' },
-            { icon: chalk.green('  '), label: 'Run Extension', key: 'r' },
-            { icon: chalk.cyan('  '), label: 'Info', key: 'i' },
-            { icon: chalk.yellow('  '), label: 'Logs', key: 'l' },
-            { icon: chalk.white('  '), label: 'Grep', key: 'g' },
-            { icon: chalk.gray('  '), label: 'Manifest', key: 'm' },
-            { icon: chalk.blue('  '), label: 'Open Directory', key: 'o' },
-            { icon: chalk.dim('  '), label: 'Search Again', key: 's' },
-            { icon: chalk.red('  '), label: 'Quit', key: 'q' },
+            { icon: chalk.blue(' '), label: 'View Source', key: 'v' },
+            { icon: chalk.magenta(' '), label: 'Compare Versions', key: 'c' },
+            { icon: chalk.green(' '), label: 'Run Extension', key: 'r' },
+            { icon: chalk.cyan(' '), label: 'Info', key: 'i' },
+            { icon: chalk.black(' '), label: 'Logs', key: 'l' },
+            { icon: chalk.white(' '), label: 'Grep', key: 'g' },
+            { icon: chalk.yellow(' '), label: 'Manifest', key: 'm' },
+            { icon: chalk.blue(' '), label: 'Open Directory', key: 'o' },
+            { icon: chalk.dim('󰌑 '), label: 'Search Again', key: 's' },
+            { icon: chalk.red('󰈆 '), label: 'Quit', key: 'q' },
         ];
 
         // Display menu
