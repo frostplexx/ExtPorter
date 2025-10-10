@@ -11,6 +11,7 @@ import * as path from 'path';
 import inquirer from 'inquirer';
 import chalk from 'chalk';
 import stringWidth from 'string-width';
+import * as readline from 'readline';
 // @ts-ignore - no types available for inquirer-search-list
 import inquirerSearchList from 'inquirer-search-list';
 
@@ -176,35 +177,101 @@ class ExtensionExplorer {
         return lines.join('\n');
     }
 
+    private lastSearchQuery: string = '';
+    private lastSelectedIndex: number = 0;
+
     async searchWithInquirer(extensions: ExtensionSearchResult[]): Promise<ExtensionSearchResult | null> {
         const sortedExtensions = extensions.sort(
             (a, b) => (b.interestingness_score || 0) - (a.interestingness_score || 0)
         );
 
-        const choices = sortedExtensions.map((ext) => ({
-            name: this.formatExtensionForFzf(ext),
-            value: ext.id,
-            short: ext.name || ext.manifest?.name || 'Unknown',
-        }));
+        // Build a simple text-based search interface
+        let searchQuery = this.lastSearchQuery;
+        let filteredExtensions = this.filterExtensions(sortedExtensions, searchQuery);
+        let selectedIndex = Math.min(this.lastSelectedIndex, filteredExtensions.length - 1);
 
-        try {
-            const answer = await inquirer.prompt([
-                {
-                    type: 'search-list',
-                    name: 'extensionId',
-                    message: 'Search Extensions (type to filter):',
-                    choices,
-                    pageSize: 20,
-                    loop: false,
-                },
-            ] as any);
+        while (true) {
+            console.clear();
+            console.log(chalk.cyan('Search Extensions'));
+            console.log(chalk.dim(`Filter: ${searchQuery || '(none)'} | ${filteredExtensions.length} of ${sortedExtensions.length} extensions | arrows to navigate, ESC to quit`));
+            console.log('');
 
-            const selected = sortedExtensions.find((ext) => ext.id === answer.extensionId);
-            return selected || null;
-        } catch (error) {
-            // User cancelled with Ctrl+C
-            return null;
+            // Display filtered list
+            const displayStart = Math.max(0, selectedIndex - 10);
+            const displayEnd = Math.min(filteredExtensions.length, displayStart + 20);
+
+            for (let i = displayStart; i < displayEnd; i++) {
+                const ext = filteredExtensions[i];
+                const formatted = this.formatExtensionForFzf(ext);
+                if (i === selectedIndex) {
+                    console.log(chalk.inverse(` ${formatted} `));
+                } else {
+                    console.log(`  ${formatted}  `);
+                }
+            }
+
+            // Get keypress
+            const key = await this.getKeypress();
+
+            if (!key) continue;
+
+            if (key.name === 'escape' || (key.ctrl && key.name === 'c')) {
+                return null;
+            } else if (key.name === 'return') {
+                // Select current item
+                if (filteredExtensions.length > 0) {
+                    this.lastSearchQuery = searchQuery;
+                    this.lastSelectedIndex = selectedIndex;
+                    return filteredExtensions[selectedIndex];
+                }
+            } else if (key.name === 'down') {
+                selectedIndex = Math.min(filteredExtensions.length - 1, selectedIndex + 1);
+            } else if (key.name === 'up') {
+                selectedIndex = Math.max(0, selectedIndex - 1);
+            } else if (key.name === 'backspace' || key.name === 'delete') {
+                searchQuery = searchQuery.slice(0, -1);
+                filteredExtensions = this.filterExtensions(sortedExtensions, searchQuery);
+                selectedIndex = Math.min(selectedIndex, Math.max(0, filteredExtensions.length - 1));
+            } else if (key.sequence && key.sequence.length === 1 && !key.ctrl && !key.meta) {
+                // Regular character input
+                searchQuery += key.sequence;
+                filteredExtensions = this.filterExtensions(sortedExtensions, searchQuery);
+                selectedIndex = 0; // Reset to top when filtering
+            }
         }
+    }
+
+    private filterExtensions(extensions: ExtensionSearchResult[], query: string): ExtensionSearchResult[] {
+        if (!query) return extensions;
+
+        const lowerQuery = query.toLowerCase();
+        return extensions.filter(ext => {
+            const name = (ext.name || ext.manifest?.name || '').toLowerCase();
+            const desc = (ext.manifest?.description || '').toLowerCase();
+            const id = ext.id.toLowerCase();
+            return name.includes(lowerQuery) || desc.includes(lowerQuery) || id.includes(lowerQuery);
+        });
+    }
+
+    private async getKeypress(): Promise<any> {
+        return new Promise((resolve) => {
+            readline.emitKeypressEvents(process.stdin);
+            if (process.stdin.isTTY) {
+                process.stdin.setRawMode(true);
+            }
+
+            const onKeypress = (str: string, key: any) => {
+                if (process.stdin.isTTY) {
+                    process.stdin.setRawMode(false);
+                }
+                process.stdin.removeListener('keypress', onKeypress);
+                process.stdin.pause();
+                resolve(key);
+            };
+
+            process.stdin.on('keypress', onKeypress);
+            process.stdin.resume();
+        });
     }
 
     async showActionsMenu(ext: ExtensionSearchResult): Promise<string> {
@@ -214,36 +281,69 @@ class ExtensionExplorer {
         console.log(chalk.dim(`  ${ext.id}${ext.mv3_extension_id ? chalk.green(' → ' + ext.mv3_extension_id) : ''}`));
         console.log('');
 
-        const choices = [
-            { name: chalk.blue('  ') + ' View Source', value: 'v' },
-            { name: chalk.magenta('  ') + ' Compare Versions', value: 'c' },
-            { name: chalk.green('  ') + ' Run Extension', value: 'r' },
-            { name: chalk.cyan('  ') + ' Info', value: 'i' },
-            { name: chalk.yellow('  ') + ' Logs', value: 'l' },
-            { name: chalk.white('  ') + ' Grep', value: 'g' },
-            { name: chalk.gray('  ') + ' Manifest', value: 'm' },
-            { name: chalk.blue('  ') + ' Open Directory', value: 'o' },
-            { name: chalk.dim('  ') + ' Search Again', value: 's' },
-            { name: chalk.red('  ') + ' Quit', value: 'q' },
+        const menuItems = [
+            { icon: chalk.blue('  '), label: 'View Source', key: 'v' },
+            { icon: chalk.magenta('  '), label: 'Compare Versions', key: 'c' },
+            { icon: chalk.green('  '), label: 'Run Extension', key: 'r' },
+            { icon: chalk.cyan('  '), label: 'Info', key: 'i' },
+            { icon: chalk.yellow('  '), label: 'Logs', key: 'l' },
+            { icon: chalk.white('  '), label: 'Grep', key: 'g' },
+            { icon: chalk.gray('  '), label: 'Manifest', key: 'm' },
+            { icon: chalk.blue('  '), label: 'Open Directory', key: 'o' },
+            { icon: chalk.dim('  '), label: 'Search Again', key: 's' },
+            { icon: chalk.red('  '), label: 'Quit', key: 'q' },
         ];
 
-        try {
-            const answer = await inquirer.prompt([
-                {
-                    type: 'list',
-                    name: 'action',
-                    message: 'Action (j/k to navigate, ESC to go back):',
-                    choices,
-                    pageSize: 15,
-                    loop: true,
-                },
-            ]);
+        // Display menu
+        menuItems.forEach((item) => {
+            console.log(`${item.icon} ${item.label.padEnd(20)} ${chalk.dim('[' + item.key + ']')}`);
+        });
 
-            return answer.action;
-        } catch (error) {
-            // User pressed ESC or Ctrl+C - go back to search
-            return 's';
-        }
+        console.log('');
+        console.log(chalk.dim('Press a key or ESC to go back'));
+
+        // Listen for keypress
+        return new Promise<string>((resolve) => {
+            readline.emitKeypressEvents(process.stdin);
+            if (process.stdin.isTTY) {
+                process.stdin.setRawMode(true);
+            }
+
+            const onKeypress = (str: string, key: any) => {
+                if (process.stdin.isTTY) {
+                    process.stdin.setRawMode(false);
+                }
+                process.stdin.removeListener('keypress', onKeypress);
+                process.stdin.pause();
+
+                if (key) {
+                    // Handle ESC
+                    if (key.name === 'escape') {
+                        resolve('s');
+                        return;
+                    }
+
+                    // Handle Ctrl+C
+                    if (key.ctrl && key.name === 'c') {
+                        resolve('s');
+                        return;
+                    }
+
+                    // Check if pressed key matches a menu item
+                    const item = menuItems.find(item => item.key === key.name);
+                    if (item) {
+                        resolve(item.key);
+                        return;
+                    }
+                }
+
+                // Invalid key, show menu again
+                resolve(this.showActionsMenu(ext));
+            };
+
+            process.stdin.on('keypress', onKeypress);
+            process.stdin.resume();
+        });
     }
 
     async viewSource(ext: ExtensionSearchResult): Promise<void> {
@@ -373,16 +473,21 @@ class ExtensionExplorer {
         if (mv3Path) choices.push({ name: 'MV3 version', value: '3' });
         choices.push({ name: 'Back to menu', value: 'b' });
 
-        const answer = await inquirer.prompt([
-            {
-                type: 'list',
-                name: 'choice',
-                message: 'Which version would you like to run?',
-                choices,
-            },
-        ]);
-
-        const choice = answer.choice;
+        let choice;
+        try {
+            const answer = await inquirer.prompt([
+                {
+                    type: 'list',
+                    name: 'choice',
+                    message: 'Which version would you like to run?',
+                    choices,
+                },
+            ]);
+            choice = answer.choice;
+        } catch (error) {
+            // User pressed ESC or Ctrl+C
+            return;
+        }
 
         let pathToRun: string | null = null;
 
@@ -608,13 +713,19 @@ class ExtensionExplorer {
             return;
         }
 
-        const patternAnswer = await inquirer.prompt([
-            {
-                type: 'input',
-                name: 'pattern',
-                message: 'Enter search pattern (regex):',
-            },
-        ]);
+        let patternAnswer;
+        try {
+            patternAnswer = await inquirer.prompt([
+                {
+                    type: 'input',
+                    name: 'pattern',
+                    message: 'Enter search pattern (regex):',
+                },
+            ]);
+        } catch (error) {
+            // User pressed ESC or Ctrl+C
+            return;
+        }
 
         const pattern = patternAnswer.pattern.trim();
 
@@ -628,14 +739,20 @@ class ExtensionExplorer {
         if (mv3Path) choices.push({ name: 'MV3 version', value: '3' });
         choices.push({ name: 'Both', value: 'b' });
 
-        const versionAnswer = await inquirer.prompt([
-            {
-                type: 'list',
-                name: 'choice',
-                message: 'Search in:',
-                choices,
-            },
-        ]);
+        let versionAnswer;
+        try {
+            versionAnswer = await inquirer.prompt([
+                {
+                    type: 'list',
+                    name: 'choice',
+                    message: 'Search in:',
+                    choices,
+                },
+            ]);
+        } catch (error) {
+            // User pressed ESC or Ctrl+C
+            return;
+        }
 
         const choice = versionAnswer.choice;
 
@@ -687,16 +804,21 @@ class ExtensionExplorer {
         if (mv2Path) choices.push({ name: 'MV2 version', value: '2' });
         if (mv3Path) choices.push({ name: 'MV3 version', value: '3' });
 
-        const answer = await inquirer.prompt([
-            {
-                type: 'list',
-                name: 'choice',
-                message: 'Which version?',
-                choices,
-            },
-        ]);
-
-        const choice = answer.choice;
+        let choice;
+        try {
+            const answer = await inquirer.prompt([
+                {
+                    type: 'list',
+                    name: 'choice',
+                    message: 'Which version?',
+                    choices,
+                },
+            ]);
+            choice = answer.choice;
+        } catch (error) {
+            // User pressed ESC or Ctrl+C
+            return;
+        }
 
         let manifestPath: string | null = null;
 
@@ -737,16 +859,21 @@ class ExtensionExplorer {
         if (mv2Path) choices.push({ name: 'MV2 version', value: '2' });
         if (mv3Path) choices.push({ name: 'MV3 version', value: '3' });
 
-        const answer = await inquirer.prompt([
-            {
-                type: 'list',
-                name: 'choice',
-                message: 'Which version?',
-                choices,
-            },
-        ]);
-
-        const choice = answer.choice;
+        let choice;
+        try {
+            const answer = await inquirer.prompt([
+                {
+                    type: 'list',
+                    name: 'choice',
+                    message: 'Which version?',
+                    choices,
+                },
+            ]);
+            choice = answer.choice;
+        } catch (error) {
+            // User pressed ESC or Ctrl+C
+            return;
+        }
 
         let pathToOpen: string | null = null;
 
@@ -804,13 +931,17 @@ class ExtensionExplorer {
     }
 
     private async waitForKeypress(message: string): Promise<void> {
-        await inquirer.prompt([
-            {
-                type: 'input',
-                name: 'continue',
-                message,
-            },
-        ]);
+        try {
+            await inquirer.prompt([
+                {
+                    type: 'input',
+                    name: 'continue',
+                    message,
+                },
+            ]);
+        } catch (error) {
+            // User pressed ESC or Ctrl+C - just return
+        }
     }
 
     async runActionLoop(ext: ExtensionSearchResult): Promise<boolean> {
