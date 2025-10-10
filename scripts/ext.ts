@@ -12,6 +12,7 @@ import inquirer from 'inquirer';
 import chalk from 'chalk';
 import stringWidth from 'string-width';
 import * as readline from 'readline';
+import { Browser } from 'puppeteer';
 
 // Load environment variables
 dotenv.config();
@@ -29,7 +30,7 @@ interface SearchOptions {
 }
 
 class ExtensionExplorer {
-    constructor() {}
+    constructor() { }
 
     async getAllExtensions(options: SearchOptions = {}): Promise<ExtensionSearchResult[]> {
         if (!Database.shared.database) throw new Error('Database not initialized');
@@ -451,24 +452,44 @@ class ExtensionExplorer {
             const tempDir = execSync('mktemp -d').toString().trim();
             console.log(`Using temporary profile: ${tempDir}`);
 
-            const chromeProcess = spawn(
-                'google-chrome-stable',
-                [
-                    '--enable-extensions',
-                    `--user-data-dir=${tempDir}`,
-                    `--load-extension=${pathToRun}`,
-                    '--no-first-run',
-                    '--no-default-browser-check',
-                    `--disable-extensions-except=${pathToRun}`,
-                ],
-                { stdio: 'inherit' }
-            );
+            const browser = new ChromeTester()
+            const tmpExt: Extension = {
+                id: "00000",
+                name: "tmp",
+                manifest_v2_path: pathToRun,
+                manifest: {},
+                files: []
+            }
 
-            chromeProcess.on('close', () => {
-                console.log('Cleaning up temporary profile...');
-                execSync(`rm -rf "${tempDir}"`);
-                console.log('✓ Done');
-            });
+            await Promise.all([
+                (async () => {
+                    console.log('Starting MV3 browser (red)...');
+                    await browser.initBrowser(tmpExt, 3, true);
+                    await browser.navigateTo('https://www.nytimes.com/');
+                })(),
+            ]);
+
+            console.log('✓ Both browsers launched successfully');
+            console.log('  Close the browsers when done...');
+
+            // const chromeProcess = spawn(
+            //     'google-chrome-stable',
+            //     [
+            //         '--enable-extensions',
+            //         `--user-data-dir=${tempDir}`,
+            //         `--load-extension=${pathToRun}`,
+            //         '--no-first-run',
+            //         '--no-default-browser-check',
+            //         `--disable-extensions-except=${pathToRun}`,
+            //     ],
+            //     { stdio: 'inherit' }
+            // );
+
+            // chromeProcess.on('close', () => {
+            //     console.log('Cleaning up temporary profile...');
+            //     execSync(`rm -rf "${tempDir}"`);
+            //     console.log('✓ Done');
+            // });
         } catch (error: any) {
             console.log('❌ Error launching Chrome:', error.message);
         }
