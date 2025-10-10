@@ -45,6 +45,8 @@ export class ChromeTester {
         }
         // Create a new page to test the new tab override
         const page = await this.browser.newPage();
+        // Set viewport to match window size
+        await page.setViewport({ width: 1280, height: 800 });
         // Navigate to chrome://newtab to trigger the extension's new tab page
         await page.goto(url);
     }
@@ -162,6 +164,8 @@ export class ChromeTester {
                         '--disable-manifest-v2-deprecation-warnings',
                         '--disable-extensions-manifest-v2-deprecation-warnings',
                         '--silent-debugger-extension-api',
+                        '--window-size=1280,800',
+                        '--window-position=0,0',
                         `--window-name=Testing: ${extension.name} (${extension.manifest?.manifest_version || 'Unknown'})`,
                     ],
                 });
