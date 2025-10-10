@@ -12,11 +12,6 @@ import inquirer from 'inquirer';
 import chalk from 'chalk';
 import stringWidth from 'string-width';
 import * as readline from 'readline';
-// @ts-ignore - no types available for inquirer-search-list
-import inquirerSearchList from 'inquirer-search-list';
-
-// Register the search list prompt
-inquirer.registerPrompt('search-list', inquirerSearchList);
 
 // Load environment variables
 dotenv.config();
@@ -85,8 +80,7 @@ class ExtensionExplorer {
         }));
     }
 
-    formatExtensionForFzf(ext: ExtensionSearchResult): string {
-        // Use fixed widths for proper alignment
+    formatExtensionForDisplay(ext: ExtensionSearchResult): string {
         const rawName = ext.name || ext.manifest?.name || 'Unknown';
         const name = this.truncateAndPad(rawName, 35);
 
@@ -102,17 +96,14 @@ class ExtensionExplorer {
     }
 
     private truncateAndPad(str: string, maxLength: number): string {
-        // Remove any existing color codes for width calculation
         const cleanStr = str.replace(/\x1b\[[0-9;]*m/g, '');
         const width = stringWidth(cleanStr);
 
         if (width <= maxLength) {
-            // Pad with spaces to ensure consistent width
             const padding = ' '.repeat(maxLength - width);
             return str + padding;
         }
 
-        // Truncate carefully to respect display width
         let truncated = '';
         let currentWidth = 0;
 
@@ -128,102 +119,30 @@ class ExtensionExplorer {
         return truncated + '…' + ' '.repeat(Math.max(0, maxLength - currentWidth - 1));
     }
 
-    createFzfPreview(ext: ExtensionSearchResult): string {
-        const lines: string[] = [];
-
-        lines.push('═'.repeat(70));
-        lines.push(`📦 ${ext.name || ext.manifest?.name || 'Unknown Extension'}`);
-        lines.push('═'.repeat(70));
-        lines.push('');
-
-        lines.push(`🆔 MV2 ID: ${ext.id}`);
-        if (ext.mv3_extension_id) {
-            lines.push(`🆔 MV3 ID: ${ext.mv3_extension_id} ✓`);
-        } else {
-            lines.push(`🆔 MV3 ID: Not migrated ✗`);
-        }
-
-        lines.push('');
-        lines.push(`📝 Version: ${ext.manifest?.version || 'Unknown'}`);
-        lines.push(`📄 Description: ${ext.manifest?.description || 'No description'}`);
-
-        if (ext.interestingness_score !== undefined) {
-            lines.push('');
-            lines.push(`⭐ Interestingness Score: ${ext.interestingness_score}`);
-
-            if (ext.interestingness_breakdown) {
-                lines.push('');
-                lines.push('Score Breakdown:');
-                Object.entries(ext.interestingness_breakdown)
-                    .filter(([_, value]) => value > 0)
-                    .sort(([_, a], [__, b]) => b - a)
-                    .forEach(([key, value]) => {
-                        lines.push(`  • ${key.replace(/_/g, ' ')}: ${value}`);
-                    });
-            }
-        }
-
-        if (ext.manifest?.permissions && ext.manifest.permissions.length > 0) {
-            lines.push('');
-            lines.push('🔑 Permissions:');
-            ext.manifest.permissions.slice(0, 10).forEach((perm: string) => {
-                lines.push(`  • ${perm}`);
-            });
-            if (ext.manifest.permissions.length > 10) {
-                lines.push(`  ... and ${ext.manifest.permissions.length - 10} more`);
-            }
-        }
-
-        return lines.join('\n');
-    }
-
     private lastSearchQuery: string = '';
     private lastSelectedIndex: number = 0;
 
-    async searchWithInquirer(extensions: ExtensionSearchResult[]): Promise<ExtensionSearchResult | null> {
+    async searchExtensions(extensions: ExtensionSearchResult[]): Promise<ExtensionSearchResult | null> {
         const sortedExtensions = extensions.sort(
             (a, b) => (b.interestingness_score || 0) - (a.interestingness_score || 0)
         );
 
-        // Build a simple text-based search interface
         let searchQuery = this.lastSearchQuery;
         let filteredExtensions = this.filterExtensions(sortedExtensions, searchQuery);
         let selectedIndex = Math.min(this.lastSelectedIndex, filteredExtensions.length - 1);
 
         while (true) {
-            console.clear();
-            console.log(chalk.cyan('Search Extensions'));
-            console.log(chalk.dim(`Filter: ${searchQuery || '(none)'} | ${filteredExtensions.length} of ${sortedExtensions.length} extensions | arrows to navigate, ESC to quit`));
-            console.log('');
+            this.displayExtensionList(searchQuery, filteredExtensions, sortedExtensions.length, selectedIndex);
 
-            // Display filtered list
-            const displayStart = Math.max(0, selectedIndex - 10);
-            const displayEnd = Math.min(filteredExtensions.length, displayStart + 20);
-
-            for (let i = displayStart; i < displayEnd; i++) {
-                const ext = filteredExtensions[i];
-                const formatted = this.formatExtensionForFzf(ext);
-                if (i === selectedIndex) {
-                    console.log(chalk.inverse(` ${formatted} `));
-                } else {
-                    console.log(`  ${formatted}  `);
-                }
-            }
-
-            // Get keypress
             const key = await this.getKeypress();
-
             if (!key) continue;
 
             if (key.name === 'escape' || (key.ctrl && key.name === 'c')) {
                 return null;
-            } else if (key.name === 'return') {
-                // Select current item
-                if (filteredExtensions.length > 0) {
-                    this.lastSearchQuery = searchQuery;
-                    this.lastSelectedIndex = selectedIndex;
-                    return filteredExtensions[selectedIndex];
-                }
+            } else if (key.name === 'return' && filteredExtensions.length > 0) {
+                this.lastSearchQuery = searchQuery;
+                this.lastSelectedIndex = selectedIndex;
+                return filteredExtensions[selectedIndex];
             } else if (key.name === 'down') {
                 selectedIndex = Math.min(filteredExtensions.length - 1, selectedIndex + 1);
             } else if (key.name === 'up') {
@@ -233,10 +152,34 @@ class ExtensionExplorer {
                 filteredExtensions = this.filterExtensions(sortedExtensions, searchQuery);
                 selectedIndex = Math.min(selectedIndex, Math.max(0, filteredExtensions.length - 1));
             } else if (key.sequence && key.sequence.length === 1 && !key.ctrl && !key.meta) {
-                // Regular character input
                 searchQuery += key.sequence;
                 filteredExtensions = this.filterExtensions(sortedExtensions, searchQuery);
-                selectedIndex = 0; // Reset to top when filtering
+                selectedIndex = 0;
+            }
+        }
+    }
+
+    private displayExtensionList(
+        searchQuery: string,
+        filteredExtensions: ExtensionSearchResult[],
+        totalCount: number,
+        selectedIndex: number
+    ): void {
+        console.clear();
+        console.log(chalk.cyan('Search Extensions'));
+        console.log(chalk.dim(`Filter: ${searchQuery || '(none)'} | ${filteredExtensions.length} of ${totalCount} extensions | arrows to navigate, ESC to quit`));
+        console.log('');
+
+        const displayStart = Math.max(0, selectedIndex - 10);
+        const displayEnd = Math.min(filteredExtensions.length, displayStart + 20);
+
+        for (let i = displayStart; i < displayEnd; i++) {
+            const ext = filteredExtensions[i];
+            const formatted = this.formatExtensionForDisplay(ext);
+            if (i === selectedIndex) {
+                console.log(chalk.inverse(` ${formatted} `));
+            } else {
+                console.log(`  ${formatted}  `);
             }
         }
     }
@@ -1086,7 +1029,7 @@ async function main() {
 
                 console.log(chalk.dim(`Found ${extensions.length} extensions`));
 
-                const selected = await explorer.searchWithInquirer(extensions);
+                const selected = await explorer.searchExtensions(extensions);
 
                 if (!selected) {
                     console.log(chalk.cyan('\n👋 Goodbye!'));

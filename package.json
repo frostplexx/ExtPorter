@@ -47,13 +47,10 @@
         "file-type": "^21.0.0",
         "fs-extra": "^11.3.1",
         "inquirer": "^12.9.6",
-        "inquirer-press-to-continue": "^1.2.0",
-        "inquirer-search-list": "^1.2.6",
         "jiti": "^2.6.0",
         "json5": "^2.2.3",
         "mongodb": "^6.19.0",
         "puppeteer": "^24.19.0",
-        "readline-sync": "^1.4.10",
         "string-width": "^8.1.0",
         "ts-node-dev": "^2.0.0",
         "types": "^0.1.1"
