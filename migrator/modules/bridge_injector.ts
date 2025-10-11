@@ -102,7 +102,7 @@ export class BridgeInjector implements MigrationModule {
                 return true;
             }
 
-            // Prepend the import statement
+            // Prepend import statement
             const newContent = `${importStatement}\n${currentContent}`;
 
             // Update the file content
@@ -127,12 +127,65 @@ export class BridgeInjector implements MigrationModule {
     }
 
     /**
+     * Injects bridge script tag into an HTML file.
+     */
+    private static injectBridgeIntoHTML(extension: Extension, htmlPath: string): boolean {
+        const htmlFile = extension.files.find(file => file.path === htmlPath);
+
+        if (!htmlFile) {
+            logger.warn(extension, `HTML file not found: ${htmlPath}`);
+            return false;
+        }
+
+        try {
+            const content = htmlFile.getContent();
+            const scriptTag = `<script src="${BridgeInjector.BRIDGE_FILENAME}"></script>`;
+
+            // Check if already injected
+            if (content.includes(BridgeInjector.BRIDGE_FILENAME)) {
+                logger.debug(extension, `Bridge already in ${htmlPath}`);
+                return true;
+            }
+
+            // Inject before first existing script or before </head> or before </body>
+            let newContent: string;
+            if (content.includes('<script')) {
+                // Inject before first script
+                newContent = content.replace(/<script/, `${scriptTag}\n    <script`);
+            } else if (content.includes('</head>')) {
+                newContent = content.replace('</head>', `    ${scriptTag}\n</head>`);
+            } else if (content.includes('</body>')) {
+                newContent = content.replace('</body>', `    ${scriptTag}\n</body>`);
+            } else {
+                logger.warn(extension, `Could not find injection point in ${htmlPath}`);
+                return false;
+            }
+
+            FileContentUpdater.updateFileContent(htmlFile, newContent);
+            logger.info(extension, `Bridge injected into HTML: ${htmlPath}`);
+            return true;
+        } catch (error) {
+            logger.error(
+                extension,
+                `Error injecting bridge into ${htmlPath}: ${error instanceof Error ? error.message : String(error)}`,
+                {
+                    error: error instanceof Error ? {
+                        message: error.message,
+                        stack: error.stack,
+                        name: error.name
+                    } : String(error)
+                }
+            );
+            return false;
+        }
+    }
+
+    /**
      * Injects the bridge file into the manifest's script arrays.
      */
     private static injectBridgeIntoManifest(manifest: any, extension?: Extension): any {
 
         const updatedManifest = JSON.parse(JSON.stringify(manifest));
-
 
         // Inject into background service worker
         if (updatedManifest.background && updatedManifest.background.service_worker) {
@@ -197,6 +250,37 @@ export class BridgeInjector implements MigrationModule {
                 ) {
                     updatedManifest.web_accessible_resources.push(BridgeInjector.BRIDGE_FILENAME);
                 }
+            }
+        }
+
+        // Inject into HTML pages
+        if (extension) {
+            // Inject into options page
+            if (updatedManifest.options_page) {
+                BridgeInjector.injectBridgeIntoHTML(extension, updatedManifest.options_page);
+            }
+
+            // Inject into options_ui page
+            if (updatedManifest.options_ui?.page) {
+                BridgeInjector.injectBridgeIntoHTML(extension, updatedManifest.options_ui.page);
+            }
+
+            // Inject into action/browser_action/page_action popups
+            const popupKeys = ['action', 'browser_action', 'page_action'];
+            for (const key of popupKeys) {
+                if (updatedManifest[key]?.default_popup) {
+                    BridgeInjector.injectBridgeIntoHTML(extension, updatedManifest[key].default_popup);
+                }
+            }
+
+            // Inject into devtools page
+            if (updatedManifest.devtools_page) {
+                BridgeInjector.injectBridgeIntoHTML(extension, updatedManifest.devtools_page);
+            }
+
+            // Inject into sidebar action (Firefox)
+            if (updatedManifest.sidebar_action?.default_panel) {
+                BridgeInjector.injectBridgeIntoHTML(extension, updatedManifest.sidebar_action.default_panel);
             }
         }
 
@@ -266,6 +350,9 @@ export class BridgeInjector implements MigrationModule {
 
     /**
      * Helper method for testing - checks if manifest has bridge injected.
+     * Note: This only checks manifest-declared scripts. HTML page injections
+     * (options_page, popups, etc.) require checking the actual HTML file contents,
+     * which this method does not do.
      */
     public static hasBridgeInManifest(manifest: any): boolean {
         if (!manifest) {
@@ -291,15 +378,37 @@ export class BridgeInjector implements MigrationModule {
     }
 
     /**
+     * Helper method to check if an HTML file has the bridge injected.
+     * This checks the actual file content, not just the manifest.
+     */
+    public static hasBridgeInHTML(extension: Extension, htmlPath: string): boolean {
+        const htmlFile = extension.files.find(file => file.path === htmlPath);
+
+        if (!htmlFile) {
+            return false;
+        }
+
+        try {
+            const content = htmlFile.getContent();
+            const scriptTag = `<script src="${BridgeInjector.BRIDGE_FILENAME}"></script>`;
+            return content.includes(scriptTag);
+        } catch (error) {
+            return false;
+        }
+    }
+
+    /**
      * Helper method for testing - exposed for unit tests.
      */
     public static testHelpers = {
         needsBridge: BridgeInjector.needsBridge,
         injectBridgeIntoManifest: BridgeInjector.injectBridgeIntoManifest,
         injectBridgeIntoServiceWorker: BridgeInjector.injectBridgeIntoServiceWorker,
+        injectBridgeIntoHTML: BridgeInjector.injectBridgeIntoHTML,
         createBridgeFile: BridgeInjector.createBridgeFile,
         loadBridgeContent: BridgeInjector.loadBridgeContent,
         hasBridgeInManifest: BridgeInjector.hasBridgeInManifest,
+        hasBridgeInHTML: BridgeInjector.hasBridgeInHTML,
         BRIDGE_FILENAME: BridgeInjector.BRIDGE_FILENAME,
     };
 }

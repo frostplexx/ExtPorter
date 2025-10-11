@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Message Passing Test</title>
+    <style>
+        body {
+            width: 450px;
+            padding: 15px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+            font-size: 13px;
+            background: #f5f5f5;
+        }
+
+        h1 {
+            font-size: 18px;
+            margin: 0 0 15px 0;
+            color: #333;
+            border-bottom: 2px solid #4CAF50;
+            padding-bottom: 8px;
+        }
+
+        .section {
+            background: white;
+            padding: 12px;
+            margin-bottom: 10px;
+            border-radius: 5px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        .section-title {
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: #555;
+            font-size: 14px;
+        }
+
+        .button-row {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 8px;
+            flex-wrap: wrap;
+        }
+
+        button {
+            flex: 1;
+            min-width: 100px;
+            padding: 8px 12px;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 500;
+            transition: background 0.2s;
+        }
+
+        button:hover {
+            background: #45a049;
+        }
+
+        button:active {
+            background: #3d8b40;
+        }
+
+        button.secondary {
+            background: #2196F3;
+        }
+
+        button.secondary:hover {
+            background: #0b7dda;
+        }
+
+        button.danger {
+            background: #f44336;
+        }
+
+        button.danger:hover {
+            background: #da190b;
+        }
+
+        #log {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 10px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 11px;
+            max-height: 250px;
+            overflow-y: auto;
+            margin-top: 10px;
+            line-height: 1.4;
+        }
+
+        .log-entry {
+            margin-bottom: 4px;
+            padding: 2px 0;
+        }
+
+        .log-success {
+            color: #4ec9b0;
+        }
+
+        .log-error {
+            color: #f48771;
+        }
+
+        .log-info {
+            color: #569cd6;
+        }
+
+        .log-timestamp {
+            color: #858585;
+            font-size: 10px;
+        }
+
+        .clear-btn {
+            width: 100%;
+            margin-top: 8px;
+            background: #666;
+            padding: 6px;
+            font-size: 11px;
+        }
+
+        .clear-btn:hover {
+            background: #555;
+        }
+
+        .status {
+            padding: 6px 10px;
+            border-radius: 3px;
+            font-size: 11px;
+            margin-top: 8px;
+            font-weight: 500;
+        }
+
+        .status.connected {
+            background: #e8f5e9;
+            color: #2e7d32;
+        }
+
+        .status.disconnected {
+            background: #ffebee;
+            color: #c62828;
+        }
+    </style>
+</head>
+<body>
+    <h1>📨 Message Passing Test</h1>
+
+    <div class="section">
+        <div class="section-title">One-Time Messages (Callbacks)</div>
+        <div class="button-row">
+            <button id="btnPing">PING Background</button>
+            <button id="btnGetData">Get Data (Async)</button>
+        </div>
+        <div class="button-row">
+            <button id="btnEcho" class="secondary">Echo Message</button>
+            <button id="btnError" class="danger">Test Error</button>
+        </div>
+        <div class="button-row">
+            <button id="btnPingContent">PING Content Script</button>
+            <button id="btnQueryTab">Query Tab</button>
+        </div>
+    </div>
+
+    <div class="section">
+        <div class="section-title">Long-Lived Connections (Ports)</div>
+        <div class="button-row">
+            <button id="btnConnect">Connect Port</button>
+            <button id="btnDisconnect" class="danger">Disconnect Port</button>
+        </div>
+        <div class="button-row">
+            <button id="btnPortPing" class="secondary">Port PING</button>
+            <button id="btnStream" class="secondary">Stream Data</button>
+        </div>
+        <div class="button-row">
+            <button id="btnBroadcast" class="secondary">Broadcast</button>
+        </div>
+        <div id="portStatus" class="status disconnected">Port: Disconnected</div>
+    </div>
+
+    <div class="section">
+        <div class="section-title">Console Log</div>
+        <div id="log"></div>
+        <button id="btnClear" class="clear-btn">Clear Log</button>
+    </div>
+
+    <script src="popup.js"></script>
+</body>
+</html>

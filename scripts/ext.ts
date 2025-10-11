@@ -12,7 +12,6 @@ import inquirer from 'inquirer';
 import chalk from 'chalk';
 import stringWidth from 'string-width';
 import * as readline from 'readline';
-import { Browser } from 'puppeteer';
 
 // Load environment variables
 dotenv.config();
@@ -392,13 +391,13 @@ class ExtensionExplorer {
         await Promise.all([
             (async () => {
                 console.log('Starting MV3 browser (red)...');
-                await mv3Tester.initBrowser(mv3Extension, 3, true);
+                await mv3Tester.initBrowser(mv3Extension, 3, false, true);
                 await mv3Tester.injectColor('red');
                 await mv3Tester.navigateTo('https://www.nytimes.com/');
             })(),
             (async () => {
                 console.log('Starting MV2 browser (blue)...');
-                await mv2Tester.initBrowser(mv2Extension, 3, true);
+                await mv2Tester.initBrowser(mv2Extension, 3, true, true);
                 await mv2Tester.injectColor('blue');
                 await mv2Tester.navigateTo('https://www.nytimes.com/');
             })(),
@@ -409,6 +408,7 @@ class ExtensionExplorer {
     }
 
     async runExtension(ext: ExtensionSearchResult): Promise<void> {
+        let is_mv_2: boolean = true;
         const mv2Path = this.getMv2Path(ext);
         const mv3Path = this.getMv3Path(ext);
 
@@ -437,8 +437,10 @@ class ExtensionExplorer {
 
         if (choice === '2' && mv2Path) {
             pathToRun = mv2Path;
+            is_mv_2 = true;
         } else if (choice === '3' && mv3Path) {
             pathToRun = mv3Path;
+            is_mv_2 = false;
         } else if (choice === 'b') {
             return;
         } else {
@@ -464,7 +466,7 @@ class ExtensionExplorer {
             await Promise.all([
                 (async () => {
                     console.log('Starting MV3 browser (red)...');
-                    await browser.initBrowser(tmpExt, 3, true);
+                    await browser.initBrowser(tmpExt, 3, is_mv_2, true);
                     await browser.navigateTo('https://www.nytimes.com/');
                 })(),
             ]);

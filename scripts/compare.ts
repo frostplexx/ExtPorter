@@ -110,15 +110,17 @@ async function main() {
     await Promise.all([
         (async () => {
             console.log('Starting MV3 browser (red)...');
-            await mv3Tester.initBrowser(migrated_parsed_ext, 3, true);
+            await mv3Tester.initBrowser(migrated_parsed_ext, 3, false, true);
             await mv3Tester.injectColor('red');
-            await mv3Tester.navigateTo('https://www.nytimes.com/');
+            mv3Tester.navigateTo('https://www.nytimes.com/');
+            mv3Tester.navigateTo('chrome://extensions');
         })(),
         (async () => {
             console.log('Starting MV2 browser (blue)...');
-            await mv2Tester.initBrowser(mv2_extension, 3, true);
+            await mv2Tester.initBrowser(mv2_extension, 3, true, true);
             await mv2Tester.injectColor('blue');
-            await mv2Tester.navigateTo('https://www.nytimes.com/');
+            mv2Tester.navigateTo('https://www.nytimes.com/');
+            mv2Tester.navigateTo('chrome://extensions');
         })(),
     ]);
 
