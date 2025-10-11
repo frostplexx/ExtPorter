@@ -19,23 +19,26 @@ export class ChromeTester {
     //     timestamp: ""
     // }
 
-    constructor() {}
+    constructor() { }
 
     // fetches the path of the chrome binary
-    private getChromePath(): string {
+    private getChromePath(latest: boolean): string {
+
         if (process.env.IN_NIX_SHELL) {
-            let bin_path = execSync(`which google-chrome-stable`).toString();
-            bin_path = bin_path
-                .replace(
-                    '/bin/google-chrome-stable',
-                    '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
-                )
-                .replace('\n', '');
-            logger.debug(null, bin_path);
-            return bin_path;
+            if (latest) {
+                if (!process.env.CHROME_LATESTS) {
+                    throw new Error("CHROME_LATESTS environment variable is not set. Please ensure your flake.nix exports CHROME_LATESTS.")
+                }
+                return `${process.env.CHROME_LATESTS}/Applications/Google Chrome.app/Contents/MacOS/Google Chrome`
+            } else {
+                if (!process.env.CHROME_138) {
+                    throw new Error("CHROME_138 environment variable is not set. Please ensure your flake.nix exports CHROME_138.")
+                }
+                return `${process.env.CHROME_138}/Applications/Google Chrome.app/Contents/MacOS/Google Chrome`
+            }
         } else {
             // TODO
-            return '';
+            throw new Error("Not a nix shell! Not implemented")
         }
     }
 
@@ -102,7 +105,7 @@ export class ChromeTester {
      * @param{External} extension that should be loaded
      * @param{number} maxRetries maximum number of retry attempts
      */
-    async initBrowser(extension: Extension, maxRetries: number = 3, override_headless?: boolean) {
+    async initBrowser(extension: Extension, maxRetries: number = 3, is_mv_2: boolean = false, override_headless?: boolean) {
         // Close any existing browser first to prevent conflicts
         if (this.browser) {
             logger.debug(extension, 'Closing existing browser before launching new one');
@@ -138,35 +141,14 @@ export class ChromeTester {
                     headless: override_headless
                         ? false
                         : ENV_LOG_LEVEL.toLowerCase() == 'debug'
-                          ? false
-                          :  (process.env.PUPPETEER_HEADLESS as boolean | undefined) || true,
+                            ? false
+                            : (process.env.PUPPETEER_HEADLESS as boolean | undefined) || true,
                     pipe: true,
                     devtools: true,
-                    executablePath: this.getChromePath(),
+                    executablePath: this.getChromePath(!is_mv_2),
                     enableExtensions: [this.current_extension.manifest_v2_path],
                     args: [
                         '--no-first-run',
-                        '--disable-default-apps',
-                        '--disable-popup-blocking',
-                        '--disable-web-security',
-                        '--no-sandbox',
-                        '--disable-setuid-sandbox',
-                        '--disable-extensions-file-access-check',
-                        '--disable-extensions-http-throttling',
-                        '--allow-running-insecure-content',
-                        '--disable-component-extensions-with-background-pages',
-                        '--disable-background-networking',
-                        '--disable-background-timer-throttling',
-                        '--disable-renderer-backgrounding',
-                        '--disable-backgrounding-occluded-windows',
-                        '--disable-features=TranslateUI,VizDisplayCompositor',
-                        '--disable-ipc-flooding-protection',
-                        '--disable-manifest-v2-deprecation-warnings',
-                        '--disable-extensions-manifest-v2-deprecation-warnings',
-                        '--silent-debugger-extension-api',
-                        '--window-size=1280,800',
-                        '--window-position=0,0',
-                        `--window-name=Testing: ${extension.name} (${extension.manifest?.manifest_version || 'Unknown'})`,
                     ],
                 });
 
@@ -262,7 +244,7 @@ export class ChromeTester {
             try {
                 // Close all pages first to clean up gracefully
                 const pages = await this.browser.pages();
-                await Promise.all(pages.map((page) => page.close().catch(() => {})));
+                await Promise.all(pages.map((page) => page.close().catch(() => { })));
 
                 await this.browser.close();
             } catch (error) {

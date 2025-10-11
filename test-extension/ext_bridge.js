@@ -4,15 +4,23 @@
  *
  * This bridge enables MV2 callback-style Chrome APIs to work in MV3 by converting
  * promises to callbacks and handling chrome.runtime.lastError properly.
+ *
+ * STRICT MODE:
+ * To disable callback backwards compatibility and force promise usage, set the
+ * environment variable DISABLE_CALLBACK_COMPAT=true when running the migrator.
+ * This will cause the bridge to throw errors when callbacks are used, helping
+ * identify code that needs to be updated to use promises.
+ *
+ * Example: DISABLE_CALLBACK_COMPAT=true yarn migrate
  */
 (function () {
     'use strict';
 
     // Skip if bridge is already loaded to prevent double-wrapping
-    if (self._chromeExtBridgeLoaded) {
+    if (window._chromeExtBridgeLoaded) {
         return;
     }
-    self._chromeExtBridgeLoaded = true;
+    window._chromeExtBridgeLoaded = true;
 
     // Logging configuration
     const BRIDGE_DEBUG = true; // Set to false to disable logging
@@ -25,7 +33,7 @@
     bridgeLog('🌉 Chrome Extension Bridge loaded');
 
     // Store original chrome object
-    const originalChrome = self.chrome;
+    const originalChrome = window.chrome;
 
     // Skip if chrome is not available (shouldn't happen in extensions)
     if (!originalChrome || typeof originalChrome !== 'object') {
@@ -33,7 +41,11 @@
         return;
     }
 
-    // Generic method wrapper that converts callbacks to promises
+    // Strict mode: throw errors when callbacks are used
+    // Can be enabled by setting: window.__CHROME_BRIDGE_STRICT_MODE = true; before loading the bridge
+    const STRICT_MODE = typeof window !== 'undefined' && window.__CHROME_BRIDGE_STRICT_MODE === true;
+
+    // Generic method wrapper that always promisifies (unless callback provided)
     function createCallbackCompatibleMethod(originalMethod, originalContext, methodPath) {
         return function (...args) {
             const lastArg = args[args.length - 1];
@@ -41,6 +53,17 @@
             // If user provides a callback, handle it
             if (typeof lastArg === 'function') {
                 const callback = args.pop();
+
+                // STRICT MODE: Throw error if callbacks are used
+                if (STRICT_MODE) {
+                    const error = new Error(
+                        `[STRICT MODE] Callback usage detected for ${methodPath}. ` +
+                        `MV3 extensions should use promises instead. ` +
+                        `Change: ${methodPath}(..., callback) → await ${methodPath}(...)`
+                    );
+                    console.error(error);
+                    throw error;
+                }
 
                 bridgeLog(`🔄 Wrapping callback for ${methodPath || 'unknown method'}`);
 
@@ -160,7 +183,7 @@
     }
 
     // Replace chrome object with wrapped version
-    self.chrome = wrappedChrome;
+    window.chrome = wrappedChrome;
 
     bridgeLog('🎯 Bridge initialized and chrome object replaced');
 

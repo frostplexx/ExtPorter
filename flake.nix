@@ -7,10 +7,15 @@
     # Pinned nixpkgs for specific package versions
     nixpkgs-pinned.url = "github:NixOS/nixpkgs/87f3f67a7bf3f84ebe1f6154b50fbb71c4ee8f5c";
   };
-  outputs = { self, nixpkgs, flake-utils, nixpkgs-pinned }:
+  outputs = { nixpkgs, flake-utils, nixpkgs-pinned, ... }:
     flake-utils.lib.eachDefaultSystem (system:
       let
-        pkgs = nixpkgs.legacyPackages.${system};
+        pkgs = import nixpkgs {
+          inherit system;
+          config = {
+            allowUnfree = true;
+          };
+        };
         pkgs-pinned = import nixpkgs-pinned {
           inherit system;
           config = {
@@ -32,6 +37,7 @@
             fx
             jq 
             vi-mongo
+            google-chrome
           ] ++ [
             # Pinned packages from specific commit
             pkgs-pinned.google-chrome # pinned google chrome to 138.0.7204.183
@@ -45,6 +51,8 @@
             # Alternative heap size options (comment out above and uncomment one below to use):
             # NODE_OPTIONS=--max-old-space-size=4096 --expose-gc     # 4GB heap
             # NODE_OPTIONS=--max-old-space-size=16384 --expose-gc    # 16GB heap
+            export CHROME_138="${pkgs-pinned.google-chrome}"
+            export CHROME_LATESTS="${pkgs.google-chrome}"
           '';
         };
       });
