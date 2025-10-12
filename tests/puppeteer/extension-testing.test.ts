@@ -27,14 +27,11 @@ describe('Mock Extensions Puppeteer Tests', () => {
     // fetches the path of the chrome binary
     const getChromePath = () => {
         if (process.env.IN_NIX_SHELL) {
-            let bin_path = execSync(`which google-chrome-stable`).toString();
-            bin_path = bin_path
-                .replace(
-                    '/bin/google-chrome-stable',
-                    '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
-                )
-                .replace('\n', '');
-            return bin_path;
+            // Use Chrome 138 for MV2 extension support
+            if (!process.env.CHROME_138) {
+                throw new Error("CHROME_138 environment variable is not set. Please ensure your flake.nix exports CHROME_138.");
+            }
+            return `${process.env.CHROME_138}/Applications/Google Chrome.app/Contents/MacOS/Google Chrome`;
         } else {
             // TODO
             return '';
