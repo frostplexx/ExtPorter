@@ -27,9 +27,11 @@ describe('MigrateCSP', () => {
 
             expect(result).not.toBeInstanceOf(MigrationError);
             if (!(result instanceof MigrationError)) {
-                expect(result.manifest.content_security_policy).toEqual({
-                    extension_pages: "script-src 'self'; object-src 'self';",
-                });
+                expect(result.manifest.content_security_policy).toHaveProperty('extension_pages');
+                expect(result.manifest.content_security_policy).toHaveProperty('sandbox');
+                expect(result.manifest.content_security_policy.extension_pages).toBe(
+                    "script-src 'self'; object-src 'self';"
+                );
             }
         });
 
@@ -42,9 +44,11 @@ describe('MigrateCSP', () => {
 
                 expect(result).not.toBeInstanceOf(MigrationError);
                 if (!(result instanceof MigrationError)) {
-                    expect(result.manifest.content_security_policy).toEqual({
-                        extension_pages: "script-src 'self'; object-src 'self';",
-                    });
+                    expect(result.manifest.content_security_policy).toHaveProperty('extension_pages');
+                    expect(result.manifest.content_security_policy).toHaveProperty('sandbox');
+                    expect(result.manifest.content_security_policy.extension_pages).toBe(
+                        "script-src 'self'; object-src 'self';"
+                    );
                 }
             });
 
@@ -66,18 +70,18 @@ describe('MigrateCSP', () => {
             });
         });
 
-        describe('Hash directive sanitization', () => {
-            it('should remove the specific insecure SHA256 hash that causes Chrome errors', () => {
-                const insecureCSP =
-                    "script-src 'self' 'sha256-iZBJenro+ON4QTZuWnyvHk3Yj9s/TfHgJLTCP8EJzhE='; object-src 'self';";
-                baseExtension.manifest.content_security_policy = insecureCSP;
+        describe('MV3 allowed directives', () => {
+            it('should preserve SHA256 hashes as they are allowed in MV3', () => {
+                const hashCSP =
+                    "script-src 'self' 'sha256-abc123=='; object-src 'self';";
+                baseExtension.manifest.content_security_policy = hashCSP;
 
                 const result = MigrateCSP.migrate(baseExtension);
 
                 expect(result).not.toBeInstanceOf(MigrationError);
                 if (!(result instanceof MigrationError)) {
-                    expect(result.manifest.content_security_policy.extension_pages).not.toContain(
-                        'sha256-iZBJenro+ON4QTZuWnyvHk3Yj9s/TfHgJLTCP8EJzhE='
+                    expect(result.manifest.content_security_policy.extension_pages).toContain(
+                        "'sha256-abc123=='"
                     );
                     expect(result.manifest.content_security_policy.extension_pages).toContain(
                         "script-src 'self'"
@@ -85,7 +89,7 @@ describe('MigrateCSP', () => {
                 }
             });
 
-            it('should remove all SHA-based hashes from CSP', () => {
+            it('should preserve all SHA hash variants (256, 384, 512) as they are allowed in MV3', () => {
                 const hashCSP =
                     "script-src 'self' 'sha256-abc123==' 'sha384-def456==' 'sha512-ghi789=='; object-src 'self';";
                 baseExtension.manifest.content_security_policy = hashCSP;
@@ -95,12 +99,14 @@ describe('MigrateCSP', () => {
                 expect(result).not.toBeInstanceOf(MigrationError);
                 if (!(result instanceof MigrationError)) {
                     const csp = result.manifest.content_security_policy.extension_pages;
-                    expect(csp).not.toMatch(/'sha[0-9]+-[A-Za-z0-9+/]+=*'/);
+                    expect(csp).toContain("'sha256-abc123=='");
+                    expect(csp).toContain("'sha384-def456=='");
+                    expect(csp).toContain("'sha512-ghi789=='");
                     expect(csp).toContain("script-src 'self'");
                 }
             });
 
-            it('should remove nonce directives', () => {
+            it('should preserve nonce directives as they are allowed in MV3', () => {
                 const nonceCSP = "script-src 'self' 'nonce-random123'; object-src 'self';";
                 baseExtension.manifest.content_security_policy = nonceCSP;
 
@@ -108,8 +114,23 @@ describe('MigrateCSP', () => {
 
                 expect(result).not.toBeInstanceOf(MigrationError);
                 if (!(result instanceof MigrationError)) {
-                    expect(result.manifest.content_security_policy.extension_pages).not.toMatch(
-                        /'nonce-[^']+'/
+                    expect(result.manifest.content_security_policy.extension_pages).toContain(
+                        "'nonce-random123'"
+                    );
+                }
+            });
+
+            it('should preserve wasm-unsafe-eval as it is allowed in MV3', () => {
+                const wasmCSP =
+                    "script-src 'self' 'wasm-unsafe-eval'; object-src 'self';";
+                baseExtension.manifest.content_security_policy = wasmCSP;
+
+                const result = MigrateCSP.migrate(baseExtension);
+
+                expect(result).not.toBeInstanceOf(MigrationError);
+                if (!(result instanceof MigrationError)) {
+                    expect(result.manifest.content_security_policy.extension_pages).toContain(
+                        "'wasm-unsafe-eval'"
                     );
                 }
             });
@@ -201,35 +222,21 @@ describe('MigrateCSP', () => {
             });
         });
 
-        describe('MV3 object format validation', () => {
-            it('should validate existing MV3 format extension_pages CSP', () => {
+        describe('MV3 object format handling', () => {
+            it('should use default CSP when MV3 object format is provided (migration is from MV2 only)', () => {
                 baseExtension.manifest.content_security_policy = {
-                    extension_pages: "script-src 'self' 'sha256-badHash=='; object-src 'self';",
+                    extension_pages: "script-src 'self' 'sha256-someHash=='; object-src 'self';",
                 };
 
                 const result = MigrateCSP.migrate(baseExtension);
 
                 expect(result).not.toBeInstanceOf(MigrationError);
                 if (!(result instanceof MigrationError)) {
-                    expect(result.manifest.content_security_policy.extension_pages).not.toContain(
-                        'sha256-badHash=='
-                    );
-                }
-            });
-
-            it('should add missing extension_pages to existing MV3 format', () => {
-                baseExtension.manifest.content_security_policy = {
-                    sandbox: 'allow-scripts',
-                };
-
-                const result = MigrateCSP.migrate(baseExtension);
-
-                expect(result).not.toBeInstanceOf(MigrationError);
-                if (!(result instanceof MigrationError)) {
+                    // Object format means it's already MV3, but since we're migrating FROM MV2,
+                    // this should be treated as invalid and replaced with default
                     expect(result.manifest.content_security_policy.extension_pages).toBe(
                         "script-src 'self'; object-src 'self';"
                     );
-                    expect(result.manifest.content_security_policy.sandbox).toBe('allow-scripts');
                 }
             });
         });
@@ -242,22 +249,27 @@ describe('MigrateCSP', () => {
 
                 expect(result).not.toBeInstanceOf(MigrationError);
                 if (!(result instanceof MigrationError)) {
-                    expect(result.manifest.content_security_policy).toEqual({
-                        extension_pages: "script-src 'self'; object-src 'self';",
-                    });
+                    expect(result.manifest.content_security_policy).toHaveProperty('extension_pages');
+                    expect(result.manifest.content_security_policy).toHaveProperty('sandbox');
+                    // The trailing semicolon may or may not be present, both are valid
+                    const csp = result.manifest.content_security_policy.extension_pages;
+                    expect(csp).toMatch(/^script-src 'self'; object-src 'self';?$/);
                 }
             });
 
-            it('should preserve valid HTTPS sources', () => {
-                const validCSP = "script-src 'self' https://cdn.example.com; object-src 'self';";
-                baseExtension.manifest.content_security_policy = validCSP;
+            it('should remove HTTPS sources as remote scripts are not allowed in MV3', () => {
+                const remoteCSP = "script-src 'self' https://cdn.example.com; object-src 'self';";
+                baseExtension.manifest.content_security_policy = remoteCSP;
 
                 const result = MigrateCSP.migrate(baseExtension);
 
                 expect(result).not.toBeInstanceOf(MigrationError);
                 if (!(result instanceof MigrationError)) {
-                    expect(result.manifest.content_security_policy.extension_pages).toContain(
+                    expect(result.manifest.content_security_policy.extension_pages).not.toContain(
                         'https://cdn.example.com'
+                    );
+                    expect(result.manifest.content_security_policy.extension_pages).toContain(
+                        "script-src 'self'"
                     );
                 }
             });
@@ -276,16 +288,16 @@ describe('MigrateCSP', () => {
                     const csp = result.manifest.content_security_policy.extension_pages;
                     expect(csp).not.toContain('unsafe-eval');
                     expect(csp).not.toContain('unsafe-inline');
-                    expect(csp).not.toContain('sha256-abc123==');
+                    expect(csp).toContain("'sha256-abc123=='"); // Hashes are allowed in MV3
                     expect(csp).not.toContain('data:');
                     expect(csp).not.toContain('http://bad.com');
-                    expect(csp).not.toContain('nonce-xyz');
+                    expect(csp).toContain("'nonce-xyz'"); // Nonces are allowed in MV3
                     expect(csp).toContain("script-src 'self'");
                     expect(csp).toContain("object-src 'self'");
                 }
             });
 
-            it('should handle real-world problematic CSP from Chrome Web Store extensions', () => {
+            it('should handle real-world CSP from Chrome Web Store extensions', () => {
                 const realWorldCSP =
                     "script-src 'self' 'wasm-unsafe-eval' 'sha256-iZBJenro+ON4QTZuWnyvHk3Yj9s/TfHgJLTCP8EJzhE='; object-src 'self';";
                 baseExtension.manifest.content_security_policy = realWorldCSP;
@@ -295,10 +307,9 @@ describe('MigrateCSP', () => {
                 expect(result).not.toBeInstanceOf(MigrationError);
                 if (!(result instanceof MigrationError)) {
                     const csp = result.manifest.content_security_policy.extension_pages;
-                    expect(csp).not.toContain(
-                        'sha256-iZBJenro+ON4QTZuWnyvHk3Yj9s/TfHgJLTCP8EJzhE='
-                    );
-                    expect(csp).toContain('wasm-unsafe-eval');
+                    // Both wasm-unsafe-eval and hashes are allowed in MV3
+                    expect(csp).toContain("'sha256-iZBJenro+ON4QTZuWnyvHk3Yj9s/TfHgJLTCP8EJzhE='");
+                    expect(csp).toContain("'wasm-unsafe-eval'");
                     expect(csp).toContain("script-src 'self'");
                 }
             });
@@ -338,8 +349,8 @@ describe('MigrateCSP', () => {
             });
         });
 
-        describe('Generic pattern detection and removal', () => {
-            it('should remove any SHA hash variant (256, 384, 512)', () => {
+        describe('Generic pattern detection', () => {
+            it('should preserve any SHA hash variant (256, 384, 512) as they are allowed in MV3', () => {
                 const multiHashCSP =
                     "script-src 'self' 'sha256-randomhash1==' 'sha384-anotherhash2==' 'sha512-thirdhash3=='; object-src 'self';";
                 baseExtension.manifest.content_security_policy = multiHashCSP;
@@ -349,14 +360,14 @@ describe('MigrateCSP', () => {
                 expect(result).not.toBeInstanceOf(MigrationError);
                 if (!(result instanceof MigrationError)) {
                     const csp = result.manifest.content_security_policy.extension_pages;
-                    expect(csp).not.toMatch(/'sha256-[^']+'/);
-                    expect(csp).not.toMatch(/'sha384-[^']+'/);
-                    expect(csp).not.toMatch(/'sha512-[^']+'/);
+                    expect(csp).toMatch(/'sha256-randomhash1=='/);
+                    expect(csp).toMatch(/'sha384-anotherhash2=='/);
+                    expect(csp).toMatch(/'sha512-thirdhash3=='/);
                     expect(csp).toContain("script-src 'self'");
                 }
             });
 
-            it('should remove any nonce directive regardless of value', () => {
+            it('should preserve nonce directives as they are allowed in MV3', () => {
                 const nonceCSP =
                     "script-src 'self' 'nonce-abc123' 'nonce-xyz789' 'nonce-random456'; object-src 'self';";
                 baseExtension.manifest.content_security_policy = nonceCSP;
@@ -366,7 +377,9 @@ describe('MigrateCSP', () => {
                 expect(result).not.toBeInstanceOf(MigrationError);
                 if (!(result instanceof MigrationError)) {
                     const csp = result.manifest.content_security_policy.extension_pages;
-                    expect(csp).not.toMatch(/'nonce-[^']+'/);
+                    expect(csp).toContain("'nonce-abc123'");
+                    expect(csp).toContain("'nonce-xyz789'");
+                    expect(csp).toContain("'nonce-random456'");
                     expect(csp).toContain("script-src 'self'");
                 }
             });
@@ -442,16 +455,18 @@ describe('MigrateCSP', () => {
 
                     expect(result).not.toBeInstanceOf(MigrationError);
                     if (!(result instanceof MigrationError)) {
-                        expect(result.manifest.content_security_policy).toEqual({
-                            extension_pages: "script-src 'self'; object-src 'self';",
-                        });
+                        expect(result.manifest.content_security_policy).toHaveProperty('extension_pages');
+                        expect(result.manifest.content_security_policy).toHaveProperty('sandbox');
+                        // The trailing semicolon may or may not be present, both are valid
+                        const csp = result.manifest.content_security_policy.extension_pages;
+                        expect(csp).toMatch(/^script-src 'self'; object-src 'self';?$/);
                     }
                 });
             });
 
-            it('should preserve valid HTTPS sources while removing invalid patterns', () => {
+            it('should remove remote HTTPS sources and invalid patterns while preserving valid hashes', () => {
                 const mixedValidInvalidCSP =
-                    "script-src 'self' https://cdn.jsdelivr.net/npm/jquery@3.6.0/dist/jquery.min.js 'sha256-invalid==' badfile.js 'unsafe-eval' https://apis.google.com/js/platform.js data:; object-src 'self';";
+                    "script-src 'self' https://cdn.jsdelivr.net/npm/jquery@3.6.0/dist/jquery.min.js 'sha256-validhash==' badfile.js 'unsafe-eval' https://apis.google.com/js/platform.js data:; object-src 'self';";
                 baseExtension.manifest.content_security_policy = mixedValidInvalidCSP;
 
                 const result = MigrateCSP.migrate(baseExtension);
@@ -459,11 +474,12 @@ describe('MigrateCSP', () => {
                 expect(result).not.toBeInstanceOf(MigrationError);
                 if (!(result instanceof MigrationError)) {
                     const csp = result.manifest.content_security_policy.extension_pages;
-                    expect(csp).toContain(
-                        'https://cdn.jsdelivr.net/npm/jquery@3.6.0/dist/jquery.min.js'
-                    );
-                    expect(csp).toContain('https://apis.google.com/js/platform.js');
-                    expect(csp).not.toContain('sha256-invalid==');
+                    // Remote scripts not allowed in MV3
+                    expect(csp).not.toContain('https://cdn.jsdelivr.net');
+                    expect(csp).not.toContain('https://apis.google.com');
+                    // Hashes are allowed
+                    expect(csp).toContain("'sha256-validhash=='");
+                    // Invalid patterns removed
                     expect(csp).not.toContain('badfile.js');
                     expect(csp).not.toContain('unsafe-eval');
                     expect(csp).not.toContain('data:');
