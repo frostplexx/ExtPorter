@@ -2,6 +2,7 @@ import dotenv from 'dotenv';
 import * as path from 'path';
 import { RenameAPIS } from './modules/api_renames';
 import { MigrateManifest } from './modules/manifest';
+import { MigrateCSP } from './modules/csp';
 import { WriteMigrated } from './modules/write_migrated';
 import { MigrationWriter } from './modules/migration_writer';
 import { InterestingnessScorer } from './modules/interestingness_scorer';
@@ -85,6 +86,7 @@ async function main() {
     // Migration modules (WriteMigrated should be last to queue completed migrations)
     const migrationModules = [
         MigrateManifest.migrate,
+        MigrateCSP.migrate,
         ResourceDownloader.migrate,
         RenameAPIS.migrate,
         BridgeInjector.migrate,
