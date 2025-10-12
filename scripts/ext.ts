@@ -12,6 +12,8 @@ import inquirer from 'inquirer';
 import chalk from 'chalk';
 import stringWidth from 'string-width';
 import * as readline from 'readline';
+import * as https from 'https';
+import * as http from 'http';
 
 // Load environment variables
 dotenv.config();
@@ -233,6 +235,7 @@ class ExtensionExplorer {
             { icon: chalk.white(' '), label: 'Grep', key: 'g' },
             { icon: chalk.yellow(' '), label: 'Manifest', key: 'm' },
             { icon: chalk.blue(' '), label: 'Open Directory', key: 'o' },
+            { icon: chalk.magenta('󰚩 '), label: 'Generate Description', key: 'd' },
             { icon: chalk.dim('󰌑 '), label: 'Search Again', key: 's' },
             { icon: chalk.red('󰈆 '), label: 'Quit', key: 'q' },
         ];
@@ -861,6 +864,402 @@ class ExtensionExplorer {
         }
     }
 
+    async generateDescription(ext: ExtensionSearchResult): Promise<void> {
+        console.clear();
+
+        // Get LLM endpoint from environment (defaults to local Ollama)
+        const llmEndpoint = process.env.LLM_ENDPOINT || 'http://localhost:11434';
+        const llmModel = process.env.LLM_MODEL || 'llama3.2';
+
+        // Check if Ollama is running and start if needed
+        if (llmEndpoint.includes('localhost')) {
+            console.log(chalk.dim('Checking Ollama status...'));
+            const ollamaReady = await this.ensureOllamaRunning(llmModel);
+            if (!ollamaReady) {
+                console.log('');
+                console.log(chalk.red('❌ Failed to start Ollama or download model'));
+                console.log(chalk.dim('Please install Ollama: https://ollama.com/download'));
+                await this.waitForKeypress('\nPress Enter to continue...');
+                return;
+            }
+        }
+
+        console.log(chalk.dim('Collecting extension migrator code...'));
+
+        try {
+            // Collect all TypeScript files from migrator directory
+            const migratorPath = path.join(__dirname, '..', 'migrator');
+            const codeFiles: { path: string; content: string }[] = [];
+
+            // Key files to include
+            const keyFiles = [
+                'index.ts',
+                'types/extension.ts',
+                'types/migration_module.ts',
+                'modules/manifest.ts',
+                'modules/api_renames.ts',
+                'modules/bridge_injector.ts',
+                'modules/csp.ts',
+                'modules/resource_downloader.ts',
+                'utils/find_extensions.ts',
+                'utils/file_content_updater.ts',
+            ];
+
+            for (const file of keyFiles) {
+                const filePath = path.join(migratorPath, file);
+                if (fs.existsSync(filePath)) {
+                    const content = fs.readFileSync(filePath, 'utf8');
+                    codeFiles.push({ path: file, content });
+                }
+            }
+
+            // Add extension manifest if available
+            const mv2Path = this.getMv2Path(ext);
+            if (mv2Path) {
+                const manifestPath = path.join(mv2Path, 'manifest.json');
+                if (fs.existsSync(manifestPath)) {
+                    const content = fs.readFileSync(manifestPath, 'utf8');
+                    codeFiles.push({ path: 'extension/manifest.json', content });
+                }
+            }
+
+            console.log(chalk.dim(`Collected ${codeFiles.length} files`));
+
+            // Build description focused on the extension itself
+            // Look for manifest.json and key extension files
+            const manifestFile = codeFiles.find(f => f.path.includes('manifest.json'));
+            const manifest = manifestFile ? JSON.parse(manifestFile.content) : null;
+
+            // Get extension code files (not migrator files)
+            const extensionFiles = codeFiles
+                .filter(f => f.path.includes('extension/'))
+                .map(f => {
+                    const lines = f.content.split('\n').slice(0, 30); // First 30 lines
+                    return `${f.path}:\n${lines.join('\n')}`;
+                })
+                .join('\n\n---\n\n');
+
+            const prompt = `Analyze this Chrome extension: "${ext.name || 'Unknown'}"
+
+${manifest ? `Manifest:
+${JSON.stringify(manifest, null, 2)}
+
+` : ''}${extensionFiles ? `Extension code samples:
+
+${extensionFiles}
+
+` : 'No extension code available.'}
+
+Write a SHORT, SPECIFIC description in markdown (max 250 words):
+
+## What it does
+1-2 sentences explaining the core functionality
+
+## How to test it
+3-5 specific steps to verify the extension works:
+- Be SPECIFIC: mention exact URLs, actions, or UI elements
+- Include what to look for (e.g., "red banner appears", "request blocked")
+- Focus on observable behavior
+
+## Key features
+3-4 bullets with CONCRETE details:
+- Not "blocks websites" but "blocks requests to *.ads.com domains"
+- Not "monitors activity" but "logs all network requests to console"
+- Include specific permissions used (webRequest, storage, tabs, etc.)
+
+Be TECHNICAL and SPECIFIC. Focus on implementation details visible in the code.`;
+
+            // Show prompt stats
+            const promptTokens = Math.ceil(prompt.length / 4); // Rough estimate: 4 chars ≈ 1 token
+            console.log('');
+            console.log(chalk.dim(`Prompt size: ~${promptTokens} tokens (${Math.ceil(prompt.length / 1024)}KB)`));
+            console.log(chalk.dim(`Sending to LLM (${llmEndpoint})...`));
+            console.log(chalk.dim(`Using model: ${llmModel}`));
+            console.log(chalk.yellow('⏳ Generating description... (this may take 30-60 seconds)'));
+            console.log('');
+
+            // Call LLM API
+            const response = await this.callLLMAPI(prompt, llmEndpoint, llmModel);
+
+            // Save to temp file and display
+            const tmpDir = require('os').tmpdir();
+            const tmpFile = path.join(tmpDir, `ext-description-${ext.id}-${Date.now()}.md`);
+
+            const output = `# Extension Migrator Description\n\n` +
+                `Extension: ${ext.name || 'Unknown'}\n` +
+                `ID: ${ext.id}\n\n` +
+                `---\n\n` +
+                response;
+
+            fs.writeFileSync(tmpFile, output);
+
+            try {
+                execSync(`less -R "${tmpFile}"`, { stdio: 'inherit' });
+            } catch (error: any) {
+                if (error.status !== 0 && error.code === 'ENOENT') {
+                    console.log('❌ less command not found');
+                    console.log('Falling back to cat...');
+                    execSync(`cat "${tmpFile}"`, { stdio: 'inherit' });
+                    await this.waitForKeypress('\nPress Enter to continue...');
+                }
+            } finally {
+                // Clean up temp file
+                try {
+                    if (fs.existsSync(tmpFile)) {
+                        fs.unlinkSync(tmpFile);
+                    }
+                } catch (e) {
+                    // Ignore cleanup errors silently
+                }
+            }
+        } catch (error: any) {
+            console.log('');
+            console.log(chalk.red('❌ Error generating description:'), error.message);
+            await this.waitForKeypress('\nPress Enter to continue...');
+        }
+    }
+
+    private async ensureOllamaRunning(model: string): Promise<boolean> {
+        try {
+            // Check if Ollama is running by trying to list models
+            const checkResult = await this.runCommand('ollama', ['list'], false);
+
+            if (checkResult.success) {
+                console.log(chalk.green('✓ Ollama is running'));
+
+                // Check if model is available
+                if (checkResult.output.includes(model)) {
+                    console.log(chalk.green(`✓ Model '${model}' is available`));
+                    return true;
+                } else {
+                    // Model not found, try to pull it
+                    console.log(chalk.yellow(`⚠ Model '${model}' not found`));
+                    console.log(chalk.dim(`Downloading model '${model}'... (this may take a few minutes)`));
+
+                    const pullResult = await this.runCommand('ollama', ['pull', model], true);
+
+                    if (pullResult.success) {
+                        console.log(chalk.green(`✓ Model '${model}' downloaded successfully`));
+                        return true;
+                    } else {
+                        console.log(chalk.red(`✗ Failed to download model: ${pullResult.error}`));
+                        return false;
+                    }
+                }
+            } else {
+                // Ollama not running, try to start it
+                console.log(chalk.yellow('⚠ Ollama not running, attempting to start...'));
+
+                // Try to start Ollama in the background
+                const startResult = await this.runCommand('ollama', ['serve'], false, true);
+
+                // Wait a bit for Ollama to start
+                await new Promise(resolve => setTimeout(resolve, 2000));
+
+                // Check again
+                const recheckResult = await this.runCommand('ollama', ['list'], false);
+
+                if (recheckResult.success) {
+                    console.log(chalk.green('✓ Ollama started successfully'));
+
+                    // Now check/download the model
+                    if (!recheckResult.output.includes(model)) {
+                        console.log(chalk.dim(`Downloading model '${model}'... (this may take a few minutes)`));
+                        const pullResult = await this.runCommand('ollama', ['pull', model], true);
+
+                        if (!pullResult.success) {
+                            console.log(chalk.red(`✗ Failed to download model: ${pullResult.error}`));
+                            return false;
+                        }
+                        console.log(chalk.green(`✓ Model '${model}' downloaded successfully`));
+                    }
+                    return true;
+                } else {
+                    return false;
+                }
+            }
+        } catch (error: any) {
+            console.log(chalk.red(`✗ Error checking Ollama: ${error.message}`));
+            return false;
+        }
+    }
+
+    private async runCommand(
+        command: string,
+        args: string[],
+        showOutput: boolean = false,
+        background: boolean = false
+    ): Promise<{ success: boolean; output: string; error?: string }> {
+        return new Promise((resolve) => {
+            try {
+                if (background) {
+                    // Run in background
+                    const proc = spawn(command, args, {
+                        detached: true,
+                        stdio: 'ignore'
+                    });
+                    proc.unref();
+                    resolve({ success: true, output: '' });
+                    return;
+                }
+
+                const proc = spawn(command, args, {
+                    stdio: showOutput ? 'inherit' : 'pipe'
+                });
+
+                let output = '';
+                let error = '';
+
+                if (!showOutput) {
+                    proc.stdout?.on('data', (data) => {
+                        output += data.toString();
+                    });
+
+                    proc.stderr?.on('data', (data) => {
+                        error += data.toString();
+                    });
+                }
+
+                proc.on('close', (code) => {
+                    resolve({
+                        success: code === 0,
+                        output,
+                        error: error || undefined
+                    });
+                });
+
+                proc.on('error', (err) => {
+                    resolve({
+                        success: false,
+                        output: '',
+                        error: err.message
+                    });
+                });
+            } catch (err: any) {
+                resolve({
+                    success: false,
+                    output: '',
+                    error: err.message
+                });
+            }
+        });
+    }
+
+    private async callLLMAPI(prompt: string, endpoint: string, model: string): Promise<string> {
+        return new Promise((resolve, reject) => {
+            // Parse endpoint URL
+            const url = new URL(endpoint);
+            const isHttps = url.protocol === 'https:';
+            const httpModule = isHttps ? https : http;
+
+            // Set a timeout (2 minutes)
+            const timeout = setTimeout(() => {
+                req.destroy();
+                reject(new Error('Request timed out after 2 minutes. The model might be too slow or the prompt too large.'));
+            }, 120000);
+
+            // Ollama API format - enable streaming for live output
+            const data = JSON.stringify({
+                model: model,
+                prompt: prompt,
+                stream: true,  // Enable streaming
+                options: {
+                    temperature: 0.3,  // Lower = more focused
+                    num_predict: 500,   // Limit output length
+                    top_p: 0.9,
+                    top_k: 40
+                }
+            });
+
+            const options = {
+                hostname: url.hostname,
+                port: url.port || (isHttps ? 443 : 80),
+                path: '/api/generate',
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Content-Length': Buffer.byteLength(data),
+                },
+            };
+
+            const req = httpModule.request(options, (res: any) => {
+                let fullResponse = '';
+                let buffer = '';
+
+                console.log(chalk.cyan('\n--- Generated Description ---\n'));
+
+                res.on('data', (chunk: any) => {
+                    buffer += chunk.toString();
+
+                    // Process each line (streaming responses come line by line as JSON)
+                    const lines = buffer.split('\n');
+                    buffer = lines.pop() || ''; // Keep incomplete line in buffer
+
+                    for (const line of lines) {
+                        if (!line.trim()) continue;
+
+                        try {
+                            const parsed = JSON.parse(line);
+                            if (parsed.response) {
+                                // Print the chunk immediately
+                                process.stdout.write(parsed.response);
+                                fullResponse += parsed.response;
+                            }
+
+                            // Check if done
+                            if (parsed.done) {
+                                clearTimeout(timeout);
+                                console.log(chalk.cyan('\n\n--- End of Description ---\n'));
+                                console.log(chalk.green('✓ Description generated successfully'));
+                                resolve(fullResponse);
+                            }
+                        } catch (e) {
+                            // Skip invalid JSON lines
+                        }
+                    }
+                });
+
+                res.on('end', () => {
+                    clearTimeout(timeout);
+
+                    // Process any remaining buffer
+                    if (buffer.trim()) {
+                        try {
+                            const parsed = JSON.parse(buffer);
+                            if (parsed.response) {
+                                process.stdout.write(parsed.response);
+                                fullResponse += parsed.response;
+                            }
+                        } catch (e) {
+                            // Ignore
+                        }
+                    }
+
+                    if (fullResponse) {
+                        console.log(chalk.cyan('\n\n--- End of Description ---\n'));
+                        console.log(chalk.green('✓ Description generated successfully'));
+                        resolve(fullResponse);
+                    } else {
+                        reject(new Error('Empty response from LLM'));
+                    }
+                });
+
+                res.on('error', (error: any) => {
+                    clearTimeout(timeout);
+                    reject(error);
+                });
+            });
+
+            req.on('error', (error: any) => {
+                clearTimeout(timeout);
+                reject(error);
+            });
+
+            req.write(data);
+            req.end();
+        });
+    }
+
     private getMv2Path(ext: ExtensionSearchResult): string | null {
         if (!ext.manifest_v2_path) return null;
 
@@ -938,6 +1337,9 @@ class ExtensionExplorer {
                     break;
                 case 'o':
                     await this.openDirectory(ext);
+                    break;
+                case 'd':
+                    await this.generateDescription(ext);
                     break;
                 case 's':
                     return true; // Signal to search again
