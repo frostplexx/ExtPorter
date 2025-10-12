@@ -69,24 +69,23 @@ describe('Bridge Functionality Test', () => {
             const mockChrome = {
                 storage: {
                     local: {
-                        set: function(data: any, callback: (error?: any) => void) {
-                            // Simulate async storage operation - use regular function to preserve this
-                            setTimeout(function() {
+                        set: function(data: any) {
+                            // MV3 APIs return promises
+                            return Promise.resolve().then(() => {
                                 Object.assign(storageData, data);
-                                callback();
-                            }, 2);
+                            });
                         },
-                        get: function(keys: string[], callback: (result: any) => void) {
-                            // Simulate async storage retrieval - use regular function to preserve this
-                            setTimeout(function() {
+                        get: function(keys: string[]) {
+                            // MV3 APIs return promises
+                            return Promise.resolve().then(() => {
                                 const result: any = {};
                                 keys.forEach(key => {
                                     if (storageData[key] !== undefined) {
                                         result[key] = storageData[key];
                                     }
                                 });
-                                callback(result);
-                            }, 2);
+                                return result;
+                            });
                         }
                     }
                 },
@@ -168,7 +167,7 @@ describe('Bridge Functionality Test', () => {
         expect(bridgeContent).toContain('typeof lastArg === \'function\'');
 
         // Verify it wraps the original chrome object
-        expect(bridgeContent).toContain('const originalChrome = window.chrome');
+        expect(bridgeContent).toContain('const originalChrome = self.chrome');
 
         // Verify error handling
         expect(bridgeContent).toContain('callbackWithError');
