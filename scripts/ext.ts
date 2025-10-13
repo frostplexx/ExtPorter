@@ -396,13 +396,13 @@ class ExtensionExplorer {
                 (async () => {
                     console.log('Starting MV3 browser (red)...');
                     await mv3Tester.initBrowser(mv3Extension, 3, false, true);
-                    await mv3Tester.injectColor('red');
+                    // await mv3Tester.injectColor('red');
                     await mv3Tester.navigateTo('https://www.nytimes.com/');
                 })(),
                 (async () => {
                     console.log('Starting MV2 browser (blue)...');
                     await mv2Tester.initBrowser(mv2Extension, 3, true, true);
-                    await mv2Tester.injectColor('blue');
+                    // await mv2Tester.injectColor('blue');
                     await mv2Tester.navigateTo('https://www.nytimes.com/');
                 })(),
             ]);
