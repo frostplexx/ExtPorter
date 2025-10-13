@@ -397,13 +397,13 @@ class ExtensionExplorer {
                     console.log('Starting MV3 browser (red)...');
                     await mv3Tester.initBrowser(mv3Extension, 3, false, true);
                     // await mv3Tester.injectColor('red');
-                    await mv3Tester.navigateTo('https://www.nytimes.com/');
+                    mv3Tester.navigateTo('https://www.nytimes.com/');
                 })(),
                 (async () => {
                     console.log('Starting MV2 browser (blue)...');
                     await mv2Tester.initBrowser(mv2Extension, 3, true, true);
                     // await mv2Tester.injectColor('blue');
-                    await mv2Tester.navigateTo('https://www.nytimes.com/');
+                    mv2Tester.navigateTo('https://www.nytimes.com/');
                 })(),
             ]);
         } catch (error) {
@@ -649,7 +649,7 @@ class ExtensionExplorer {
         }
 
         try {
-            execSync(`bat -R "${tmpFile}"`, { stdio: 'inherit' });
+            execSync(`less -R "${tmpFile}"`, { stdio: 'inherit' });
         } catch (error: any) {
             // Check if it's an actual error or just less exiting normally
             if (error.status !== 0 && error.code === 'ENOENT') {
@@ -891,39 +891,116 @@ class ExtensionExplorer {
         console.log(chalk.dim('Collecting extension migrator code...'));
 
         try {
-            // Collect all TypeScript files from migrator directory
-            const migratorPath = path.join(__dirname, '..', 'migrator');
             const codeFiles: { path: string; content: string }[] = [];
 
-            // Key files to include
-            const keyFiles = [
-                'index.ts',
-                'types/extension.ts',
-                'types/migration_module.ts',
-                'modules/manifest.ts',
-                'modules/api_renames.ts',
-                'modules/bridge_injector.ts',
-                'modules/csp.ts',
-                'modules/resource_downloader.ts',
-                'utils/find_extensions.ts',
-                'utils/file_content_updater.ts',
-            ];
-
-            for (const file of keyFiles) {
-                const filePath = path.join(migratorPath, file);
-                if (fs.existsSync(filePath)) {
-                    const content = fs.readFileSync(filePath, 'utf8');
-                    codeFiles.push({ path: file, content });
-                }
-            }
-
-            // Add extension manifest if available
+            // Collect extension files
             const mv2Path = this.getMv2Path(ext);
             if (mv2Path) {
+                // 1. Add manifest.json
                 const manifestPath = path.join(mv2Path, 'manifest.json');
                 if (fs.existsSync(manifestPath)) {
-                    const content = fs.readFileSync(manifestPath, 'utf8');
-                    codeFiles.push({ path: 'extension/manifest.json', content });
+                    const manifestContent = fs.readFileSync(manifestPath, 'utf8');
+                    codeFiles.push({ path: 'extension/manifest.json', content: manifestContent });
+
+                    // Parse manifest to find important files
+                    try {
+                        const manifest = JSON.parse(manifestContent);
+
+                        // 2. Collect background scripts
+                        if (manifest.background) {
+                            const scripts = manifest.background.scripts || (manifest.background.service_worker ? [manifest.background.service_worker] : []);
+                            for (const script of scripts) {
+                                if (script) {
+                                    const scriptPath = path.join(mv2Path, script);
+                                    if (fs.existsSync(scriptPath)) {
+                                        const content = fs.readFileSync(scriptPath, 'utf8');
+                                        codeFiles.push({ path: `extension/${script}`, content });
+                                    }
+                                }
+                            }
+                            // Also check for page property
+                            if (manifest.background.page) {
+                                const pagePath = path.join(mv2Path, manifest.background.page);
+                                if (fs.existsSync(pagePath)) {
+                                    const content = fs.readFileSync(pagePath, 'utf8');
+                                    codeFiles.push({ path: `extension/${manifest.background.page}`, content });
+                                }
+                            }
+                        }
+
+                        // 3. Collect content scripts
+                        if (manifest.content_scripts) {
+                            for (const cs of manifest.content_scripts) {
+                                if (cs.js) {
+                                    for (const jsFile of cs.js) {
+                                        const jsPath = path.join(mv2Path, jsFile);
+                                        if (fs.existsSync(jsPath)) {
+                                            const content = fs.readFileSync(jsPath, 'utf8');
+                                            codeFiles.push({ path: `extension/${jsFile}`, content });
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // 4. Collect popup HTML and its scripts
+                        const popupPath = manifest.browser_action?.default_popup || manifest.action?.default_popup;
+                        if (popupPath) {
+                            const fullPopupPath = path.join(mv2Path, popupPath);
+                            if (fs.existsSync(fullPopupPath)) {
+                                const content = fs.readFileSync(fullPopupPath, 'utf8');
+                                codeFiles.push({ path: `extension/${popupPath}`, content });
+
+                                // Parse HTML to find script tags
+                                const scriptMatches = content.matchAll(/<script[^>]*src=["']([^"']+)["']/g);
+                                for (const match of scriptMatches) {
+                                    const scriptFile = match[1];
+                                    const scriptPath = path.join(mv2Path, path.dirname(popupPath), scriptFile);
+                                    if (fs.existsSync(scriptPath)) {
+                                        const scriptContent = fs.readFileSync(scriptPath, 'utf8');
+                                        const relativePath = path.join(path.dirname(popupPath), scriptFile);
+                                        codeFiles.push({ path: `extension/${relativePath}`, content: scriptContent });
+                                    }
+                                }
+                            }
+                        }
+
+                        // 5. Collect options page
+                        const optionsPage = manifest.options_page || manifest.options_ui?.page;
+                        if (optionsPage) {
+                            const optionsPath = path.join(mv2Path, optionsPage);
+                            if (fs.existsSync(optionsPath)) {
+                                const content = fs.readFileSync(optionsPath, 'utf8');
+                                codeFiles.push({ path: `extension/${optionsPage}`, content });
+                            }
+                        }
+
+                        // 6. Collect chrome_url_overrides (new tab, history, bookmarks)
+                        if (manifest.chrome_url_overrides) {
+                            for (const [key, value] of Object.entries(manifest.chrome_url_overrides)) {
+                                const overridePath = path.join(mv2Path, value as string);
+                                if (fs.existsSync(overridePath)) {
+                                    const content = fs.readFileSync(overridePath, 'utf8');
+                                    codeFiles.push({ path: `extension/${value}`, content });
+                                }
+                            }
+                        }
+
+                        // 7. Look for common main files if we don't have much yet
+                        if (codeFiles.length < 5) {
+                            const commonFiles = ['main.js', 'index.js', 'app.js', 'background.js', 'content.js', 'script.js'];
+                            for (const commonFile of commonFiles) {
+                                const commonPath = path.join(mv2Path, commonFile);
+                                if (fs.existsSync(commonPath) && !codeFiles.some(f => f.path.includes(commonFile))) {
+                                    const content = fs.readFileSync(commonPath, 'utf8');
+                                    codeFiles.push({ path: `extension/${commonFile}`, content });
+                                }
+                            }
+                        }
+
+                    } catch (e) {
+                        console.log(chalk.yellow('⚠ Could not parse manifest.json'));
+                    }
                 }
             }
 
@@ -990,24 +1067,17 @@ Be TECHNICAL and SPECIFIC. Focus on implementation details visible in the code a
 
             fs.writeFileSync(tmpFile, output);
 
+            // Wait for user before continuing
+            console.log('');
+            await this.waitForKeypress(chalk.dim('Press Enter to continue...'));
+
+            // Clean up temp file
             try {
-                execSync(`bat "${tmpFile}"`, { stdio: 'inherit' });
-            } catch (error: any) {
-                if (error.status !== 0 && error.code === 'ENOENT') {
-                    console.log('❌ less command not found');
-                    console.log('Falling back to cat...');
-                    execSync(`cat "${tmpFile}"`, { stdio: 'inherit' });
-                    await this.waitForKeypress('\nPress Enter to continue...');
+                if (fs.existsSync(tmpFile)) {
+                    fs.unlinkSync(tmpFile);
                 }
-            } finally {
-                // Clean up temp file
-                try {
-                    if (fs.existsSync(tmpFile)) {
-                        fs.unlinkSync(tmpFile);
-                    }
-                } catch (e) {
-                    // Ignore cleanup errors silently
-                }
+            } catch (e) {
+                // Ignore cleanup errors silently
             }
         } catch (error: any) {
             console.log('');
