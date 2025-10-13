@@ -877,7 +877,7 @@ class ExtensionExplorer {
 
         // Check if Ollama is running and start if needed
         if (llmEndpoint.includes('localhost')) {
-            console.log(chalk.dim('Checking Ollama status...'));
+            // console.log(chalk.dim('Checking Ollama status...'));
             const ollamaReady = await this.ensureOllamaRunning(llmModel);
             if (!ollamaReady) {
                 console.log('');
@@ -888,7 +888,7 @@ class ExtensionExplorer {
             }
         }
 
-        console.log(chalk.dim('Collecting extension migrator code...'));
+        // console.log(chalk.dim('Collecting extension migrator code...'));
 
         try {
             const codeFiles: { path: string; content: string }[] = [];
@@ -1015,38 +1015,63 @@ class ExtensionExplorer {
             const extensionFiles = codeFiles
                 .filter(f => f.path.includes('extension/'))
                 .map(f => {
-                    const lines = f.content.split('\n').slice(0, 30); // First 30 lines
-                    return `${f.path}:\n${lines.join('\n')}`;
+                    const content = f.content;
+                    const lines = content.split('\n');
+
+                    // For minified/webpack files, extract key strings and function names
+                    if (lines.length < 20 || content.includes('webpackBootstrap')) {
+                        // Extract chrome.* API calls, URLs, and identifiable strings
+                        const apiCalls = content.match(/chrome\.\w+\.\w+/g) || [];
+                        const urls = content.match(/https?:\/\/[^\s"']+/g) || [];
+                        const keywords = content.match(/['"][\w\s]{3,30}['"]/g) || [];
+
+                        const summary = [
+                            f.path + ' (minified):',
+                            'Chrome APIs: ' + [...new Set(apiCalls)].slice(0, 10).join(', '),
+                            'URLs: ' + [...new Set(urls)].slice(0, 5).join(', '),
+                            'Key strings: ' + [...new Set(keywords)].slice(0, 10).join(', ')
+                        ].filter(line => !line.endsWith(': ')).join('\n');
+
+                        return summary;
+                    }
+
+                    // For regular files, show first 200 lines (we have plenty of context!)
+                    return `${f.path}:\n${lines.slice(0, 400).join('\n')}`;
                 })
                 .join('\n\n---\n\n');
 
-            const prompt = `Analyze this Chrome extension: "${ext.name || 'Unknown'}"
+            // Only include manifest permissions and key fields
+            const manifestSummary = manifest ? `
+Permissions: ${manifest.permissions?.join(', ') || 'none'}
+Background: ${manifest.background?.scripts?.join(', ') || manifest.background?.service_worker || 'none'}
+Content Scripts: ${manifest.content_scripts?.map((cs: any) => cs.matches?.join(', ')).join('; ') || 'none'}
+Popup: ${manifest.browser_action?.default_popup || manifest.action?.default_popup || 'none'}
+` : 'No manifest';
 
-${manifest ? `Manifest:
-${JSON.stringify(manifest, null, 2)}
+            const prompt = `Extension: ${ext.name || 'Unknown'}
+${manifestSummary}
 
-` : ''}${extensionFiles ? `Extension code samples:
-
+FILES:
 ${extensionFiles}
 
-` : 'No extension code available.'}
+TASK: Write 2-3 sentence description + 4-5 detailed test steps. Max 200 words total.
 
-Write a SHORT, SPECIFIC description in markdown (max 100 words):
+FORMAT:
+## What it does
+[1-2 sentences]
 
-1 sentences explaining the core functionality
+## Test steps
+1. [Specific actions the user has to take to tests the functionality]
+2. [What to observe]
+3. [Expected result]
 
-3-5 specific steps to verify the extension works, assume the extension is already installed and I want to quickly tests its functionality:
-- Be SPECIFIC: mention exact URLs, actions, or UI elements
-- Include what to look for (e.g., "red banner appears", "request blocked")
-- Focus on observable behavior
-Be TECHNICAL and SPECIFIC. Focus on implementation details visible in the code and keep the SENTENCES SHORT`;
+RULES: Be specific. Mention exact URLs/UI elements. Keep sentences under 10 words each. Do not make mistakes. You are an expert. Do not print the rules or anything else except what you have to`;
 
             // Show prompt stats
             const promptTokens = Math.ceil(prompt.length / 4); // Rough estimate: 4 chars ≈ 1 token
             // Save to temp file and display
             const tmpDir = require('os').tmpdir();
             const tmpFile = path.join(tmpDir, `ext-description-${ext.id}-${Date.now()}.md`);
-            console.log('');
             console.log(chalk.dim(`Prompt size: ~${promptTokens} tokens (${Math.ceil(prompt.length / 1024)}KB)`));
             console.log(chalk.dim(`Temp file: ${tmpFile}`));
             console.log(chalk.dim(`Sending to LLM (${llmEndpoint})...`));
@@ -1093,11 +1118,11 @@ Be TECHNICAL and SPECIFIC. Focus on implementation details visible in the code a
             const checkResult = await this.runCommand('ollama', ['list'], false);
 
             if (checkResult.success) {
-                console.log(chalk.green('✓ Ollama is running'));
+                // console.log(chalk.green('✓ Ollama is running'));
 
                 // Check if model is available
                 if (checkResult.output.includes(model)) {
-                    console.log(chalk.green(`✓ Model '${model}' is available`));
+                    // console.log(chalk.green(`✓ Model '${model}' is available`));
                     return true;
                 } else {
                     // Model not found, try to pull it
@@ -1232,10 +1257,11 @@ Be TECHNICAL and SPECIFIC. Focus on implementation details visible in the code a
                 prompt: prompt,
                 stream: true,  // Enable streaming
                 options: {
-                    temperature: 0.3,  // Lower = more focused
-                    num_predict: 500,   // Limit output length
-                    top_p: 0.9,
-                    top_k: 40
+                    temperature: 0.2,  // Very focused
+                    num_predict: 400,   // Allow more detailed output with better context
+                    top_p: 0.85,
+                    top_k: 30,
+                    stop: ['\n\n\n\n', '###', '===='] // Stop at excessive newlines
                 }
             });
 
