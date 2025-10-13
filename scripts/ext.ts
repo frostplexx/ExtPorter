@@ -1152,11 +1152,11 @@ Be TECHNICAL and SPECIFIC. Focus on implementation details visible in the code.`
             const isHttps = url.protocol === 'https:';
             const httpModule = isHttps ? https : http;
 
-            // Set a timeout (2 minutes)
+            // Set a timeout (3 minutes)
             const timeout = setTimeout(() => {
                 req.destroy();
-                reject(new Error('Request timed out after 2 minutes. The model might be too slow or the prompt too large.'));
-            }, 120000);
+                reject(new Error('Request timed out after 3 minutes. The model might be too slow or the prompt too large.'));
+            }, 180000);
 
             // Ollama API format - enable streaming for live output
             const data = JSON.stringify({
