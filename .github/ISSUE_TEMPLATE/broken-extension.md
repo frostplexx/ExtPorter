@@ -2,7 +2,7 @@
 name: Broken Extension
 about: Issue template for broken extension
 title: "[BROKEN EXT] <extension name>"
-labels: ''
+labels: broken extension
 assignees: ''
 
 ---
