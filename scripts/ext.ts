@@ -391,21 +391,24 @@ class ExtensionExplorer {
         const mv3Tester = new ChromeTester();
         const mv2Tester = new ChromeTester();
 
-        await Promise.all([
-            (async () => {
-                console.log('Starting MV3 browser (red)...');
-                await mv3Tester.initBrowser(mv3Extension, 3, false, true);
-                await mv3Tester.injectColor('red');
-                await mv3Tester.navigateTo('https://www.nytimes.com/');
-            })(),
-            (async () => {
-                console.log('Starting MV2 browser (blue)...');
-                await mv2Tester.initBrowser(mv2Extension, 3, true, true);
-                await mv2Tester.injectColor('blue');
-                await mv2Tester.navigateTo('https://www.nytimes.com/');
-            })(),
-        ]);
-
+        try {
+            await Promise.all([
+                (async () => {
+                    console.log('Starting MV3 browser (red)...');
+                    await mv3Tester.initBrowser(mv3Extension, 3, false, true);
+                    await mv3Tester.injectColor('red');
+                    await mv3Tester.navigateTo('https://www.nytimes.com/');
+                })(),
+                (async () => {
+                    console.log('Starting MV2 browser (blue)...');
+                    await mv2Tester.initBrowser(mv2Extension, 3, true, true);
+                    await mv2Tester.injectColor('blue');
+                    await mv2Tester.navigateTo('https://www.nytimes.com/');
+                })(),
+            ]);
+        } catch (error) {
+            console.log(error as any)
+        }
         console.log('✓ Both browsers launched successfully');
         console.log('  Close the browsers when done...');
     }
@@ -432,6 +435,7 @@ class ExtensionExplorer {
             ]);
             choice = answer.choice;
         } catch (error) {
+            console.log(error as any)
             // User pressed ESC or Ctrl+C
             return;
         }
@@ -645,7 +649,7 @@ class ExtensionExplorer {
         }
 
         try {
-            execSync(`less -R "${tmpFile}"`, { stdio: 'inherit' });
+            execSync(`bat -R "${tmpFile}"`, { stdio: 'inherit' });
         } catch (error: any) {
             // Check if it's an actual error or just less exiting normally
             if (error.status !== 0 && error.code === 'ENOENT') {
@@ -950,24 +954,17 @@ ${extensionFiles}
 
 ` : 'No extension code available.'}
 
-Write a SHORT, SPECIFIC description in markdown (max 250 words):
+Write a SHORT, SPECIFIC description in markdown (max 100 words):
 
 ## What it does
-1-2 sentences explaining the core functionality
+1 sentences explaining the core functionality
 
 ## How to test it
-3-5 specific steps to verify the extension works:
+3-5 specific steps to verify the extension works, assume the extension is already installed and I want to quickly tests its functionality:
 - Be SPECIFIC: mention exact URLs, actions, or UI elements
 - Include what to look for (e.g., "red banner appears", "request blocked")
 - Focus on observable behavior
-
-## Key features
-3-4 bullets with CONCRETE details:
-- Not "blocks websites" but "blocks requests to *.ads.com domains"
-- Not "monitors activity" but "logs all network requests to console"
-- Include specific permissions used (webRequest, storage, tabs, etc.)
-
-Be TECHNICAL and SPECIFIC. Focus on implementation details visible in the code.`;
+Be TECHNICAL and SPECIFIC. Focus on implementation details visible in the code and keep the SENTENCES SHORT`;
 
             // Show prompt stats
             const promptTokens = Math.ceil(prompt.length / 4); // Rough estimate: 4 chars ≈ 1 token
@@ -994,7 +991,7 @@ Be TECHNICAL and SPECIFIC. Focus on implementation details visible in the code.`
             fs.writeFileSync(tmpFile, output);
 
             try {
-                execSync(`less -R "${tmpFile}"`, { stdio: 'inherit' });
+                execSync(`bat "${tmpFile}"`, { stdio: 'inherit' });
             } catch (error: any) {
                 if (error.status !== 0 && error.code === 'ENOENT') {
                     console.log('❌ less command not found');
@@ -1481,3 +1478,5 @@ async function main() {
 if (require.main === module) {
     main().catch(console.error);
 }
+
+
