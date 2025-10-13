@@ -1033,10 +1033,8 @@ ${extensionFiles}
 
 Write a SHORT, SPECIFIC description in markdown (max 100 words):
 
-## What it does
 1 sentences explaining the core functionality
 
-## How to test it
 3-5 specific steps to verify the extension works, assume the extension is already installed and I want to quickly tests its functionality:
 - Be SPECIFIC: mention exact URLs, actions, or UI elements
 - Include what to look for (e.g., "red banner appears", "request blocked")
@@ -1045,8 +1043,12 @@ Be TECHNICAL and SPECIFIC. Focus on implementation details visible in the code a
 
             // Show prompt stats
             const promptTokens = Math.ceil(prompt.length / 4); // Rough estimate: 4 chars ≈ 1 token
+            // Save to temp file and display
+            const tmpDir = require('os').tmpdir();
+            const tmpFile = path.join(tmpDir, `ext-description-${ext.id}-${Date.now()}.md`);
             console.log('');
             console.log(chalk.dim(`Prompt size: ~${promptTokens} tokens (${Math.ceil(prompt.length / 1024)}KB)`));
+            console.log(chalk.dim(`Temp file: ${tmpFile}`));
             console.log(chalk.dim(`Sending to LLM (${llmEndpoint})...`));
             console.log(chalk.dim(`Using model: ${llmModel}`));
             console.log(chalk.yellow('⏳ Generating description... (this may take 30-60 seconds)'));
@@ -1055,13 +1057,12 @@ Be TECHNICAL and SPECIFIC. Focus on implementation details visible in the code a
             // Call LLM API
             const response = await this.callLLMAPI(prompt, llmEndpoint, llmModel);
 
-            // Save to temp file and display
-            const tmpDir = require('os').tmpdir();
-            const tmpFile = path.join(tmpDir, `ext-description-${ext.id}-${Date.now()}.md`);
 
-            const output = `# Extension Migrator Description\n\n` +
+            const output =
                 `Extension: ${ext.name || 'Unknown'}\n` +
                 `ID: ${ext.id}\n\n` +
+                `---\n\n` +
+                prompt +
                 `---\n\n` +
                 response;
 
@@ -1252,6 +1253,7 @@ Be TECHNICAL and SPECIFIC. Focus on implementation details visible in the code a
             const req = httpModule.request(options, (res: any) => {
                 let fullResponse = '';
                 let buffer = '';
+                let resolved = false; // Flag to prevent double resolution
 
                 console.log(chalk.cyan('\n--- Generated Description ---\n'));
 
@@ -1274,7 +1276,8 @@ Be TECHNICAL and SPECIFIC. Focus on implementation details visible in the code a
                             }
 
                             // Check if done
-                            if (parsed.done) {
+                            if (parsed.done && !resolved) {
+                                resolved = true;
                                 clearTimeout(timeout);
                                 console.log(chalk.cyan('\n\n--- End of Description ---\n'));
                                 console.log(chalk.green('✓ Description generated successfully'));
@@ -1287,6 +1290,8 @@ Be TECHNICAL and SPECIFIC. Focus on implementation details visible in the code a
                 });
 
                 res.on('end', () => {
+                    if (resolved) return; // Already resolved, don't do anything
+
                     clearTimeout(timeout);
 
                     // Process any remaining buffer
