@@ -10,6 +10,7 @@ import { ExtensionSearchResult } from './types';
 import { getMv2Path, getMv3Path, execCommand, collectExtensionFiles } from './file-operations';
 import { llmManager } from './llm-manager';
 import { waitForKeypress } from './input-handler';
+import { buildChatMessagesFromFile } from '../migrator/features/llm';
 
 export async function viewSource(ext: ExtensionSearchResult): Promise<void> {
     const mv2Path = getMv2Path(ext);
@@ -598,71 +599,56 @@ export async function generateDescription(ext: ExtensionSearchResult): Promise<v
 
         const manifestSummary = `Manifest.json: ${JSON.stringify(manifest)}`
 
-        const prompt = `You are a helpful assistant which analyzes Chrome browser extensions and generates concise documentation. Given an extension's manifest and source code, you identify the extension's core functionality and generate clear testing instructions.
-
-Extension Name: ${ext.name || 'Unknown'}
-${manifestSummary}
-
-Source Files:
-${extensionFiles}
-
-Please analyze the extension above and generate documentation following these guidelines:
-
-Output Requirements:
-- Write a concise description (1-2 sentences) explaining what the extension does
-- Provide 4-5 specific test steps that verify the extension's functionality
-- Keep your total response under 200 words
-- Be specific about URLs, UI elements, and user actions
-- Use clear, direct language
-- Asume that the extension is already installed and that the user wants to tests its functionality
-- Focus on the manifest file, only ouput if you are sure that it does, do not assume
-
-Output Format:
-## What it does
-[2-3 sentences describing the extension's purpose and main features]
-
-## Test steps
-1. [First action the user should take, with specific details]
-2. [Second action or observation]
-3. [Third action or observation]
-4. [Fourth action or observation]
-5. [Expected result or final verification]
-
-Guidelines you must obey:
-- Do not hallucinate. Do not make up factual information
-- Base your description only on the provided code and manifest
-- If the code is unclear or minified, focus on the manifest permissions and API usage
-- Keep each sentence under 15 words for clarity
-- Mention specific websites or pages where relevant
-- Do not include meta-commentary, disclaimers, or explanations about these guidelines
-- Only output the formatted documentation, nothing else`;
+        // Build chat messages from template file (uses chat API for better instruction following)
+        const templatePath = path.join(__dirname, 'prompts', 'extension-description.txt');
+        const messages = buildChatMessagesFromFile(templatePath, {
+            extension_name: ext.name || 'Unknown',
+            manifest_summary: manifestSummary,
+            extension_files: extensionFiles
+        });
 
         // Get persistent LLM service (reuses SSH tunnel if already open)
         const llmService = await llmManager.getService();
 
-        // Show prompt stats
+        // Calculate token estimate from combined message content
+        const combinedContent = messages.map(m => m.content).join('\n\n');
+        const promptTokens = Math.ceil(combinedContent.length / 4);
+        const promptSizeKB = Math.ceil(combinedContent.length / 1024);
+
+        // Show prompt stats and write prompt to temp file immediately
         const tmpDir = require('os').tmpdir();
         const tmpFile = path.join(tmpDir, `ext-description-${ext.id}-${Date.now()}.md`);
-        const promptTokens = Math.ceil(prompt.length / 4);
-        const promptSizeKB = Math.ceil(prompt.length / 1024);
+
+        // Write prompt to file immediately so user can view it while LLM is processing
+        const initialOutput =
+            `Extension: ${ext.name || 'Unknown'}\n` +
+            `ID: ${ext.id}\n\n` +
+            `=== SYSTEM MESSAGE ===\n${messages[0].content}\n\n` +
+            `=== USER MESSAGE ===\n${messages[1].content}\n\n` +
+            `=== RESPONSE ===\n` +
+            `[Waiting for LLM response...]`;
+
+        fs.writeFileSync(tmpFile, initialOutput);
 
         console.log(chalk.dim(`Sending to LLM (${llmEndpoint})...`));
         console.log(chalk.dim(`Model: ${llmModel} | Tokens: ~${promptTokens} (~${promptSizeKB}KB)`));
+        console.log(chalk.dim(`Output: ${tmpFile}`));
         console.log(chalk.yellow('⏳ Generating description...'));
         console.log('');
 
-        // Call LLM API
-        const response = await llmService.generateCompletion(prompt);
+        // Call LLM chat API (better instruction following than completion API)
+        const response = await llmService.generateChatCompletion(messages);
 
-        const output =
+        // Update file with response
+        const finalOutput =
             `Extension: ${ext.name || 'Unknown'}\n` +
             `ID: ${ext.id}\n\n` +
-            `---\n\n` +
-            prompt +
-            `---\n\n` +
+            `=== SYSTEM MESSAGE ===\n${messages[0].content}\n\n` +
+            `=== USER MESSAGE ===\n${messages[1].content}\n\n` +
+            `=== RESPONSE ===\n` +
             response;
 
-        fs.writeFileSync(tmpFile, output);
+        fs.writeFileSync(tmpFile, finalOutput);
 
         // Wait for user before continuing
         console.log('');

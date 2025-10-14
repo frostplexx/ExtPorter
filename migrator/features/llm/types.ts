@@ -26,3 +26,21 @@ export interface CommandResult {
     output: string;
     error?: string;
 }
+
+/**
+ * Chat message for the chat API
+ */
+export interface ChatMessage {
+    role: 'system' | 'user' | 'assistant';
+    content: string;
+}
+
+/**
+ * Options for LLM generation
+ */
+export interface GenerationOptions {
+    /** Use chat API (/api/chat) instead of completion API (/api/generate) */
+    useChat?: boolean;
+    /** Stream output to console */
+    streamToConsole?: boolean;
+}

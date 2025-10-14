@@ -2,7 +2,7 @@ import * as https from 'https';
 import * as http from 'http';
 import chalk from 'chalk';
 import { spawn } from 'child_process';
-import { RemoteLLMConfig, CommandResult } from './types';
+import { RemoteLLMConfig, CommandResult, ChatMessage, GenerationOptions } from './types';
 import { SSHTunnel } from './ssh-tunnel';
 import { loadLLMConfig } from './config';
 
@@ -195,7 +195,134 @@ export class LLMService {
     }
 
     /**
-     * Call the LLM API with the given prompt
+     * Generate completion using chat messages (recommended)
+     * Uses the /api/chat endpoint which properly separates system/user messages
+     */
+    async generateChatCompletion(messages: ChatMessage[], options: GenerationOptions = {}): Promise<string> {
+        const { streamToConsole = true } = options;
+
+        return new Promise((resolve, reject) => {
+            // Parse endpoint URL
+            const url = new URL(this.effectiveEndpoint);
+            const isHttps = url.protocol === 'https:';
+            const httpModule = isHttps ? https : http;
+
+            // Set a timeout (3 minutes)
+            const timeout = setTimeout(() => {
+                req.destroy();
+                reject(new Error('Request timed out after 3 minutes. The model might be too slow or the prompt too large.'));
+            }, 180000);
+
+            // Ollama chat API format
+            const data = JSON.stringify({
+                model: this.config.model,
+                messages: messages,
+                stream: true,
+                options: {
+                    temperature: this.config.temperature,
+                    num_predict: this.config.num_predict,
+                    top_p: this.config.top_p,
+                    top_k: this.config.top_k,
+                }
+            });
+
+            const options_req = {
+                hostname: url.hostname,
+                port: url.port || (isHttps ? 443 : 80),
+                path: '/api/chat',
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Content-Length': Buffer.byteLength(data),
+                },
+            };
+
+            const req = httpModule.request(options_req, (res: any) => {
+                let fullResponse = '';
+                let buffer = '';
+                let resolved = false;
+
+                res.on('data', (chunk: any) => {
+                    buffer += chunk.toString();
+
+                    // Process each line (streaming responses come line by line as JSON)
+                    const lines = buffer.split('\n');
+                    buffer = lines.pop() || '';
+
+                    for (const line of lines) {
+                        if (!line.trim()) continue;
+
+                        try {
+                            const parsed = JSON.parse(line);
+                            if (parsed.message?.content) {
+                                if (streamToConsole) {
+                                    process.stdout.write(parsed.message.content);
+                                }
+                                fullResponse += parsed.message.content;
+                            }
+
+                            if (parsed.done && !resolved) {
+                                resolved = true;
+                                clearTimeout(timeout);
+                                if (streamToConsole) {
+                                    console.log('\n');
+                                }
+                                resolve(fullResponse);
+                            }
+                        } catch (e) {
+                            // Skip invalid JSON lines
+                        }
+                    }
+                });
+
+                res.on('end', () => {
+                    if (resolved) return;
+
+                    clearTimeout(timeout);
+
+                    if (buffer.trim()) {
+                        try {
+                            const parsed = JSON.parse(buffer);
+                            if (parsed.message?.content) {
+                                if (streamToConsole) {
+                                    process.stdout.write(parsed.message.content);
+                                }
+                                fullResponse += parsed.message.content;
+                            }
+                        } catch (e) {
+                            // Ignore
+                        }
+                    }
+
+                    if (fullResponse) {
+                        if (streamToConsole) {
+                            console.log('\n');
+                        }
+                        resolve(fullResponse);
+                    } else {
+                        reject(new Error('Empty response from LLM'));
+                    }
+                });
+
+                res.on('error', (error: any) => {
+                    clearTimeout(timeout);
+                    reject(error);
+                });
+            });
+
+            req.on('error', (error: any) => {
+                clearTimeout(timeout);
+                reject(error);
+            });
+
+            req.write(data);
+            req.end();
+        });
+    }
+
+    /**
+     * Call the LLM API with the given prompt (legacy completion API)
+     * For better results, use generateChatCompletion() instead
      */
     async generateCompletion(prompt: string, streamToConsole: boolean = true): Promise<string> {
         return new Promise((resolve, reject) => {
