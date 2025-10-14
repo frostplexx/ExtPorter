@@ -8,7 +8,7 @@ import { Extension } from '../migrator/types/extension';
 import { ChromeTester } from '../ext_tester/chrome_tester';
 import { ExtensionSearchResult } from './types';
 import { getMv2Path, getMv3Path, execCommand, collectExtensionFiles } from './file-operations';
-import { ensureOllamaRunning, callLLMAPI } from './llm-service';
+import { llmManager } from './llm-manager';
 import { waitForKeypress } from './input-handler';
 
 export async function viewSource(ext: ExtensionSearchResult): Promise<void> {
@@ -569,21 +569,9 @@ export async function openDirectory(ext: ExtensionSearchResult): Promise<void> {
 export async function generateDescription(ext: ExtensionSearchResult): Promise<void> {
     console.clear();
 
-    // Get LLM endpoint from environment (defaults to local Ollama)
+    // Get LLM configuration from environment
     const llmEndpoint = process.env.LLM_ENDPOINT || 'http://localhost:11434';
     const llmModel = process.env.LLM_MODEL || 'llama3.2';
-
-    // Check if Ollama is running and start if needed
-    if (llmEndpoint.includes('localhost')) {
-        const ollamaReady = await ensureOllamaRunning(llmModel);
-        if (!ollamaReady) {
-            console.log('');
-            console.log(chalk.red('❌ Failed to start Ollama or download model'));
-            console.log(chalk.dim('Please install Ollama: https://ollama.com/download'));
-            await waitForKeypress('\nPress Enter to continue...');
-            return;
-        }
-    }
 
     try {
         const codeFiles: { path: string; content: string }[] = [];
@@ -604,9 +592,7 @@ export async function generateDescription(ext: ExtensionSearchResult): Promise<v
         const extensionFiles = codeFiles
             .filter(f => f.path.includes('extension/'))
             .map(f => {
-                const content = f.content;
-                const lines = content.split('\n');
-                return `${f.path}:\n${lines.slice(0, 400).join('\n')}`;
+                return `${f.path}:\n${f.content}`;
             })
             .join('\n\n---\n\n');
 
@@ -651,19 +637,22 @@ Guidelines you must obey:
 - Do not include meta-commentary, disclaimers, or explanations about these guidelines
 - Only output the formatted documentation, nothing else`;
 
+        // Get persistent LLM service (reuses SSH tunnel if already open)
+        const llmService = await llmManager.getService();
+
         // Show prompt stats
-        const promptTokens = Math.ceil(prompt.length / 4);
         const tmpDir = require('os').tmpdir();
         const tmpFile = path.join(tmpDir, `ext-description-${ext.id}-${Date.now()}.md`);
-        console.log(chalk.dim(`Prompt size: ~${promptTokens} tokens (${Math.ceil(prompt.length / 1024)}KB)`));
-        console.log(chalk.dim(`Temp file: ${tmpFile}`));
+        const promptTokens = Math.ceil(prompt.length / 4);
+        const promptSizeKB = Math.ceil(prompt.length / 1024);
+
         console.log(chalk.dim(`Sending to LLM (${llmEndpoint})...`));
-        console.log(chalk.dim(`Using model: ${llmModel}`));
-        console.log(chalk.yellow('⏳ Generating description... (this may take 30-60 seconds)'));
+        console.log(chalk.dim(`Model: ${llmModel} | Tokens: ~${promptTokens} (~${promptSizeKB}KB)`));
+        console.log(chalk.yellow('⏳ Generating description...'));
         console.log('');
 
         // Call LLM API
-        const response = await callLLMAPI(prompt, llmEndpoint, llmModel);
+        const response = await llmService.generateCompletion(prompt);
 
         const output =
             `Extension: ${ext.name || 'Unknown'}\n` +
@@ -678,7 +667,6 @@ Guidelines you must obey:
         // Wait for user before continuing
         console.log('');
         await waitForKeypress(chalk.dim('Press Enter to continue...'));
-
         // Clean up temp file
         try {
             if (fs.existsSync(tmpFile)) {
