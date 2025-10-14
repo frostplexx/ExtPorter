@@ -25,7 +25,7 @@
         "db:shell": "docker-compose exec mongodb mongosh migrator -u admin -p password",
         "db:admin": "open http://localhost:8081",
         "db:setup": "docker-compose up -d",
-        "ext": "ts-node scripts/ext.ts",
+        "ext": "ts-node ext_analyzer/ext.ts",
         "scripts:compare": "ts-node scripts/compare.ts",
         "scripts:search": "ts-node scripts/search-extensions.ts",
         "scripts:inspect": "ts-node scripts/inspect.ts",
