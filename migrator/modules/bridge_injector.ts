@@ -393,6 +393,7 @@ export class BridgeInjector implements MigrationModule {
             const scriptTag = `<script src="${BridgeInjector.BRIDGE_FILENAME}"></script>`;
             return content.includes(scriptTag);
         } catch (error) {
+            logger.error(extension, error as any)
             return false;
         }
     }

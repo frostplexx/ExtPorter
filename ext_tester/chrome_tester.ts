@@ -143,12 +143,33 @@ export class ChromeTester {
                         : ENV_LOG_LEVEL.toLowerCase() == 'debug'
                             ? false
                             : (process.env.PUPPETEER_HEADLESS as boolean | undefined) || true,
-                    pipe: true,
-                    devtools: true,
+                    pipe: true, // Use WebSocket instead of IPC pipes for better performance
+                    devtools: ENV_LOG_LEVEL.toLowerCase() == 'debug', // Only open devtools in debug mode
                     executablePath: this.getChromePath(!is_mv_2),
                     enableExtensions: [this.current_extension.manifest_v2_path],
                     args: [
+                        '--no-default-browser-check',
+                        '--disable-blink-features=AutomationControlled',
+                        '--disable-background-timer-throttling',
+                        '--disable-backgrounding-occluded-windows',
+                        '--disable-renderer-backgrounding',
+                        '--disable-features=TranslateUI',
+                        '--disable-ipc-flooding-protection',
+                        '--disable-hang-monitor',
+                        '--disable-client-side-phishing-detection',
+                        '--disable-component-update',
+                        '--disable-default-apps',
+                        '--disable-domain-reliability',
+                        '--disable-features=InterestFeedContentSuggestions',
+                        '--disable-features=Translate',
+                        '--metrics-recording-only',
+                        '--mute-audio',
+                        '--no-default-browser-check',
                         '--no-first-run',
+                        '--safebrowsing-disable-auto-update',
+                        '--enable-automation',
+                        '--password-store=basic',
+                        '--use-mock-keychain',
                     ],
                 });
 
