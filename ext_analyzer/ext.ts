@@ -7,6 +7,7 @@ import { Database } from '../migrator/features/database/db_manager';
 import { SearchOptions } from './types';
 import { ExtensionExplorer } from './extension-explorer';
 import * as actions from './extension-actions';
+import { llmManager } from './llm-manager';
 
 // Load environment variables
 dotenv.config();
@@ -56,6 +57,7 @@ async function main() {
             try {
                 explorer.close();
                 await Database.shared.close();
+                await llmManager.cleanup(); // Close SSH tunnel if active
             } catch (e) {
                 // Ignore cleanup errors
             }
@@ -128,6 +130,7 @@ async function main() {
     } finally {
         explorer.close();
         await Database.shared.close();
+        await llmManager.cleanup(); // Close SSH tunnel if active
     }
 }
 
