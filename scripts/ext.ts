@@ -12,6 +12,8 @@ import inquirer from 'inquirer';
 import chalk from 'chalk';
 import stringWidth from 'string-width';
 import * as readline from 'readline';
+import * as https from 'https';
+import * as http from 'http';
 
 // Load environment variables
 dotenv.config();
@@ -233,6 +235,7 @@ class ExtensionExplorer {
             { icon: chalk.white(' '), label: 'Grep', key: 'g' },
             { icon: chalk.yellow(' '), label: 'Manifest', key: 'm' },
             { icon: chalk.blue(' '), label: 'Open Directory', key: 'o' },
+            { icon: chalk.magenta('󰚩 '), label: 'Generate Description', key: 'd' },
             { icon: chalk.dim('󰌑 '), label: 'Search Again', key: 's' },
             { icon: chalk.red('󰈆 '), label: 'Quit', key: 'q' },
         ];
@@ -388,21 +391,24 @@ class ExtensionExplorer {
         const mv3Tester = new ChromeTester();
         const mv2Tester = new ChromeTester();
 
-        await Promise.all([
-            (async () => {
-                console.log('Starting MV3 browser (red)...');
-                await mv3Tester.initBrowser(mv3Extension, 3, false, true);
-                await mv3Tester.injectColor('red');
-                await mv3Tester.navigateTo('https://www.nytimes.com/');
-            })(),
-            (async () => {
-                console.log('Starting MV2 browser (blue)...');
-                await mv2Tester.initBrowser(mv2Extension, 3, true, true);
-                await mv2Tester.injectColor('blue');
-                await mv2Tester.navigateTo('https://www.nytimes.com/');
-            })(),
-        ]);
-
+        try {
+            await Promise.all([
+                (async () => {
+                    console.log('Starting MV3 browser (red)...');
+                    await mv3Tester.initBrowser(mv3Extension, 3, false, true);
+                    // await mv3Tester.injectColor('red');
+                    mv3Tester.navigateTo('https://www.nytimes.com/');
+                })(),
+                (async () => {
+                    console.log('Starting MV2 browser (blue)...');
+                    await mv2Tester.initBrowser(mv2Extension, 3, true, true);
+                    // await mv2Tester.injectColor('blue');
+                    mv2Tester.navigateTo('https://www.nytimes.com/');
+                })(),
+            ]);
+        } catch (error) {
+            console.log(error as any)
+        }
         console.log('✓ Both browsers launched successfully');
         console.log('  Close the browsers when done...');
     }
@@ -429,6 +435,7 @@ class ExtensionExplorer {
             ]);
             choice = answer.choice;
         } catch (error) {
+            console.log(error as any)
             // User pressed ESC or Ctrl+C
             return;
         }
@@ -861,6 +868,494 @@ class ExtensionExplorer {
         }
     }
 
+    async generateDescription(ext: ExtensionSearchResult): Promise<void> {
+        console.clear();
+
+        // Get LLM endpoint from environment (defaults to local Ollama)
+        const llmEndpoint = process.env.LLM_ENDPOINT || 'http://localhost:11434';
+        const llmModel = process.env.LLM_MODEL || 'llama3.2';
+
+        // Check if Ollama is running and start if needed
+        if (llmEndpoint.includes('localhost')) {
+            // console.log(chalk.dim('Checking Ollama status...'));
+            const ollamaReady = await this.ensureOllamaRunning(llmModel);
+            if (!ollamaReady) {
+                console.log('');
+                console.log(chalk.red('❌ Failed to start Ollama or download model'));
+                console.log(chalk.dim('Please install Ollama: https://ollama.com/download'));
+                await this.waitForKeypress('\nPress Enter to continue...');
+                return;
+            }
+        }
+
+        // console.log(chalk.dim('Collecting extension migrator code...'));
+
+        try {
+            const codeFiles: { path: string; content: string }[] = [];
+
+            // Collect extension files
+            const mv2Path = this.getMv2Path(ext);
+            if (mv2Path) {
+                // 1. Add manifest.json
+                const manifestPath = path.join(mv2Path, 'manifest.json');
+                if (fs.existsSync(manifestPath)) {
+                    const manifestContent = fs.readFileSync(manifestPath, 'utf8');
+                    codeFiles.push({ path: 'extension/manifest.json', content: manifestContent });
+
+                    // Parse manifest to find important files
+                    try {
+                        const manifest = JSON.parse(manifestContent);
+
+                        // 2. Collect background scripts
+                        if (manifest.background) {
+                            const scripts = manifest.background.scripts || (manifest.background.service_worker ? [manifest.background.service_worker] : []);
+                            for (const script of scripts) {
+                                if (script) {
+                                    const scriptPath = path.join(mv2Path, script);
+                                    if (fs.existsSync(scriptPath)) {
+                                        const content = fs.readFileSync(scriptPath, 'utf8');
+                                        codeFiles.push({ path: `extension/${script}`, content });
+                                    }
+                                }
+                            }
+                            // Also check for page property
+                            if (manifest.background.page) {
+                                const pagePath = path.join(mv2Path, manifest.background.page);
+                                if (fs.existsSync(pagePath)) {
+                                    const content = fs.readFileSync(pagePath, 'utf8');
+                                    codeFiles.push({ path: `extension/${manifest.background.page}`, content });
+                                }
+                            }
+                        }
+
+                        // 3. Collect content scripts
+                        if (manifest.content_scripts) {
+                            for (const cs of manifest.content_scripts) {
+                                if (cs.js) {
+                                    for (const jsFile of cs.js) {
+                                        const jsPath = path.join(mv2Path, jsFile);
+                                        if (fs.existsSync(jsPath)) {
+                                            const content = fs.readFileSync(jsPath, 'utf8');
+                                            codeFiles.push({ path: `extension/${jsFile}`, content });
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // 4. Collect popup HTML and its scripts
+                        const popupPath = manifest.browser_action?.default_popup || manifest.action?.default_popup;
+                        if (popupPath) {
+                            const fullPopupPath = path.join(mv2Path, popupPath);
+                            if (fs.existsSync(fullPopupPath)) {
+                                const content = fs.readFileSync(fullPopupPath, 'utf8');
+                                codeFiles.push({ path: `extension/${popupPath}`, content });
+
+                                // Parse HTML to find script tags
+                                const scriptMatches = content.matchAll(/<script[^>]*src=["']([^"']+)["']/g);
+                                for (const match of scriptMatches) {
+                                    const scriptFile = match[1];
+                                    const scriptPath = path.join(mv2Path, path.dirname(popupPath), scriptFile);
+                                    if (fs.existsSync(scriptPath)) {
+                                        const scriptContent = fs.readFileSync(scriptPath, 'utf8');
+                                        const relativePath = path.join(path.dirname(popupPath), scriptFile);
+                                        codeFiles.push({ path: `extension/${relativePath}`, content: scriptContent });
+                                    }
+                                }
+                            }
+                        }
+
+                        // 5. Collect options page
+                        const optionsPage = manifest.options_page || manifest.options_ui?.page;
+                        if (optionsPage) {
+                            const optionsPath = path.join(mv2Path, optionsPage);
+                            if (fs.existsSync(optionsPath)) {
+                                const content = fs.readFileSync(optionsPath, 'utf8');
+                                codeFiles.push({ path: `extension/${optionsPage}`, content });
+                            }
+                        }
+
+                        // 6. Collect chrome_url_overrides (new tab, history, bookmarks)
+                        if (manifest.chrome_url_overrides) {
+                            for (const [key, value] of Object.entries(manifest.chrome_url_overrides)) {
+                                const overridePath = path.join(mv2Path, value as string);
+                                if (fs.existsSync(overridePath)) {
+                                    const content = fs.readFileSync(overridePath, 'utf8');
+                                    codeFiles.push({ path: `extension/${value}`, content });
+                                }
+                            }
+                        }
+
+                        // 7. Look for common main files if we don't have much yet
+                        if (codeFiles.length < 5) {
+                            const commonFiles = ['main.js', 'index.js', 'app.js', 'background.js', 'content.js', 'script.js'];
+                            for (const commonFile of commonFiles) {
+                                const commonPath = path.join(mv2Path, commonFile);
+                                if (fs.existsSync(commonPath) && !codeFiles.some(f => f.path.includes(commonFile))) {
+                                    const content = fs.readFileSync(commonPath, 'utf8');
+                                    codeFiles.push({ path: `extension/${commonFile}`, content });
+                                }
+                            }
+                        }
+
+                    } catch (e) {
+                        console.log(chalk.yellow('⚠ Could not parse manifest.json'));
+                    }
+                }
+            }
+
+            console.log(chalk.dim(`Collected ${codeFiles.length} files`));
+
+            // Build description focused on the extension itself
+            // Look for manifest.json and key extension files
+            const manifestFile = codeFiles.find(f => f.path.includes('manifest.json'));
+            const manifest = manifestFile ? JSON.parse(manifestFile.content) : null;
+
+            // Get extension code files (not migrator files)
+            const extensionFiles = codeFiles
+                .filter(f => f.path.includes('extension/'))
+                .map(f => {
+                    const content = f.content;
+                    const lines = content.split('\n');
+
+                    // For regular files, show first 200 lines (we have plenty of context!)
+                    return `${f.path}:\n${lines.slice(0, 400).join('\n')}`;
+                })
+                .join('\n\n---\n\n');
+
+            // Only include manifest permissions and key fields
+            const manifestSummary = `Manifest.json: ${JSON.stringify(manifest)}`
+
+            const prompt = `You are a helpful assistant which analyzes Chrome browser extensions and generates concise documentation. Given an extension's manifest and source code, you identify the extension's core functionality and generate clear testing instructions.
+
+Extension Name: ${ext.name || 'Unknown'}
+${manifestSummary}
+
+Source Files:
+${extensionFiles}
+
+Please analyze the extension above and generate documentation following these guidelines:
+
+Output Requirements:
+- Write a concise description (1-2 sentences) explaining what the extension does
+- Provide 4-5 specific test steps that verify the extension's functionality
+- Keep your total response under 200 words
+- Be specific about URLs, UI elements, and user actions
+- Use clear, direct language
+- Asume that the extension is already installed and that the user wants to tests its functionality
+- Focus on the manifest file, only ouput if you are sure that it does, do not assume
+
+Output Format:
+## What it does
+[2-3 sentences describing the extension's purpose and main features]
+
+## Test steps
+1. [First action the user should take, with specific details]
+2. [Second action or observation]
+3. [Third action or observation]
+4. [Fourth action or observation]
+5. [Expected result or final verification]
+
+Guidelines you must obey:
+- Do not hallucinate. Do not make up factual information
+- Base your description only on the provided code and manifest
+- If the code is unclear or minified, focus on the manifest permissions and API usage
+- Keep each sentence under 15 words for clarity
+- Mention specific websites or pages where relevant
+- Do not include meta-commentary, disclaimers, or explanations about these guidelines
+- Only output the formatted documentation, nothing else`;
+
+            // Show prompt stats
+            const promptTokens = Math.ceil(prompt.length / 4); // Rough estimate: 4 chars ≈ 1 token
+            // Save to temp file and display
+            const tmpDir = require('os').tmpdir();
+            const tmpFile = path.join(tmpDir, `ext-description-${ext.id}-${Date.now()}.md`);
+            console.log(chalk.dim(`Prompt size: ~${promptTokens} tokens (${Math.ceil(prompt.length / 1024)}KB)`));
+            console.log(chalk.dim(`Temp file: ${tmpFile}`));
+            console.log(chalk.dim(`Sending to LLM (${llmEndpoint})...`));
+            console.log(chalk.dim(`Using model: ${llmModel}`));
+            console.log(chalk.yellow('⏳ Generating description... (this may take 30-60 seconds)'));
+            console.log('');
+
+            // Call LLM API
+            const response = await this.callLLMAPI(prompt, llmEndpoint, llmModel);
+
+
+            const output =
+                `Extension: ${ext.name || 'Unknown'}\n` +
+                `ID: ${ext.id}\n\n` +
+                `---\n\n` +
+                prompt +
+                `---\n\n` +
+                response;
+
+            fs.writeFileSync(tmpFile, output);
+
+            // Wait for user before continuing
+            console.log('');
+            await this.waitForKeypress(chalk.dim('Press Enter to continue...'));
+
+            // Clean up temp file
+            try {
+                if (fs.existsSync(tmpFile)) {
+                    fs.unlinkSync(tmpFile);
+                }
+            } catch (e) {
+                // Ignore cleanup errors silently
+            }
+        } catch (error: any) {
+            console.log('');
+            console.log(chalk.red('❌ Error generating description:'), error.message);
+            await this.waitForKeypress('\nPress Enter to continue...');
+        }
+    }
+
+    private async ensureOllamaRunning(model: string): Promise<boolean> {
+        try {
+            // Check if Ollama is running by trying to list models
+            const checkResult = await this.runCommand('ollama', ['list'], false);
+
+            if (checkResult.success) {
+                // console.log(chalk.green('✓ Ollama is running'));
+
+                // Check if model is available
+                if (checkResult.output.includes(model)) {
+                    // console.log(chalk.green(`✓ Model '${model}' is available`));
+                    return true;
+                } else {
+                    // Model not found, try to pull it
+                    console.log(chalk.yellow(`⚠ Model '${model}' not found`));
+                    console.log(chalk.dim(`Downloading model '${model}'... (this may take a few minutes)`));
+
+                    const pullResult = await this.runCommand('ollama', ['pull', model], true);
+
+                    if (pullResult.success) {
+                        console.log(chalk.green(`✓ Model '${model}' downloaded successfully`));
+                        return true;
+                    } else {
+                        console.log(chalk.red(`✗ Failed to download model: ${pullResult.error}`));
+                        return false;
+                    }
+                }
+            } else {
+                // Ollama not running, try to start it
+                console.log(chalk.yellow('⚠ Ollama not running, attempting to start...'));
+
+                // Try to start Ollama in the background
+                const startResult = await this.runCommand('ollama', ['serve'], false, true);
+
+                // Wait a bit for Ollama to start
+                await new Promise(resolve => setTimeout(resolve, 2000));
+
+                // Check again
+                const recheckResult = await this.runCommand('ollama', ['list'], false);
+
+                if (recheckResult.success) {
+                    console.log(chalk.green('✓ Ollama started successfully'));
+
+                    // Now check/download the model
+                    if (!recheckResult.output.includes(model)) {
+                        console.log(chalk.dim(`Downloading model '${model}'... (this may take a few minutes)`));
+                        const pullResult = await this.runCommand('ollama', ['pull', model], true);
+
+                        if (!pullResult.success) {
+                            console.log(chalk.red(`✗ Failed to download model: ${pullResult.error}`));
+                            return false;
+                        }
+                        console.log(chalk.green(`✓ Model '${model}' downloaded successfully`));
+                    }
+                    return true;
+                } else {
+                    return false;
+                }
+            }
+        } catch (error: any) {
+            console.log(chalk.red(`✗ Error checking Ollama: ${error.message}`));
+            return false;
+        }
+    }
+
+    private async runCommand(
+        command: string,
+        args: string[],
+        showOutput: boolean = false,
+        background: boolean = false
+    ): Promise<{ success: boolean; output: string; error?: string }> {
+        return new Promise((resolve) => {
+            try {
+                if (background) {
+                    // Run in background
+                    const proc = spawn(command, args, {
+                        detached: true,
+                        stdio: 'ignore'
+                    });
+                    proc.unref();
+                    resolve({ success: true, output: '' });
+                    return;
+                }
+
+                const proc = spawn(command, args, {
+                    stdio: showOutput ? 'inherit' : 'pipe'
+                });
+
+                let output = '';
+                let error = '';
+
+                if (!showOutput) {
+                    proc.stdout?.on('data', (data) => {
+                        output += data.toString();
+                    });
+
+                    proc.stderr?.on('data', (data) => {
+                        error += data.toString();
+                    });
+                }
+
+                proc.on('close', (code) => {
+                    resolve({
+                        success: code === 0,
+                        output,
+                        error: error || undefined
+                    });
+                });
+
+                proc.on('error', (err) => {
+                    resolve({
+                        success: false,
+                        output: '',
+                        error: err.message
+                    });
+                });
+            } catch (err: any) {
+                resolve({
+                    success: false,
+                    output: '',
+                    error: err.message
+                });
+            }
+        });
+    }
+
+    private async callLLMAPI(prompt: string, endpoint: string, model: string): Promise<string> {
+        return new Promise((resolve, reject) => {
+            // Parse endpoint URL
+            const url = new URL(endpoint);
+            const isHttps = url.protocol === 'https:';
+            const httpModule = isHttps ? https : http;
+
+            // Set a timeout (3 minutes)
+            const timeout = setTimeout(() => {
+                req.destroy();
+                reject(new Error('Request timed out after 3 minutes. The model might be too slow or the prompt too large.'));
+            }, 180000);
+
+            // Ollama API format - enable streaming for live output
+            const data = JSON.stringify({
+                model: model,
+                prompt: prompt,
+                stream: true,  // Enable streaming
+                options: {
+                    temperature: 0.2,  // Very focused
+                    num_predict: 4000,   // Allow more detailed output with better context
+                    top_p: 0.85,
+                    top_k: 30,
+                    stop: ['\n\n\n\n', '###', '===='] // Stop at excessive newlines
+                }
+            });
+
+            const options = {
+                hostname: url.hostname,
+                port: url.port || (isHttps ? 443 : 80),
+                path: '/api/generate',
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Content-Length': Buffer.byteLength(data),
+                },
+            };
+
+            const req = httpModule.request(options, (res: any) => {
+                let fullResponse = '';
+                let buffer = '';
+                let resolved = false; // Flag to prevent double resolution
+
+                console.log(chalk.cyan('\n--- Generated Description ---\n'));
+
+                res.on('data', (chunk: any) => {
+                    buffer += chunk.toString();
+
+                    // Process each line (streaming responses come line by line as JSON)
+                    const lines = buffer.split('\n');
+                    buffer = lines.pop() || ''; // Keep incomplete line in buffer
+
+                    for (const line of lines) {
+                        if (!line.trim()) continue;
+
+                        try {
+                            const parsed = JSON.parse(line);
+                            if (parsed.response) {
+                                // Print the chunk immediately
+                                process.stdout.write(parsed.response);
+                                fullResponse += parsed.response;
+                            }
+
+                            // Check if done
+                            if (parsed.done && !resolved) {
+                                resolved = true;
+                                clearTimeout(timeout);
+                                console.log(chalk.cyan('\n\n--- End of Description ---\n'));
+                                console.log(chalk.green('✓ Description generated successfully'));
+                                resolve(fullResponse);
+                            }
+                        } catch (e) {
+                            // Skip invalid JSON lines
+                        }
+                    }
+                });
+
+                res.on('end', () => {
+                    if (resolved) return; // Already resolved, don't do anything
+
+                    clearTimeout(timeout);
+
+                    // Process any remaining buffer
+                    if (buffer.trim()) {
+                        try {
+                            const parsed = JSON.parse(buffer);
+                            if (parsed.response) {
+                                process.stdout.write(parsed.response);
+                                fullResponse += parsed.response;
+                            }
+                        } catch (e) {
+                            // Ignore
+                        }
+                    }
+
+                    if (fullResponse) {
+                        console.log(chalk.cyan('\n\n--- End of Description ---\n'));
+                        console.log(chalk.green('✓ Description generated successfully'));
+                        resolve(fullResponse);
+                    } else {
+                        reject(new Error('Empty response from LLM'));
+                    }
+                });
+
+                res.on('error', (error: any) => {
+                    clearTimeout(timeout);
+                    reject(error);
+                });
+            });
+
+            req.on('error', (error: any) => {
+                clearTimeout(timeout);
+                reject(error);
+            });
+
+            req.write(data);
+            req.end();
+        });
+    }
+
     private getMv2Path(ext: ExtensionSearchResult): string | null {
         if (!ext.manifest_v2_path) return null;
 
@@ -938,6 +1433,9 @@ class ExtensionExplorer {
                     break;
                 case 'o':
                     await this.openDirectory(ext);
+                    break;
+                case 'd':
+                    await this.generateDescription(ext);
                     break;
                 case 's':
                     return true; // Signal to search again
@@ -1079,3 +1577,5 @@ async function main() {
 if (require.main === module) {
     main().catch(console.error);
 }
+
+

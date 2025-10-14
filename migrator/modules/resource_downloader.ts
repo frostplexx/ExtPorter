@@ -67,6 +67,7 @@ export class ResourceDownloader extends MigrationModule {
                 try {
                     file.close();
                 } catch (error) {
+                    logger.error(extension, error as any)
                     // Ignore errors when closing files
                 }
             });

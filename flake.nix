@@ -38,6 +38,8 @@
             jq 
             vi-mongo
             google-chrome
+            ollama
+            bat
           ] ++ [
             # Pinned packages from specific commit
             pkgs-pinned.google-chrome # pinned google chrome to 138.0.7204.183

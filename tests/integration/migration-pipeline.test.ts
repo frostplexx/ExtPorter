@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
 import * as fs from 'fs-extra';
 import * as path from 'path';
 import { MigrateManifest } from '../../migrator/modules/manifest';
+import { MigrateCSP } from '../../migrator/modules/csp';
 import { ResourceDownloader } from '../../migrator/modules/resource_downloader';
 import { Extension } from '../../migrator/types/extension';
 import { MigrationError } from '../../migrator/types/migration_module';
@@ -42,21 +43,29 @@ describe('Migration Pipeline Integration Tests', () => {
                 expect(manifestResult.manifest.action).toBeDefined();
                 expect(manifestResult.manifest.browser_action).toBeUndefined();
                 expect(manifestResult.manifest.background.service_worker).toBe('background.js');
-                expect(manifestResult.manifest.content_security_policy).toBeDefined();
 
-                // Step 2: Resource Downloader (should not find any remote resources in simple extension)
-                const resourceResult = ResourceDownloader.migrate(manifestResult);
-                expect(resourceResult).not.toBeInstanceOf(MigrationError);
+                // Step 2: CSP Migration
+                const cspResult = MigrateCSP.migrate(manifestResult);
+                expect(cspResult).not.toBeInstanceOf(MigrationError);
 
-                if (!(resourceResult instanceof MigrationError)) {
-                    // Simple extension should not have additional files added
-                    expect(resourceResult.files.length).toBe(extension.files.length);
+                if (!(cspResult instanceof MigrationError)) {
+                    expect(cspResult.manifest.content_security_policy).toBeDefined();
+                    expect(cspResult.manifest.content_security_policy.extension_pages).toBeTruthy();
+
+                    // Step 3: Resource Downloader (should not find any remote resources in simple extension)
+                    const resourceResult = ResourceDownloader.migrate(cspResult);
+                    expect(resourceResult).not.toBeInstanceOf(MigrationError);
+
+                    if (!(resourceResult instanceof MigrationError)) {
+                        // Simple extension should not have additional files added
+                        expect(resourceResult.files.length).toBe(extension.files.length);
+                    }
+
+                    if (resourceResult instanceof MigrationError) {
+                        return;
+                    }
+                    resourceResult.files.forEach((file) => file.close());
                 }
-
-                if (resourceResult instanceof MigrationError) {
-                    return;
-                }
-                resourceResult.files.forEach((file) => file.close());
             }
 
             extension.files.forEach((file: { close: () => any }) => file.close());
@@ -256,9 +265,15 @@ describe('Migration Pipeline Integration Tests', () => {
     describe('Migration Output Validation', () => {
         it('should create valid MV3 manifests', () => {
             const extension = createTestExtension(SAMPLE_EXTENSIONS[1], testDir);
-            const result = MigrateManifest.migrate(extension);
+            let result = MigrateManifest.migrate(extension);
 
             expect(result).not.toBeInstanceOf(MigrationError);
+            if (!(result instanceof MigrationError)) {
+                // Apply CSP migration
+                result = MigrateCSP.migrate(result);
+                expect(result).not.toBeInstanceOf(MigrationError);
+            }
+
             if (!(result instanceof MigrationError)) {
                 const manifest = result.manifest;
 
