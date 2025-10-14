@@ -119,6 +119,21 @@ export class MigrateManifest implements MigrationModule {
             extension.manifest['permissions'] = new_permssions;
             extension.manifest['host_permissions'] = host_permission;
 
+            // Add declarativeNetRequest configuration if rules.json exists
+            const hasRulesFile = extension.files.some((file) => file.path === 'rules.json');
+            if (hasRulesFile) {
+                extension.manifest['declarative_net_request'] = {
+                    rule_resources: [
+                        {
+                            id: 'ruleset_1',
+                            enabled: true,
+                            path: 'rules.json',
+                        },
+                    ],
+                };
+                logger.info(extension, 'Added declarativeNetRequest configuration to manifest');
+            }
+
             //migrate web_accessible resources
             const resources = extension.manifest['web_accessible_resources'] as string[];
             if (resources != undefined) {

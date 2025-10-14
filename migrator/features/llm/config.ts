@@ -13,7 +13,7 @@ dotenv.config();
 function parseSSHUrl(url: string): SSHConfig | null {
     try {
         // Match ssh://[user[:password]@]host[:port][/remotePath]
-        const sshUrlPattern = /^ssh:\/\/(?:([^:@]+)(?::([^@]+))?@)?([^:\/]+)(?::(\d+))?(?:\/(\d+))?$/;
+        const sshUrlPattern = /^ssh:\/\/(?:([^:@]+)(?::([^@]+))?@)?([^:/]+)(?::(\d+))?(?:\/(\d+))?$/;
         const match = url.match(sshUrlPattern);
 
         if (!match) {
