@@ -1018,54 +1018,52 @@ class ExtensionExplorer {
                     const content = f.content;
                     const lines = content.split('\n');
 
-                    // For minified/webpack files, extract key strings and function names
-                    if (lines.length < 20 || content.includes('webpackBootstrap')) {
-                        // Extract chrome.* API calls, URLs, and identifiable strings
-                        const apiCalls = content.match(/chrome\.\w+\.\w+/g) || [];
-                        const urls = content.match(/https?:\/\/[^\s"']+/g) || [];
-                        const keywords = content.match(/['"][\w\s]{3,30}['"]/g) || [];
-
-                        const summary = [
-                            f.path + ' (minified):',
-                            'Chrome APIs: ' + [...new Set(apiCalls)].slice(0, 10).join(', '),
-                            'URLs: ' + [...new Set(urls)].slice(0, 5).join(', '),
-                            'Key strings: ' + [...new Set(keywords)].slice(0, 10).join(', ')
-                        ].filter(line => !line.endsWith(': ')).join('\n');
-
-                        return summary;
-                    }
-
                     // For regular files, show first 200 lines (we have plenty of context!)
                     return `${f.path}:\n${lines.slice(0, 400).join('\n')}`;
                 })
                 .join('\n\n---\n\n');
 
             // Only include manifest permissions and key fields
-            const manifestSummary = manifest ? `
-Permissions: ${manifest.permissions?.join(', ') || 'none'}
-Background: ${manifest.background?.scripts?.join(', ') || manifest.background?.service_worker || 'none'}
-Content Scripts: ${manifest.content_scripts?.map((cs: any) => cs.matches?.join(', ')).join('; ') || 'none'}
-Popup: ${manifest.browser_action?.default_popup || manifest.action?.default_popup || 'none'}
-` : 'No manifest';
+            const manifestSummary = `Manifest.json: ${JSON.stringify(manifest)}`
 
-            const prompt = `Extension: ${ext.name || 'Unknown'}
+            const prompt = `You are a helpful assistant which analyzes Chrome browser extensions and generates concise documentation. Given an extension's manifest and source code, you identify the extension's core functionality and generate clear testing instructions.
+
+Extension Name: ${ext.name || 'Unknown'}
 ${manifestSummary}
 
-FILES:
+Source Files:
 ${extensionFiles}
 
-TASK: Write 2-3 sentence description + 4-5 detailed test steps. Max 200 words total.
+Please analyze the extension above and generate documentation following these guidelines:
 
-FORMAT:
+Output Requirements:
+- Write a concise description (1-2 sentences) explaining what the extension does
+- Provide 4-5 specific test steps that verify the extension's functionality
+- Keep your total response under 200 words
+- Be specific about URLs, UI elements, and user actions
+- Use clear, direct language
+- Asume that the extension is already installed and that the user wants to tests its functionality
+- Focus on the manifest file, only ouput if you are sure that it does, do not assume
+
+Output Format:
 ## What it does
-[1-2 sentences]
+[2-3 sentences describing the extension's purpose and main features]
 
 ## Test steps
-1. [Specific actions the user has to take to tests the functionality]
-2. [What to observe]
-3. [Expected result]
+1. [First action the user should take, with specific details]
+2. [Second action or observation]
+3. [Third action or observation]
+4. [Fourth action or observation]
+5. [Expected result or final verification]
 
-RULES: Be specific. Mention exact URLs/UI elements. Keep sentences under 10 words each. Do not make mistakes. You are an expert. Do not print the rules or anything else except what you have to`;
+Guidelines you must obey:
+- Do not hallucinate. Do not make up factual information
+- Base your description only on the provided code and manifest
+- If the code is unclear or minified, focus on the manifest permissions and API usage
+- Keep each sentence under 15 words for clarity
+- Mention specific websites or pages where relevant
+- Do not include meta-commentary, disclaimers, or explanations about these guidelines
+- Only output the formatted documentation, nothing else`;
 
             // Show prompt stats
             const promptTokens = Math.ceil(prompt.length / 4); // Rough estimate: 4 chars ≈ 1 token
@@ -1258,7 +1256,7 @@ RULES: Be specific. Mention exact URLs/UI elements. Keep sentences under 10 word
                 stream: true,  // Enable streaming
                 options: {
                     temperature: 0.2,  // Very focused
-                    num_predict: 400,   // Allow more detailed output with better context
+                    num_predict: 4000,   // Allow more detailed output with better context
                     top_p: 0.85,
                     top_k: 30,
                     stop: ['\n\n\n\n', '###', '===='] // Stop at excessive newlines
