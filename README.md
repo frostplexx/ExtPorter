@@ -28,10 +28,10 @@ of Chrome extension migration in the face of Google's deprecation of Manifest V2
 
 ### When using nix
 
-- Nix
-- Flakes enabled
-- (optional) kitty terminal
-- (optional) direnv
+- [Nix](https://nixos.org/)
+- [Flakes enabled](https://nixos.wiki/wiki/flakes)
+- (optional) [kitty terminal](https://sw.kovidgoyal.net/kitty/)
+- (optional) [direnv](https://direnv.net/)
 
 ### If you are not using nix
 
@@ -39,13 +39,11 @@ of Chrome extension migration in the face of Google's deprecation of Manifest V2
 - Docker & Docker Compose
 - Git
 - Chrome 138 AND Chrome 141
-- (optional) sshpass
-- (optional) kitty terminal
-- (optional) ollama
+- (optional) [sshpass](https://linux.die.net/man/1/sshpass)
+- (optional) [kitty terminal](https://sw.kovidgoyal.net/kitty/)
+- (optional) [ollama](https://ollama.com/)
 
 ## Installation
-
-
 
 ### Bare metal
 
@@ -79,6 +77,7 @@ of Chrome extension migration in the face of Google's deprecation of Manifest V2
     ```bash
     yarn env:init
     ```
+    (This should run automatically if you are using direnv)
 
 ## Usage
 
