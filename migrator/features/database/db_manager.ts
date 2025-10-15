@@ -186,15 +186,17 @@ export class Database {
 
     async close() {
         if (this.client) {
-            logger.debug(null, 'Initiating graceful database shutdown...');
+
+            // Flush all pending logs before shutting down
+            await logger.flush();
+
+            // Set shutdown flag to prevent new operations
             this.isShuttingDown = true;
 
             // Give a moment for any queued operations to see the shutdown flag
             await new Promise((resolve) => setTimeout(resolve, 100));
 
-            logger.debug(null, 'Closing database connection...');
             await this.client.close(false);
-            logger.debug(null, 'Database connection closed');
             this.client = null;
             this.database = null;
         }
