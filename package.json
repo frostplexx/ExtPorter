@@ -27,10 +27,6 @@
         "db:admin": "open http://localhost:8081",
         "db:setup": "docker-compose up -d",
         "ext": "ts-node ext_analyzer/ext.ts",
-        "scripts:compare": "ts-node scripts/compare.ts",
-        "scripts:search": "ts-node scripts/search-extensions.ts",
-        "scripts:inspect": "ts-node scripts/inspect.ts",
-        "scripts:run_ext": "scripts/chrome-temp-extension.bash",
         "lint": "eslint migrator --ext .ts",
         "format": "nix run nixpkgs#prettier -- --write \"**/*.{ts,tsx,js,jsx,json,css,md}\"",
         "lint:fix": "eslint migrator --ext .ts --fix"
