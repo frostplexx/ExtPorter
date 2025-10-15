@@ -26,9 +26,6 @@
       {
         devShells.default = pkgs.mkShell {
           buildInputs = with pkgs; [
-            # Python
-            python312
-            uv
             # Node.js
             nodejs_24
             yarn
@@ -41,6 +38,8 @@
             ollama
             bat
             sshpass
+            docker
+            docker-compose
           ] ++ [
             # Pinned packages from specific commit
             pkgs-pinned.google-chrome # pinned google chrome to 138.0.7204.183
