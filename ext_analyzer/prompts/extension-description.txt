@@ -16,7 +16,7 @@ Output Requirements:
 - Be specific about URLs, UI elements, and user actions
 - Use clear, direct language
 - Assume that the extension is already installed and that the user wants to tests its functionality
-- Focus on the manifest file, only ouput if you are sure that it does, do not assume
+- Focus on the manifest file, only output if you are sure that it does, do not assume
 
 Output Format:
 ## What it does
