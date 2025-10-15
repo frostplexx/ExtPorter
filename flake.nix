@@ -55,6 +55,8 @@
             # NODE_OPTIONS=--max-old-space-size=16384 --expose-gc    # 16GB heap
             export CHROME_138="${pkgs-pinned.google-chrome}"
             export CHROME_LATESTS="${pkgs.google-chrome}"
+
+            ./scripts/init_env.sh;
           '';
         };
       });
