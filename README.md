@@ -2,7 +2,7 @@
     <!-- <img src="https://nixos.wiki/images/thumb/2/20/Home-nixos-logo.png/414px-Home-nixos-logo.png" width=200/> -->
     <h1 align="center"><code>ExtPorter</code></h1>
     <div style="display: grid;" align="center">
-        <img src="https://github.com/frostplexx/ExtPorter/actions/workflows/test.yml" height=20/>
+        <img src="https://github.com/frostplexx/ExtPorter/actions/workflows/test.yml/badge.svg" height=20/>
     </div>
 </p>
 
