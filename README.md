@@ -6,6 +6,11 @@
     </div>
 </p>
 
+
+<!-- prettier-ignore -->
+> :red_circle: **IMPORTANT**:
+> This is an expermimental research project! Breakages and instabilities are to be expected.
+
 ExtPorter is a framework for automatically migrating
 Google Chrome extensions from Manifest V2 to Manifest V3.
 This project was developed as part of a bachelor thesis to address the challenges
@@ -77,7 +82,10 @@ of Chrome extension migration in the face of Google's deprecation of Manifest V2
 
 ## Usage
 
-### Basic Migration
+
+Make sure that the environment is Initialized before running any commands by doing `yarn env:init`!
+
+### Migration
 
 Before running the command configure the input and output directories in the `.env` file:
 ```conf
@@ -93,20 +101,21 @@ yarn dev
 ### Manual Analysis
 
 This project also provides a tool that helps you analyse if extensions got migrated successfully.
-To start, run `yarn ext` which will open a list of all extensions in the dataset. You can then press enter on an extension to get the following options:
+To start, run `yarn ext` which will open a list of all extensions in the dataset. You can then press enter on an extension to get the following options (with
+keyboard shortcut in square brackets):
 
 ```
-  View Source          [v]
-  Compare Versions     [c]
-  Run Extension        [r]
-  Info                 [i]
-  Logs                 [l]
-  Grep                 [g]
-  Manifest             [m]
-  Open Directory       [o]
-󰚩  Generate Description [d]
-󰌑  Search Again         [s]
-󰈆  Quit                 [q]
+View Source          [v]
+Compare Versions     [c]
+Run Extension        [r]
+Info                 [i]
+Logs                 [l]
+Grep                 [g]
+Manifest             [m]
+Open Directory       [o]
+Generate Description [d]
+Search Again         [s]
+Quit                 [q]
 ```
 
 **⚠️ Limitations**:
@@ -117,15 +126,19 @@ To start, run `yarn ext` which will open a list of all extensions in the dataset
 
 ## Development
 
-### Available Scripts
+### Most important Scripts
 
 - `yarn dev` - Run migrator in development mode
+- `yarn check_full` - Build, Lint and Test. Do this before pushing
+- `yarn debug` - Run the migrator with debugger support
 - `yarn build` - Build TypeScript to JavaScript
 - `yarn test` - Run test suite
 - `yarn lint` - Run ESLint
 - `yarn clean` - Clean output directory and database
 - `yarn db:shell` - Connect to MongoDB shell
 - `yarn db:admin` - Open MongoDB admin interface
+
+For more scripts look in `package.json`.
 
 ### Database Management
 
