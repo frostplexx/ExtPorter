@@ -9,7 +9,7 @@
 
 <!-- prettier-ignore -->
 > :red_circle: **IMPORTANT**:
-> This is an expermimental research project! Breakages and instabilities are to be expected.
+> This is an experimental research project! Breakages and instabilities are to be expected.
 
 ExtPorter is a framework for automatically migrating
 Google Chrome extensions from Manifest V2 to Manifest V3.
