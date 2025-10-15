@@ -5,6 +5,7 @@ import { spawn } from 'child_process';
 import { RemoteLLMConfig, CommandResult, ChatMessage, GenerationOptions } from './types';
 import { SSHTunnel } from './ssh-tunnel';
 import { loadLLMConfig } from './config';
+import { logger } from '../../utils/logger';
 
 export class LLMService {
     private config: RemoteLLMConfig;
@@ -270,6 +271,7 @@ export class LLMService {
                                 resolve(fullResponse);
                             }
                         } catch (e) {
+                            logger.error(null, e as any)
                             // Skip invalid JSON lines
                         }
                     }
@@ -290,6 +292,7 @@ export class LLMService {
                                 fullResponse += parsed.message.content;
                             }
                         } catch (e) {
+                            logger.error(null, e as any)
                             // Ignore
                         }
                     }
@@ -399,6 +402,7 @@ export class LLMService {
                                 resolve(fullResponse);
                             }
                         } catch (e) {
+                            logger.error(null, e as any)
                             // Skip invalid JSON lines
                         }
                     }
@@ -420,6 +424,7 @@ export class LLMService {
                                 fullResponse += parsed.response;
                             }
                         } catch (e) {
+                            logger.error(null, e as any)
                             // Ignore
                         }
                     }
