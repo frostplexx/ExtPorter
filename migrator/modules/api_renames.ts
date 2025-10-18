@@ -387,7 +387,7 @@ export class RenameAPIS implements MigrationModule {
 
             // Handle parameter transformation if needed
             if (source && RenameAPIS.isParameterTransformationRequired(source, target)) {
-                RenameAPIS.transformParameters(node);
+                RenameAPIS.transformParameters(node, source);
             }
         } else if (node.type === 'MemberExpression') {
             // Transform property access member expression
@@ -415,16 +415,29 @@ export class RenameAPIS implements MigrationModule {
 
     /**
      * Transforms function call parameters according to mapping rules.
-     * Currently handles the chrome.tabs.executeScript -> chrome.scripting.executeScript transformation.
+     * Currently handles:
+     * - chrome.tabs.executeScript -> chrome.scripting.executeScript
+     * - chrome.tabs.getAllInWindow -> chrome.tabs.query
+     * - chrome.tabs.getSelected -> chrome.tabs.query
      *
      * @param callNode CallExpression AST node
+     * @param source Source pattern from mapping to determine which transformation to apply
      */
-    private static transformParameters(callNode: any): void {
+    private static transformParameters(callNode: any, source: any): void {
         const apiPath = RenameAPIS.buildMemberExpressionPath(callNode.callee);
+        const sourcePattern = source.body.replace(/^return\s+/, '').replace(/;$/, '');
 
         // Handle chrome.tabs.executeScript transformation specifically
         if (apiPath === 'chrome.scripting.executeScript') {
             RenameAPIS.transformExecuteScriptParameters(callNode);
+        }
+        // Handle chrome.tabs.getAllInWindow -> chrome.tabs.query transformation
+        else if (sourcePattern.startsWith('chrome.tabs.getAllInWindow(')) {
+            RenameAPIS.transformGetAllInWindowParameters(callNode);
+        }
+        // Handle chrome.tabs.getSelected -> chrome.tabs.query transformation
+        else if (sourcePattern.startsWith('chrome.tabs.getSelected(')) {
+            RenameAPIS.transformGetSelectedParameters(callNode);
         }
 
         // Future parameter transformations can be added here
@@ -504,6 +517,184 @@ export class RenameAPIS implements MigrationModule {
             if (callbackArg) {
                 callNode.arguments.push(callbackArg);
             }
+        }
+    }
+
+    /**
+     * Transforms chrome.tabs.getAllInWindow parameters to chrome.tabs.query format.
+     *
+     * MV2: chrome.tabs.getAllInWindow(windowId, callback)
+     *      - windowId can be null (current window) or a number
+     * MV3: chrome.tabs.query(queryInfo, callback)
+     *      - queryInfo is an object like {windowId: windowId} or {currentWindow: true}
+     *
+     * @param callNode CallExpression AST node for getAllInWindow call
+     */
+    private static transformGetAllInWindowParameters(callNode: any): void {
+        const args = callNode.arguments;
+        if (!args || args.length === 0) return;
+
+        // Check if this is already in the correct format (has an object as first param)
+        if (args[0].type === 'ObjectExpression') {
+            // Already transformed or already in correct format
+            return;
+        }
+
+        const windowIdArg = args[0];
+        const callbackArg = args[1]; // Optional
+
+        // Create queryInfo object
+        let queryInfoObject: any;
+
+        // Case 1: windowId is null -> use {currentWindow: true}
+        if (windowIdArg.type === 'Literal' && windowIdArg.value === null) {
+            queryInfoObject = {
+                type: 'ObjectExpression',
+                properties: [
+                    {
+                        type: 'Property',
+                        method: false,
+                        shorthand: false,
+                        computed: false,
+                        key: {
+                            type: 'Identifier',
+                            name: 'currentWindow',
+                        },
+                        value: {
+                            type: 'Literal',
+                            value: true,
+                        },
+                    },
+                ],
+            };
+        }
+        // Case 2: windowId is a number or variable -> use {windowId: windowId}
+        else {
+            queryInfoObject = {
+                type: 'ObjectExpression',
+                properties: [
+                    {
+                        type: 'Property',
+                        method: false,
+                        shorthand: false,
+                        computed: false,
+                        key: {
+                            type: 'Identifier',
+                            name: 'windowId',
+                        },
+                        value: windowIdArg,
+                    },
+                ],
+            };
+        }
+
+        // Update arguments: [queryInfo, callback?]
+        callNode.arguments = [queryInfoObject];
+        if (callbackArg) {
+            callNode.arguments.push(callbackArg);
+        }
+    }
+
+    /**
+     * Transforms chrome.tabs.getSelected parameters to chrome.tabs.query format.
+     *
+     * MV2: chrome.tabs.getSelected(windowId, callback)
+     *      - windowId can be null (current window) or a number
+     * MV3: chrome.tabs.query({active: true, windowId: windowId}, callback)
+     *      - Always includes active: true to get the selected (active) tab
+     *
+     * @param callNode CallExpression AST node for getSelected call
+     */
+    private static transformGetSelectedParameters(callNode: any): void {
+        const args = callNode.arguments;
+        if (!args || args.length === 0) return;
+
+        // Check if this is already in the correct format (has an object as first param)
+        if (args[0].type === 'ObjectExpression') {
+            // Already transformed or already in correct format
+            return;
+        }
+
+        const windowIdArg = args[0];
+        const callbackArg = args[1]; // Optional
+
+        // Create queryInfo object with active: true
+        let queryInfoObject: any;
+
+        // Case 1: windowId is null -> use {active: true, currentWindow: true}
+        if (windowIdArg.type === 'Literal' && windowIdArg.value === null) {
+            queryInfoObject = {
+                type: 'ObjectExpression',
+                properties: [
+                    {
+                        type: 'Property',
+                        method: false,
+                        shorthand: false,
+                        computed: false,
+                        key: {
+                            type: 'Identifier',
+                            name: 'active',
+                        },
+                        value: {
+                            type: 'Literal',
+                            value: true,
+                        },
+                    },
+                    {
+                        type: 'Property',
+                        method: false,
+                        shorthand: false,
+                        computed: false,
+                        key: {
+                            type: 'Identifier',
+                            name: 'currentWindow',
+                        },
+                        value: {
+                            type: 'Literal',
+                            value: true,
+                        },
+                    },
+                ],
+            };
+        }
+        // Case 2: windowId is a number or variable -> use {active: true, windowId: windowId}
+        else {
+            queryInfoObject = {
+                type: 'ObjectExpression',
+                properties: [
+                    {
+                        type: 'Property',
+                        method: false,
+                        shorthand: false,
+                        computed: false,
+                        key: {
+                            type: 'Identifier',
+                            name: 'active',
+                        },
+                        value: {
+                            type: 'Literal',
+                            value: true,
+                        },
+                    },
+                    {
+                        type: 'Property',
+                        method: false,
+                        shorthand: false,
+                        computed: false,
+                        key: {
+                            type: 'Identifier',
+                            name: 'windowId',
+                        },
+                        value: windowIdArg,
+                    },
+                ],
+            };
+        }
+
+        // Update arguments: [queryInfo, callback?]
+        callNode.arguments = [queryInfoObject];
+        if (callbackArg) {
+            callNode.arguments.push(callbackArg);
         }
     }
 

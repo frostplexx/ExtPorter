@@ -188,7 +188,7 @@
             "target": {
                 "returnType": "Array",
                 "formals": [
-                    { "type": "number", "name": "windowId" },
+                    { "type": "object", "name": "queryInfo" },
                     { "type": "function", "name": "callback" }
                 ],
                 "body": "chrome.tabs.query({windowId: windowId}, callback);"
@@ -206,7 +206,7 @@
             "target": {
                 "returnType": "void",
                 "formals": [
-                    { "type": "number", "name": "windowId" },
+                    { "type": "object", "name": "queryInfo" },
                     { "type": "function", "name": "callback" }
                 ],
                 "body": "chrome.tabs.query({active: true, windowId: windowId}, callback);"
