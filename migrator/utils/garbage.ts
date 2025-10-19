@@ -91,4 +91,17 @@ export function clearExtensionMemory(extension: Extension): void {
         name: extensionName,
         manifest_version: extension.manifest.manifest_version,
     };
+
+    // Clear fakeium validation data - the summary stats are already in the database
+    // No need to keep the full validation object in memory
+    if (extension.fakeium_validation) {
+        // Keep only the essential summary for potential re-use
+        const summary = {
+            enabled: extension.fakeium_validation.enabled,
+            is_equivalent: extension.fakeium_validation.is_equivalent,
+            similarity_score: extension.fakeium_validation.similarity_score,
+        };
+        // Replace the full object with just the summary
+        extension.fakeium_validation = summary as any;
+    }
 }

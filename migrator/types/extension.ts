@@ -26,6 +26,19 @@ export interface Extension {
         manifest_changes: number;
         file_modifications: number;
     };
+    fakeium_validation?: {
+        enabled: boolean;
+        is_equivalent: boolean;
+        similarity_score: number;
+        mv2_api_calls: number;
+        mv3_api_calls: number;
+        matched_calls: number;
+        mv2_only_calls: number;
+        mv3_only_calls: number;
+        differences: string[];
+        validation_errors: string[];
+        duration_ms: number;
+    };
 }
 
 export function closeExtensionFiles(extension: Extension): void {

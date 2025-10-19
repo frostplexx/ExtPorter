@@ -10,6 +10,16 @@ module.exports = {
                 useESM: false,
             },
         ],
+        '^.+\\.js$': [
+            'ts-jest',
+            {
+                useESM: true,
+            },
+        ],
+    },
+    extensionsToTreatAsEsm: ['.ts'],
+    moduleNameMapper: {
+        '^(\\.{1,2}/.*)\\.js$': '$1',
     },
     collectCoverageFrom: ['migrator/**/*.ts', '!migrator/**/*.d.ts', '!migrator/index.ts', '!migrator/scripts/**'],
     coverageDirectory: 'coverage',
@@ -18,6 +28,10 @@ module.exports = {
     testTimeout: 30000,
     // Ignore node_modules and dist directories
     testPathIgnorePatterns: ['/node_modules/', '/dist/', '/output/'],
+    // Transform ES modules from node_modules (like fakeium)
+    transformIgnorePatterns: [
+        'node_modules/(?!fakeium)'
+    ],
     // Prevent hanging processes
     forceExit: true,
     detectOpenHandles: true,
