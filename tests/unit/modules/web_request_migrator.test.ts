@@ -67,6 +67,88 @@ describe('WebRequestMigrator', () => {
             expect(result).not.toBeInstanceOf(MigrationError);
         });
 
+        it('should ignore non-blocking webRequest listeners', () => {
+            const file = createMockJSFile(
+                'background.js',
+                `
+                // Non-blocking listener (no "blocking" in extraInfoSpec)
+                chrome.webRequest.onBeforeRequest.addListener(
+                    function(details) {
+                        console.log("Request to:", details.url);
+                        // No return value - just observing
+                    },
+                    {urls: ["*://*.example.com/*"]}
+                );
+
+                // Another non-blocking listener
+                chrome.webRequest.onCompleted.addListener(
+                    function(details) {
+                        console.log("Completed:", details.url);
+                    },
+                    {urls: ["<all_urls>"]}
+                );
+                `
+            );
+            const extension = createMockExtension([file]);
+
+            const result = WebRequestMigrator.migrate(extension);
+
+            // Should not create any rules since these are non-blocking
+            expect(result).not.toBeInstanceOf(MigrationError);
+            if (!(result instanceof MigrationError)) {
+                const rulesFile = result.files.find((f) => f.path === 'rules.json');
+                expect(rulesFile).toBeUndefined();
+            }
+        });
+
+        it('should only migrate blocking listeners when mixed with non-blocking', () => {
+            const file = createMockJSFile(
+                'background.js',
+                `
+                // Non-blocking listener - should be ignored
+                chrome.webRequest.onBeforeRequest.addListener(
+                    function(details) {
+                        console.log("Observing:", details.url);
+                    },
+                    {urls: ["*://*.example.com/*"]}
+                );
+
+                // Blocking listener - should be migrated
+                chrome.webRequest.onBeforeRequest.addListener(
+                    function(details) {
+                        return {cancel: true};
+                    },
+                    {urls: ["*://*.ads.com/*"]},
+                    ["blocking"]
+                );
+
+                // Another non-blocking listener - should be ignored
+                chrome.webRequest.onCompleted.addListener(
+                    function(details) {
+                        console.log("Completed:", details.url);
+                    },
+                    {urls: ["<all_urls>"]}
+                );
+                `
+            );
+            const extension = createMockExtension([file]);
+
+            const result = WebRequestMigrator.migrate(extension);
+
+            // Should create exactly 1 rule for the blocking listener
+            expect(result).not.toBeInstanceOf(MigrationError);
+            if (!(result instanceof MigrationError)) {
+                const rulesFile = result.files.find((f) => f.path === 'rules.json');
+                expect(rulesFile).toBeDefined();
+
+                if (rulesFile) {
+                    const rulesContent = JSON.parse(rulesFile.getContent());
+                    expect(rulesContent.rules.length).toBe(1);
+                    expect(rulesContent.rules[0].action.type).toBe('block');
+                }
+            }
+        });
+
         it('should create rules.json for static blocking webRequest', () => {
             const file = createMockJSFile(
                 'background.js',

@@ -12,13 +12,22 @@ import {
 } from '../types/dnr_rule_types';
 
 /**
- * Migration module that converts chrome.webRequest API calls to chrome.declarativeNetRequest
+ * Migration module that converts blocking chrome.webRequest API calls to chrome.declarativeNetRequest
  *
- * This module analyzes webRequest usage and:
+ * This module only migrates webRequest listeners that use "blocking" in their extraInfoSpec.
+ * Non-blocking webRequest listeners (observational only) are left unchanged.
+ *
+ * This module analyzes blocking webRequest usage and:
  * 1. Identifies static patterns that can be converted to DNR rules
  * 2. Detects dynamic logic that may require updateDynamicRules or marks migration as failed
  * 3. Generates rules.json file with static rules
  * 4. Updates manifest to include DNR configuration
+ *
+ * Blocking webRequest events include listeners with "blocking" in extraInfoSpec, such as:
+ * - onBeforeRequest with blocking (for canceling/redirecting requests)
+ * - onBeforeSendHeaders with blocking (for modifying request headers)
+ * - onHeadersReceived with blocking (for modifying response headers)
+ * - onAuthRequired with blocking (for handling authentication)
  */
 export class WebRequestMigrator implements MigrationModule {
     private static ruleIdCounter = 1;
@@ -35,15 +44,15 @@ export class WebRequestMigrator implements MigrationModule {
                 return new MigrationError(extension, new Error('Invalid extension structure'));
             }
 
-            // Find all webRequest usages
+            // Find all blocking webRequest usages
             const webRequestUsages = WebRequestMigrator.findWebRequestUsages(extension);
 
             if (webRequestUsages.length === 0) {
-                logger.debug(extension, 'No webRequest usage found');
+                logger.debug(extension, 'No blocking webRequest usage found');
                 return extension;
             }
 
-            logger.info(extension, `Found ${webRequestUsages.length} webRequest usage(s)`);
+            logger.info(extension, `Found ${webRequestUsages.length} blocking webRequest usage(s)`);
 
             // Analyze each usage to determine if it can be migrated
             const staticRules: Rule[] = [];
@@ -57,7 +66,7 @@ export class WebRequestMigrator implements MigrationModule {
                         // Migration must fail - dynamic logic that cannot be converted
                         logger.error(
                             extension,
-                            `Cannot migrate webRequest usage with dynamic logic: ${usage.eventType}`,
+                            `Cannot migrate blocking webRequest usage with dynamic logic: ${usage.eventType}`,
                             {
                                 file: usage.file.path,
                                 reason: analysis.reason,
@@ -66,7 +75,7 @@ export class WebRequestMigrator implements MigrationModule {
                         return new MigrationError(
                             extension,
                             new Error(
-                                `webRequest migration failed: ${usage.eventType} in ${usage.file.path} contains non-migratable dynamic logic: ${analysis.reason}`
+                                `Blocking webRequest migration failed: ${usage.eventType} in ${usage.file.path} contains non-migratable dynamic logic: ${analysis.reason}`
                             )
                         );
                     } else {
@@ -96,7 +105,7 @@ export class WebRequestMigrator implements MigrationModule {
             }
 
             const duration = Date.now() - startTime;
-            logger.info(extension, 'webRequest to declarativeNetRequest migration completed', {
+            logger.info(extension, 'Blocking webRequest to declarativeNetRequest migration completed', {
                 staticRules: staticRules.length,
                 dynamicRewrites: dynamicLogicCases.length,
                 duration,
@@ -107,7 +116,7 @@ export class WebRequestMigrator implements MigrationModule {
                 files: finalFiles,
             };
         } catch (error) {
-            logger.error(extension, 'webRequest migration failed', {
+            logger.error(extension, 'Blocking webRequest migration failed', {
                 error: error instanceof Error ? error.message : String(error),
             });
             return new MigrationError(extension, error);
@@ -115,7 +124,8 @@ export class WebRequestMigrator implements MigrationModule {
     }
 
     /**
-     * Find all webRequest API usages in the extension
+     * Find all blocking webRequest API usages in the extension
+     * Only returns webRequest listeners that have "blocking" in extraInfoSpec
      */
     private static findWebRequestUsages(extension: Extension): WebRequestUsage[] {
         const usages: WebRequestUsage[] = [];
@@ -134,7 +144,8 @@ export class WebRequestMigrator implements MigrationModule {
             WebRequestMigrator.traverseAST(ast, (node: any) => {
                 if (WebRequestMigrator.isWebRequestEventListener(node)) {
                     const usage = WebRequestMigrator.extractWebRequestUsage(node, file);
-                    if (usage) {
+                    // Only include blocking webRequest usages
+                    if (usage && WebRequestMigrator.isBlockingWebRequest(usage)) {
                         usages.push(usage);
                     }
                 }
@@ -193,6 +204,33 @@ export class WebRequestMigrator implements MigrationModule {
             filter,
             extraInfoSpec,
         };
+    }
+
+    /**
+     * Check if a webRequest usage is blocking
+     * Blocking requests have "blocking" in the extraInfoSpec array
+     */
+    private static isBlockingWebRequest(usage: WebRequestUsage): boolean {
+        const extraInfoSpec = usage.extraInfoSpec;
+
+        // No extraInfoSpec means it's not blocking
+        if (!extraInfoSpec) {
+            return false;
+        }
+
+        // extraInfoSpec should be an array
+        if (extraInfoSpec.type !== 'ArrayExpression') {
+            return false;
+        }
+
+        // Check if the array contains "blocking"
+        for (const element of extraInfoSpec.elements) {
+            if (element.type === 'Literal' && element.value === 'blocking') {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
