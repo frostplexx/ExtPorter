@@ -139,9 +139,17 @@ export class BridgeInjector implements MigrationModule {
 
         try {
             const content = htmlFile.getContent();
-            const scriptTag = `<script src="${BridgeInjector.BRIDGE_FILENAME}"></script>`;
 
-            // Check if already injected
+            // Calculate the correct relative path from the HTML file to the bridge file
+            // The bridge file is always in the root, so we need to go up directories
+            const htmlDir = path.dirname(htmlPath);
+            const relativePath = htmlDir && htmlDir !== '.'
+                ? path.posix.join(...htmlDir.split(path.sep).map(() => '..'), BridgeInjector.BRIDGE_FILENAME)
+                : BridgeInjector.BRIDGE_FILENAME;
+
+            const scriptTag = `<script src="${relativePath}"></script>`;
+
+            // Check if already injected (check for both the filename and the script tag)
             if (content.includes(BridgeInjector.BRIDGE_FILENAME)) {
                 logger.debug(extension, `Bridge already in ${htmlPath}`);
                 return true;
@@ -390,8 +398,9 @@ export class BridgeInjector implements MigrationModule {
 
         try {
             const content = htmlFile.getContent();
-            const scriptTag = `<script src="${BridgeInjector.BRIDGE_FILENAME}"></script>`;
-            return content.includes(scriptTag);
+            // Check if the bridge filename appears anywhere in the content
+            // (could be with or without relative path)
+            return content.includes(BridgeInjector.BRIDGE_FILENAME);
         } catch (error) {
             logger.error(extension, error as any)
             return false;
