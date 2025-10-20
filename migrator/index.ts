@@ -86,10 +86,10 @@ async function main() {
 
     // Migration modules (WriteMigrated should be last to queue completed migrations)
     const migrationModules = [
+        WebRequestMigrator.migrate,
         MigrateManifest.migrate,
         MigrateCSP.migrate,
         ResourceDownloader.migrate,
-        WebRequestMigrator.migrate,
         RenameAPIS.migrate,
         BridgeInjector.migrate,
         InterestingnessScorer.migrate,
