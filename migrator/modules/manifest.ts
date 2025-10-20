@@ -127,11 +127,11 @@ export class MigrateManifest implements MigrationModule {
                 // Ensure rule_resources is an array
                 dnr.rule_resources = Array.isArray(dnr.rule_resources) ? dnr.rule_resources : [];
                 // Check if rules.json is already present
-                const hasRuleset = dnr.rule_resources.some((r) => r.path === 'rules.json');
+                const hasRuleset = dnr.rule_resources.some((r: any) => r.path === 'rules.json');
                 if (!hasRuleset) {
                     // Generate a unique id for the new ruleset
                     let id = 'ruleset_1';
-                    const existingIds = new Set(dnr.rule_resources.map((r) => r.id));
+                    const existingIds = new Set(dnr.rule_resources.map((r: any) => r.id));
                     let counter = 1;
                     while (existingIds.has(id)) {
                         counter++;

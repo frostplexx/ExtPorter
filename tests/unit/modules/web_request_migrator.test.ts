@@ -234,6 +234,32 @@ describe('WebRequestMigrator', () => {
             expect(result).toBeInstanceOf(MigrationError);
         });
 
+        it('should fail migration for webRequest with XMLHttpRequest', () => {
+            const file = createMockJSFile(
+                'background.js',
+                `
+                chrome.webRequest.onBeforeRequest.addListener(
+                    function(details) {
+                        var xhr = new XMLHttpRequest();
+                        xhr.open('GET', '/api/check');
+                        xhr.send();
+                        return {cancel: false};
+                    },
+                    {urls: ["<all_urls>"]},
+                    ["blocking"]
+                );
+                `
+            );
+            const extension = createMockExtension([file]);
+
+            const result = WebRequestMigrator.migrate(extension);
+
+            expect(result).toBeInstanceOf(MigrationError);
+            if (result instanceof MigrationError) {
+                expect(result.error.message).toContain('external API/database calls');
+            }
+        });
+
         it('should fail migration for webRequest with loops', () => {
             const file = createMockJSFile(
                 'background.js',

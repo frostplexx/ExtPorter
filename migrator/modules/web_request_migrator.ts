@@ -291,7 +291,7 @@ export class WebRequestMigrator implements MigrationModule {
             // External function calls (database, API, etc.)
             if (node.type === 'CallExpression') {
                 const callee = node.callee;
-                // Check for fetch, XMLHttpRequest, database calls, etc.
+                // Check for fetch and other network APIs
                 if (callee.type === 'Identifier') {
                     const name = callee.name;
                     // Only flag known network APIs
@@ -309,9 +309,12 @@ export class WebRequestMigrator implements MigrationModule {
                     ) {
                         patterns.push('external API/database calls');
                     }
-                } else if (callee.type === 'NewExpression' && callee.callee && callee.callee.name === 'XMLHttpRequest') {
-                    patterns.push('external API/database calls');
                 }
+            }
+
+            // Check for new XMLHttpRequest()
+            if (node.type === 'NewExpression' && node.callee?.name === 'XMLHttpRequest') {
+                patterns.push('external API/database calls');
             }
 
             // Variable assignments based on runtime data
