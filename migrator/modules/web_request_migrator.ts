@@ -12,22 +12,18 @@ import {
 } from '../types/dnr_rule_types';
 
 /**
- * Migration module that converts blocking chrome.webRequest API calls to chrome.declarativeNetRequest
+ * Migration module that converts blocking chrome.webRequest API calls to chrome.declarativeNetRequest.
  *
- * This module only migrates webRequest listeners that use "blocking" in their extraInfoSpec.
- * Non-blocking webRequest listeners (observational only) are left unchanged.
+ * Scope:
+ * - Only migrates BLOCK/REDIRECT actions from onBeforeRequest events with "blocking" in extraInfoSpec.
+ * - Does NOT migrate header/auth events (onBeforeSendHeaders, onHeadersReceived, onAuthRequired) or modify headers.
+ * - Non-blocking webRequest listeners (observational only) are left unchanged.
+ * - Manifest changes (e.g., DNR configuration) are performed in a separate module (MigrateManifest).
  *
- * This module analyzes blocking webRequest usage and:
+ * This module analyzes blocking onBeforeRequest usage and:
  * 1. Identifies static patterns that can be converted to DNR rules
  * 2. Detects dynamic logic that may require updateDynamicRules or marks migration as failed
  * 3. Generates rules.json file with static rules
- * 4. Updates manifest to include DNR configuration
- *
- * Blocking webRequest events include listeners with "blocking" in extraInfoSpec, such as:
- * - onBeforeRequest with blocking (for canceling/redirecting requests)
- * - onBeforeSendHeaders with blocking (for modifying request headers)
- * - onHeadersReceived with blocking (for modifying response headers)
- * - onAuthRequired with blocking (for handling authentication)
  */
 export class WebRequestMigrator implements MigrationModule {
     private static ruleIdCounter = 1;
