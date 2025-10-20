@@ -28,9 +28,6 @@ import {
 export class WebRequestMigrator implements MigrationModule {
     private static ruleIdCounter = 1;
 
-    /**
-     * Main migration method
-     */
     public static migrate(extension: Extension): Extension | MigrationError {
         const startTime = Date.now();
 
