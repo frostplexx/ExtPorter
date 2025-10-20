@@ -380,5 +380,49 @@ describe('WebRequestMigrator', () => {
                 }
             }
         });
+
+        it('should create one rule per URL pattern when multiple patterns are specified', () => {
+            const file = createMockJSFile(
+                'background.js',
+                `
+                chrome.webRequest.onBeforeRequest.addListener(
+                    function(details) {
+                        return {cancel: true};
+                    },
+                    {
+                        urls: ["*://*.ads.com/*", "*://*.tracker.com/*", "*://*.analytics.com/*"],
+                        types: ["script"]
+                    },
+                    ["blocking"]
+                );
+                `
+            );
+            const extension = createMockExtension([file]);
+
+            const result = WebRequestMigrator.migrate(extension);
+
+            expect(result).not.toBeInstanceOf(MigrationError);
+            if (!(result instanceof MigrationError)) {
+                const rulesFile = result.files.find((f) => f.path === 'rules.json');
+                expect(rulesFile).toBeDefined();
+
+                if (rulesFile) {
+                    const rulesContent = JSON.parse(rulesFile.getContent());
+                    // Should create 3 rules - one per URL pattern
+                    expect(rulesContent.rules.length).toBe(3);
+
+                    // Verify each rule has the correct URL pattern
+                    expect(rulesContent.rules[0].condition.urlFilter).toBe('*://*.ads.com/*');
+                    expect(rulesContent.rules[1].condition.urlFilter).toBe('*://*.tracker.com/*');
+                    expect(rulesContent.rules[2].condition.urlFilter).toBe('*://*.analytics.com/*');
+
+                    // Verify all rules have the same action and resource types
+                    rulesContent.rules.forEach((rule: any) => {
+                        expect(rule.action.type).toBe('block');
+                        expect(rule.condition.resourceTypes).toEqual(['script']);
+                    });
+                }
+            }
+        });
     });
 });

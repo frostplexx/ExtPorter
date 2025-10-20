@@ -73,11 +73,9 @@ export class WebRequestMigrator implements MigrationModule {
                         )
                     );
                 } else {
-                    // Static pattern - convert to DNR rule
-                    const rule = WebRequestMigrator.convertToStaticRule(usage, extension);
-                    if (rule) {
-                        staticRules.push(rule);
-                    }
+                    // Static pattern - convert to DNR rules (may generate multiple rules for multiple URL patterns)
+                    const rules = WebRequestMigrator.convertToStaticRules(usage, extension);
+                    staticRules.push(...rules);
                 }
             }
 
@@ -337,43 +335,71 @@ export class WebRequestMigrator implements MigrationModule {
     }
 
     /**
-     * Convert a webRequest usage to a static DNR rule
+     * Convert a webRequest usage to static DNR rules
+     * Generates one rule per URL pattern to preserve all patterns from filter.urls
      */
-    private static convertToStaticRule(usage: WebRequestUsage, extension: Extension): Rule | null {
-        const ruleId = WebRequestMigrator.ruleIdCounter++;
-
-        // Extract filter information
-        const condition = WebRequestMigrator.extractRuleCondition(usage);
-        if (!condition) {
-            logger.warn(extension, `Could not extract filter condition for ${usage.eventType}`);
-            return null;
-        }
-
+    private static convertToStaticRules(usage: WebRequestUsage, extension: Extension): Rule[] {
         // Determine action based on event type and callback
-        const action = WebRequestMigrator.determineRuleAction(usage);
+        const action = WebRequestMigrator.determineRuleAction(usage, extension);
         if (!action) {
             logger.warn(extension, `Could not determine action for ${usage.eventType}`);
-            return null;
+            return [];
         }
 
-        return {
-            id: ruleId,
-            priority: 1,
-            condition,
-            action,
-        };
+        // Extract URL patterns and resource types
+        const { urlPatterns, resourceTypes } = WebRequestMigrator.extractFilterInfo(usage);
+
+        // If no URL patterns, create a single rule that matches all URLs
+        if (urlPatterns.length === 0) {
+            const ruleId = WebRequestMigrator.ruleIdCounter++;
+            const condition: RuleCondition = {};
+            if (resourceTypes.length > 0) {
+                condition.resourceTypes = resourceTypes;
+            }
+
+            return [{
+                id: ruleId,
+                priority: 1,
+                condition,
+                action,
+            }];
+        }
+
+        // Create one rule per URL pattern
+        const rules: Rule[] = [];
+        for (const urlPattern of urlPatterns) {
+            const ruleId = WebRequestMigrator.ruleIdCounter++;
+            const condition: RuleCondition = {
+                urlFilter: urlPattern,
+            };
+
+            if (resourceTypes.length > 0) {
+                condition.resourceTypes = resourceTypes;
+            }
+
+            rules.push({
+                id: ruleId,
+                priority: 1,
+                condition,
+                action,
+            });
+        }
+
+        return rules;
     }
 
     /**
-     * Extract rule condition from webRequest filter
+     * Extract filter information from webRequest filter
+     * Returns all URL patterns and resource types
      */
-    private static extractRuleCondition(usage: WebRequestUsage): RuleCondition | null {
+    private static extractFilterInfo(usage: WebRequestUsage): { urlPatterns: string[]; resourceTypes: ResourceType[] } {
         const filter = usage.filter;
-        const condition: RuleCondition = {};
+        const urlPatterns: string[] = [];
+        const resourceTypes: ResourceType[] = [];
 
         if (!filter || filter.type !== 'ObjectExpression') {
-            // No filter or invalid filter - match all
-            return condition;
+            // No filter or invalid filter
+            return { urlPatterns, resourceTypes };
         }
 
         // Extract properties from filter object
@@ -384,17 +410,12 @@ export class WebRequestMigrator implements MigrationModule {
             const value = prop.value;
 
             if (key === 'urls') {
-                // Extract URL patterns
+                // Extract all URL patterns
                 if (value.type === 'ArrayExpression') {
-                    const patterns: string[] = [];
                     for (const element of value.elements) {
                         if (element.type === 'Literal' && typeof element.value === 'string') {
-                            patterns.push(element.value);
+                            urlPatterns.push(element.value);
                         }
-                    }
-                    // Use the first pattern as urlFilter (simplified)
-                    if (patterns.length > 0) {
-                        condition.urlFilter = patterns[0];
                     }
                 }
             }
@@ -402,27 +423,23 @@ export class WebRequestMigrator implements MigrationModule {
             if (key === 'types') {
                 // Extract resource types
                 if (value.type === 'ArrayExpression') {
-                    const types: ResourceType[] = [];
                     for (const element of value.elements) {
                         if (element.type === 'Literal' && typeof element.value === 'string') {
                             const resourceType = element.value as ResourceType;
-                            types.push(resourceType);
+                            resourceTypes.push(resourceType);
                         }
-                    }
-                    if (types.length > 0) {
-                        condition.resourceTypes = types;
                     }
                 }
             }
         }
 
-        return condition;
+        return { urlPatterns, resourceTypes };
     }
 
     /**
      * Determine the rule action based on webRequest usage
      */
-    private static determineRuleAction(usage: WebRequestUsage): any {
+    private static determineRuleAction(usage: WebRequestUsage, extension: Extension): any {
         // Analyze callback to determine action
         const callback = usage.callback;
         let returnAction: string | null = null;
@@ -483,6 +500,7 @@ export class WebRequestMigrator implements MigrationModule {
                     }
                 });
             }
+        }
 
         // Map webRequest event types to DNR actions
         if (returnAction === 'block') {
@@ -490,7 +508,7 @@ export class WebRequestMigrator implements MigrationModule {
         } else if (returnAction === 'redirect') {
             // Use the extracted redirect URL if available, otherwise log a warning and skip rule creation
             if (!redirectUrl) {
-                logger.warn('Skipping redirect rule: redirectUrl is not a literal and cannot be migrated safely.');
+                logger.warn(extension, 'Skipping redirect rule: redirectUrl is not a literal and cannot be migrated safely.');
                 return null;
             }
             return { type: RuleActionType.REDIRECT, redirect: { url: redirectUrl } };
