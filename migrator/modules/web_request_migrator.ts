@@ -406,31 +406,58 @@ export class WebRequestMigrator implements MigrationModule {
         if (callback && (callback.type === 'FunctionExpression' || callback.type === 'ArrowFunctionExpression')) {
             const body = callback.body;
 
-            // Look for return statements
-            WebRequestMigrator.traverseAST(body, (node: any) => {
-                if (node.type === 'ReturnStatement' && node.argument) {
-                    const arg = node.argument;
-                    if (arg.type === 'ObjectExpression') {
-                        // Check for cancel: true (blocking)
-                        for (const prop of arg.properties) {
-                            if (prop.key?.name === 'cancel' || prop.key?.value === 'cancel') {
-                                if (prop.value.type === 'Literal' && prop.value.value === true) {
-                                    returnAction = 'block';
-                                }
+            // Handle ArrowFunctionExpression with concise body (not a BlockStatement)
+            if (
+                callback.type === 'ArrowFunctionExpression' &&
+                body &&
+                body.type !== 'BlockStatement'
+            ) {
+                // The body itself is the returned expression
+                const arg = body;
+                if (arg.type === 'ObjectExpression') {
+                    // Check for cancel: true (blocking)
+                    for (const prop of arg.properties) {
+                        if (prop.key?.name === 'cancel' || prop.key?.value === 'cancel') {
+                            if (prop.value.type === 'Literal' && prop.value.value === true) {
+                                returnAction = 'block';
                             }
-                            // Check for redirectUrl (redirect)
-                            if (prop.key?.name === 'redirectUrl' || prop.key?.value === 'redirectUrl') {
-                                returnAction = 'redirect';
-                                // Extract the literal URL value
-                                if (prop.value.type === 'Literal' && typeof prop.value.value === 'string') {
-                                    redirectUrl = prop.value.value;
-                                }
+                        }
+                        // Check for redirectUrl (redirect)
+                        if (prop.key?.name === 'redirectUrl' || prop.key?.value === 'redirectUrl') {
+                            returnAction = 'redirect';
+                            // Extract the literal URL value
+                            if (prop.value.type === 'Literal' && typeof prop.value.value === 'string') {
+                                redirectUrl = prop.value.value;
                             }
                         }
                     }
                 }
-            });
-        }
+            } else {
+                // Look for return statements in function body
+                WebRequestMigrator.traverseAST(body, (node: any) => {
+                    if (node.type === 'ReturnStatement' && node.argument) {
+                        const arg = node.argument;
+                        if (arg.type === 'ObjectExpression') {
+                            // Check for cancel: true (blocking)
+                            for (const prop of arg.properties) {
+                                if (prop.key?.name === 'cancel' || prop.key?.value === 'cancel') {
+                                    if (prop.value.type === 'Literal' && prop.value.value === true) {
+                                        returnAction = 'block';
+                                    }
+                                }
+                                // Check for redirectUrl (redirect)
+                                if (prop.key?.name === 'redirectUrl' || prop.key?.value === 'redirectUrl') {
+                                    returnAction = 'redirect';
+                                    // Extract the literal URL value
+                                    if (prop.value.type === 'Literal' && typeof prop.value.value === 'string') {
+                                        redirectUrl = prop.value.value;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+            }
 
         // Map webRequest event types to DNR actions
         if (returnAction === 'block') {
