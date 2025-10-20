@@ -78,7 +78,7 @@ export class WebRequestMigrator implements MigrationModule {
                     );
                 } else {
                     // Static pattern - convert to DNR rule
-                    const rule = WebRequestMigrator.convertToStaticRule(usage);
+                    const rule = WebRequestMigrator.convertToStaticRule(usage, extension);
                     if (rule) {
                         staticRules.push(rule);
                     }
@@ -314,20 +314,20 @@ export class WebRequestMigrator implements MigrationModule {
     /**
      * Convert a webRequest usage to a static DNR rule
      */
-    private static convertToStaticRule(usage: WebRequestUsage): Rule | null {
+    private static convertToStaticRule(usage: WebRequestUsage, extension: Extension): Rule | null {
         const ruleId = WebRequestMigrator.ruleIdCounter++;
 
         // Extract filter information
         const condition = WebRequestMigrator.extractRuleCondition(usage);
         if (!condition) {
-            logger.warn(null, `Could not extract filter condition for ${usage.eventType}`);
+            logger.warn(extension, `Could not extract filter condition for ${usage.eventType}`);
             return null;
         }
 
         // Determine action based on event type and callback
         const action = WebRequestMigrator.determineRuleAction(usage);
         if (!action) {
-            logger.warn(null, `Could not determine action for ${usage.eventType}`);
+            logger.warn(extension, `Could not determine action for ${usage.eventType}`);
             return null;
         }
 
