@@ -214,7 +214,7 @@ In addition to this mandatory function a module can include any arbitrary amount
 ### Most important Scripts
 
 - `yarn migrate` - Run migrator
-- `yarn check_full` - Build, Lint and Test. Do this before pushing
+- `yarn test:full` - Build, Lint and Test. Do this before pushing
 - `yarn debug` - Run the migrator with debugger support
 - `yarn build` - Build TypeScript to JavaScript
 - `yarn test` - Run test suite
