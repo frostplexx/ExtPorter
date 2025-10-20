@@ -850,6 +850,240 @@ chrome.pageAction.setIcon({
       }
     });
 
+    it('should transform chrome.tabs.getAllInWindow with null to chrome.tabs.query with currentWindow', () => {
+      const extension = createTestExtension('getAllInWindow-null', [{
+        name: 'background.js',
+        content: `
+          // Test case from user example
+          document.getElementById("generate").addEventListener('click', function(e) {
+            _gaq.push(['_trackEvent', e.target.id, 'clicked']);
+            chrome.tabs.getAllInWindow(null, list);
+            $('#copy').removeClass("disabled");
+            $('#save').removeClass("disabled");
+            $('#msg').addClass("alert-success");
+            $('#msg').html('Get all tabs\\' URLs!');
+          });
+        `
+      }]);
+
+      const result = RenameAPIS.migrate(extension);
+
+      expect(result).not.toBeInstanceOf(MigrationError);
+      if (!(result instanceof MigrationError)) {
+        const backgroundFile = result.files.find(f => f.path === 'background.js');
+        expect(backgroundFile).toBeDefined();
+
+        if (backgroundFile) {
+          const content = backgroundFile.getContent();
+
+          // Verify API namespace change
+          expect(content).toContain('chrome.tabs.query');
+          expect(content).not.toContain('chrome.tabs.getAllInWindow');
+
+          // Verify parameter transformation: null -> {currentWindow: true}
+          expect(content).toContain('currentWindow: true');
+
+          // Verify callback is preserved
+          expect(content).toContain('list');
+        }
+      }
+
+      extension.files.forEach(file => file.close());
+      if (!(result instanceof MigrationError)) {
+        result.files.forEach(file => file.close());
+      }
+    });
+
+    it('should transform chrome.tabs.getAllInWindow with windowId to chrome.tabs.query with windowId object', () => {
+      const extension = createTestExtension('getAllInWindow-windowId', [{
+        name: 'popup.js',
+        content: `
+          // Get all tabs in specific window
+          const targetWindowId = 12345;
+          chrome.tabs.getAllInWindow(targetWindowId, function(tabs) {
+            console.log('Found tabs:', tabs.length);
+            tabs.forEach(tab => {
+              console.log(tab.title);
+            });
+          });
+
+          // Get tabs in variable window
+          chrome.tabs.getAllInWindow(currentWindow.id, processTabs);
+        `
+      }]);
+
+      const result = RenameAPIS.migrate(extension);
+
+      expect(result).not.toBeInstanceOf(MigrationError);
+      if (!(result instanceof MigrationError)) {
+        const popupFile = result.files.find(f => f.path === 'popup.js');
+        expect(popupFile).toBeDefined();
+
+        if (popupFile) {
+          const content = popupFile.getContent();
+
+          // Verify API namespace change
+          expect(content).toContain('chrome.tabs.query');
+          expect(content).not.toContain('chrome.tabs.getAllInWindow');
+
+          // Verify parameter transformation: windowId -> {windowId: windowId}
+          expect(content).toContain('windowId: targetWindowId');
+          expect(content).toContain('windowId: currentWindow.id');
+
+          // Verify callbacks are preserved
+          expect(content).toContain('function (tabs)');
+          expect(content).toContain('processTabs');
+        }
+      }
+
+      extension.files.forEach(file => file.close());
+      if (!(result instanceof MigrationError)) {
+        result.files.forEach(file => file.close());
+      }
+    });
+
+    it('should transform chrome.tabs.getSelected with null to chrome.tabs.query with active and currentWindow', () => {
+      const extension = createTestExtension('getSelected-null', [{
+        name: 'content.js',
+        content: `
+          // Get selected tab in current window
+          chrome.tabs.getSelected(null, function(tab) {
+            console.log('Selected tab:', tab.title);
+            console.log('Tab URL:', tab.url);
+          });
+
+          // Another example
+          chrome.tabs.getSelected(null, handleSelectedTab);
+        `
+      }]);
+
+      const result = RenameAPIS.migrate(extension);
+
+      expect(result).not.toBeInstanceOf(MigrationError);
+      if (!(result instanceof MigrationError)) {
+        const contentFile = result.files.find(f => f.path === 'content.js');
+        expect(contentFile).toBeDefined();
+
+        if (contentFile) {
+          const content = contentFile.getContent();
+
+          // Verify API namespace change
+          expect(content).toContain('chrome.tabs.query');
+          expect(content).not.toContain('chrome.tabs.getSelected');
+
+          // Verify parameter transformation: null -> {active: true, currentWindow: true}
+          expect(content).toContain('active: true');
+          expect(content).toContain('currentWindow: true');
+
+          // Verify callbacks are preserved
+          expect(content).toContain('function (tab)');
+          expect(content).toContain('handleSelectedTab');
+        }
+      }
+
+      extension.files.forEach(file => file.close());
+      if (!(result instanceof MigrationError)) {
+        result.files.forEach(file => file.close());
+      }
+    });
+
+    it('should transform chrome.tabs.getSelected with windowId to chrome.tabs.query with active and windowId', () => {
+      const extension = createTestExtension('getSelected-windowId', [{
+        name: 'background.js',
+        content: `
+          // Get selected tab in specific window
+          const windowId = 98765;
+          chrome.tabs.getSelected(windowId, function(tab) {
+            if (tab) {
+              chrome.tabs.update(tab.id, { url: 'https://example.com' });
+            }
+          });
+
+          // Get selected tab using variable
+          chrome.tabs.getSelected(myWindow.id, onTabSelected);
+        `
+      }]);
+
+      const result = RenameAPIS.migrate(extension);
+
+      expect(result).not.toBeInstanceOf(MigrationError);
+      if (!(result instanceof MigrationError)) {
+        const backgroundFile = result.files.find(f => f.path === 'background.js');
+        expect(backgroundFile).toBeDefined();
+
+        if (backgroundFile) {
+          const content = backgroundFile.getContent();
+
+          // Verify API namespace change
+          expect(content).toContain('chrome.tabs.query');
+          expect(content).not.toContain('chrome.tabs.getSelected');
+
+          // Verify parameter transformation: windowId -> {active: true, windowId: windowId}
+          expect(content).toContain('active: true');
+          expect(content).toContain('windowId: windowId');
+          expect(content).toContain('windowId: myWindow.id');
+
+          // Verify callbacks are preserved
+          expect(content).toContain('function (tab)');
+          expect(content).toContain('onTabSelected');
+        }
+      }
+
+      extension.files.forEach(file => file.close());
+      if (!(result instanceof MigrationError)) {
+        result.files.forEach(file => file.close());
+      }
+    });
+
+    it('should handle mixed getAllInWindow and getSelected transformations', () => {
+      const extension = createTestExtension('mixed-tabs-apis', [{
+        name: 'popup.js',
+        content: `
+          // Mix of getAllInWindow and getSelected calls
+          chrome.tabs.getAllInWindow(null, function(allTabs) {
+            console.log('All tabs:', allTabs.length);
+          });
+
+          chrome.tabs.getSelected(null, function(selectedTab) {
+            console.log('Selected:', selectedTab.title);
+          });
+
+          chrome.tabs.getAllInWindow(windowId, listAllTabs);
+          chrome.tabs.getSelected(windowId, highlightSelected);
+        `
+      }]);
+
+      const result = RenameAPIS.migrate(extension);
+
+      expect(result).not.toBeInstanceOf(MigrationError);
+      if (!(result instanceof MigrationError)) {
+        const popupFile = result.files.find(f => f.path === 'popup.js');
+        expect(popupFile).toBeDefined();
+
+        if (popupFile) {
+          const content = popupFile.getContent();
+
+          // Verify no old APIs remain
+          expect(content).not.toContain('chrome.tabs.getAllInWindow');
+          expect(content).not.toContain('chrome.tabs.getSelected');
+
+          // Verify all converted to query
+          const queryCount = (content.match(/chrome\.tabs\.query/g) || []).length;
+          expect(queryCount).toBe(4);
+
+          // Verify proper transformations
+          expect(content).toContain('currentWindow: true');
+          expect(content).toContain('active: true');
+          expect(content).toContain('windowId: windowId');
+        }
+      }
+
+      extension.files.forEach(file => file.close());
+      if (!(result instanceof MigrationError)) {
+        result.files.forEach(file => file.close());
+      }
+    });
+
     describe('webpack bundle handling', () => {
       it('should detect and blacklist webpack bundles by filename patterns', () => {
         const webpackFiles = [
