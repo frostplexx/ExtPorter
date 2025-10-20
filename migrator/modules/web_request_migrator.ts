@@ -93,19 +93,19 @@ export class WebRequestMigrator implements MigrationModule {
                 duration,
             });
 
-            // Update metrics.webRequest_to_dnr_migrations if static rules were generated
-            let updatedMetrics = extension.metrics ? { ...extension.metrics } : {};
-            if (staticRules.length > 0) {
-                if (typeof updatedMetrics.webRequest_to_dnr_migrations === 'number') {
-                    updatedMetrics.webRequest_to_dnr_migrations += 1;
+            // Update interestingness_breakdown.webRequest_to_dnr_migrations if static rules were generated
+            const updatedBreakdown = extension.interestingness_breakdown ? { ...extension.interestingness_breakdown } : undefined;
+            if (staticRules.length > 0 && updatedBreakdown) {
+                if (typeof updatedBreakdown.webRequest_to_dnr_migrations === 'number') {
+                    updatedBreakdown.webRequest_to_dnr_migrations += 1;
                 } else {
-                    updatedMetrics.webRequest_to_dnr_migrations = 1;
+                    updatedBreakdown.webRequest_to_dnr_migrations = 1;
                 }
             }
             return {
                 ...extension,
                 files: finalFiles,
-                metrics: updatedMetrics,
+                ...(updatedBreakdown && { interestingness_breakdown: updatedBreakdown }),
             };
         } catch (error) {
             logger.error(extension, 'Blocking webRequest migration failed', {
