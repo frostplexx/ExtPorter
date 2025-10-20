@@ -111,9 +111,8 @@ export class InterestingnessScorer implements MigrationModule {
         // Analyze migration-specific changes (if available)
         InterestingnessScorer.analyzeMigrationChanges(extension, scores);
 
-        // Check if rules.json was generated (indicates webRequest to DNR migration)
-        const hasRulesFile = extension.files.some((file) => file.path === 'rules.json');
-        if (hasRulesFile) {
+        // Check if a webRequest to DNR migration was performed during this run
+        if ((extension as any).metrics?.webRequest_to_dnr_migration) {
             scores.webRequest_to_dnr_migrations = 1;
         }
 
