@@ -127,7 +127,11 @@ export class WebRequestMigrator implements MigrationModule {
                 if (WebRequestMigrator.isWebRequestEventListener(node)) {
                     const usage = WebRequestMigrator.extractWebRequestUsage(node, file);
                     // Only include blocking webRequest usages
-                    if (usage && WebRequestMigrator.isBlockingWebRequest(usage)) {
+                    if (
+                        usage &&
+                        WebRequestMigrator.isBlockingWebRequest(usage) &&
+                        usage.eventType === 'onBeforeRequest'
+                    ) {
                         usages.push(usage);
                     }
                 }
