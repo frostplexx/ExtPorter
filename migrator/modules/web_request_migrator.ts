@@ -442,11 +442,9 @@ export class WebRequestMigrator implements MigrationModule {
     /**
      * Determine the rule action based on webRequest usage
      */
-    private static determineRuleAction(usage: WebRequestUsage): any {
-        const eventType = usage.eventType;
+        }
 
-        // Analyze callback to determine action
-        const callback = usage.callback;
+        // Only emit a blocking rule if explicitly detected; do not default to block for onBeforeRequest
         let returnAction: string | null = null;
 
         if (callback && (callback.type === 'FunctionExpression' || callback.type === 'ArrowFunctionExpression')) {
