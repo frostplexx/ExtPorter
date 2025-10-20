@@ -122,16 +122,29 @@ export class MigrateManifest implements MigrationModule {
             // Add declarativeNetRequest configuration if rules.json exists
             const hasRulesFile = extension.files.some((file) => file.path === 'rules.json');
             if (hasRulesFile) {
-                extension.manifest['declarative_net_request'] = {
-                    rule_resources: [
-                        {
-                            id: 'ruleset_1',
-                            enabled: true,
-                            path: 'rules.json',
-                        },
-                    ],
-                };
-                logger.info(extension, 'Added declarativeNetRequest configuration to manifest');
+                // Merge with existing declarative_net_request if present
+                const dnr = extension.manifest['declarative_net_request'] ?? { rule_resources: [] };
+                // Ensure rule_resources is an array
+                dnr.rule_resources = Array.isArray(dnr.rule_resources) ? dnr.rule_resources : [];
+                // Check if rules.json is already present
+                const hasRuleset = dnr.rule_resources.some((r) => r.path === 'rules.json');
+                if (!hasRuleset) {
+                    // Generate a unique id for the new ruleset
+                    let id = 'ruleset_1';
+                    const existingIds = new Set(dnr.rule_resources.map((r) => r.id));
+                    let counter = 1;
+                    while (existingIds.has(id)) {
+                        counter++;
+                        id = `ruleset_${counter}`;
+                    }
+                    dnr.rule_resources.push({
+                        id,
+                        enabled: true,
+                        path: 'rules.json',
+                    });
+                    extension.manifest['declarative_net_request'] = dnr;
+                    logger.info(extension, 'Added declarativeNetRequest configuration to manifest');
+                }
             }
 
             //migrate web_accessible resources
