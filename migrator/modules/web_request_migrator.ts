@@ -296,9 +296,23 @@ export class WebRequestMigrator implements MigrationModule {
                 // Check for fetch, XMLHttpRequest, database calls, etc.
                 if (callee.type === 'Identifier') {
                     const name = callee.name;
-                    if (name === 'fetch' || name === 'query' || name === 'get' || name === 'post') {
+                    // Only flag known network APIs
+                    if (name === 'fetch') {
                         patterns.push('external API/database calls');
                     }
+                } else if (callee.type === 'MemberExpression') {
+                    // Flag axios.get/axios.post and similar member calls
+                    const objectName = callee.object && callee.object.name;
+                    const propertyName = callee.property && callee.property.name;
+                    if (
+                        (objectName === 'axios' && (propertyName === 'get' || propertyName === 'post')) ||
+                        (objectName === 'http' && (propertyName === 'get' || propertyName === 'post')) ||
+                        (objectName === 'https' && (propertyName === 'get' || propertyName === 'post'))
+                    ) {
+                        patterns.push('external API/database calls');
+                    }
+                } else if (callee.type === 'NewExpression' && callee.callee && callee.callee.name === 'XMLHttpRequest') {
+                    patterns.push('external API/database calls');
                 }
             }
 
