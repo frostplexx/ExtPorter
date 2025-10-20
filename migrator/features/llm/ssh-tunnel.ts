@@ -55,7 +55,7 @@ export class SSHTunnel {
             });
 
             let errorOutput = '';
-            let establishmentTimeout: NodeJS.Timeout = setTimeout(() => {}, 10);
+            let establishmentTimeout: NodeJS.Timeout  = setTimeout(() => {}, 0);
 
             // Capture any error output
             this.process.stderr?.on('data', (data) => {

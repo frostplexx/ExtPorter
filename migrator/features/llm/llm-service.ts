@@ -271,8 +271,7 @@ export class LLMService {
                                 resolve(fullResponse);
                             }
                         } catch (e) {
-                            logger.error(null, e as any);
-                            
+                            logger.error(null, e as any)
                             // Skip invalid JSON lines
                         }
                     }
@@ -293,7 +292,8 @@ export class LLMService {
                                 fullResponse += parsed.message.content;
                             }
                         } catch (e) {
-                            logger.error(null, e as any);
+                            logger.error(null, e as any)
+                            // Ignore
                         }
                     }
 
@@ -402,7 +402,8 @@ export class LLMService {
                                 resolve(fullResponse);
                             }
                         } catch (e) {
-                            logger.error(null, e as any);
+                            logger.error(null, e as any)
+                            // Skip invalid JSON lines
                         }
                     }
                 });
@@ -423,7 +424,8 @@ export class LLMService {
                                 fullResponse += parsed.response;
                             }
                         } catch (e) {
-                            logger.error(null, e as any);
+                            logger.error(null, e as any)
+                            // Ignore
                         }
                     }
 
