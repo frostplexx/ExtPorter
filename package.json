@@ -7,14 +7,13 @@
     "type": "commonjs",
     "main": "dist/index.js",
     "scripts": {
-        "build": "tsc",
-        "start": "NODE_OPTIONS=\"$NODE_OPTIONS\" node dist/index.js",
-        "dev": "yarn run clean; NODE_OPTIONS=\"$NODE_OPTIONS\" ts-node migrator/index.ts",
+        "_build": "tsc",
+        "migrate": "yarn run clean; NODE_OPTIONS=\"$NODE_OPTIONS\" ts-node migrator/index.ts",
         "clean": "rm -rf tmp/output/* 2>/dev/null || true; docker exec migrator-mongodb mongosh -u admin -p password --authenticationDatabase admin migrator --eval 'db.dropDatabase()' 2>/dev/null || true",
-        "debug": "yarn run build; node --inspect-brk dist/index.js",
+        "debug": "yarn run _build; node --inspect-brk dist/index.js",
         "test": "jest",
         "env:init": "./scripts/init_env.sh",
-        "check_full": "set -e pipefail; yarn build; yarn lint; yarn test",
+        "test:full": "set -e pipefail; yarn build; yarn lint; yarn test",
         "test:watch": "jest --watch",
         "test:coverage": "jest --coverage",
         "test:unit": "jest --testPathPatterns=unit",
@@ -28,8 +27,8 @@
         "db:setup": "docker-compose up -d",
         "ext": "ts-node ext_analyzer/ext.ts",
         "lint": "eslint migrator --ext .ts",
-        "format": "nix run nixpkgs#prettier -- --write \"**/*.{ts,tsx,js,jsx,json,css,md}\"",
-        "lint:fix": "eslint migrator --ext .ts --fix"
+        "lint:fix": "eslint migrator --ext .ts --fix",
+        "format": "nix run nixpkgs#prettier -- --write \"**/*.{ts,tsx,js,jsx,json,css,md}\""
     },
     "dependencies": {
         "@types/escodegen": "^0.0.10",
