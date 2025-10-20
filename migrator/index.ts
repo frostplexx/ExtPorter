@@ -14,6 +14,7 @@ import { Database } from './features/database/db_manager';
 import { MigrationError } from './types/migration_module';
 import { ResourceDownloader } from './modules/resource_downloader';
 import { BridgeInjector } from './modules/bridge_injector';
+import { WebRequestMigrator } from './modules/web_request_migrator';
 import { checkMemoryThreshold, clearExtensionMemory, forceGarbageCollection, logMemoryUsage } from './utils/garbage';
 
 // Load environment variables once at application startup
@@ -85,6 +86,7 @@ async function main() {
 
     // Migration modules (WriteMigrated should be last to queue completed migrations)
     const migrationModules = [
+        WebRequestMigrator.migrate,
         MigrateManifest.migrate,
         MigrateCSP.migrate,
         ResourceDownloader.migrate,

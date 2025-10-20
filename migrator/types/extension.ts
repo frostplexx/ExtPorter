@@ -25,6 +25,7 @@ export interface Extension {
         api_renames: number;
         manifest_changes: number;
         file_modifications: number;
+        webRequest_to_dnr_migrations: number;
     };
 }
 

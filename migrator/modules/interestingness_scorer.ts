@@ -20,6 +20,7 @@ const WEIGHTS = {
     api_renames: 10, // +10 per API rename detected
     manifest_changes: 5, // +5 per manifest field change
     file_modifications: 2, // +2 per modified file
+    webRequest_to_dnr_migrations: 20, // +20 per webRequest to DNR migration
 };
 
 interface InterestingnessBreakdown {
@@ -36,6 +37,7 @@ interface InterestingnessBreakdown {
     api_renames: number;
     manifest_changes: number;
     file_modifications: number;
+    webRequest_to_dnr_migrations: number;
 }
 
 export class InterestingnessScorer implements MigrationModule {
@@ -94,6 +96,7 @@ export class InterestingnessScorer implements MigrationModule {
             api_renames: 0,
             manifest_changes: 0,
             file_modifications: 0,
+            webRequest_to_dnr_migrations: 0,
         };
 
         // Analyze extension files for patterns
@@ -107,6 +110,11 @@ export class InterestingnessScorer implements MigrationModule {
 
         // Analyze migration-specific changes (if available)
         InterestingnessScorer.analyzeMigrationChanges(extension, scores);
+
+        // Check if a webRequest to DNR migration was performed during this run
+        if ((extension as any).metrics?.webRequest_to_dnr_migrations) {
+            scores.webRequest_to_dnr_migrations = 1;
+        }
 
         const total = Object.entries(scores).reduce((sum, [key, value]) => {
             return sum + value * WEIGHTS[key as keyof typeof WEIGHTS];
