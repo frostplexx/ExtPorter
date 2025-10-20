@@ -318,7 +318,22 @@ export class WebRequestMigrator implements MigrationModule {
 
             // Variable assignments based on runtime data
             if (node.type === 'VariableDeclarator' && node.init) {
-                patterns.push('runtime computations');
+                // Only flag if initializer is not a literal or references request details
+                const isNonLiteral = node.init.type !== 'Literal';
+                // Check if initializer references callback parameter (e.g., 'details')
+                let referencesCallbackParam = false;
+                if (isNonLiteral && node.init.type === 'Identifier' && node.init.name === 'details') {
+                    referencesCallbackParam = true;
+                }
+                // Also check for MemberExpression like details.url, details.method, etc.
+                if (isNonLiteral && node.init.type === 'MemberExpression' &&
+                    node.init.object && node.init.object.type === 'Identifier' &&
+                    node.init.object.name === 'details') {
+                    referencesCallbackParam = true;
+                }
+                if (isNonLiteral || referencesCallbackParam) {
+                    patterns.push('runtime computations');
+                }
             }
         });
 
