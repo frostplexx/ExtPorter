@@ -153,7 +153,7 @@ SSH_LOCAL_PORT=11434
 ## Development
 
 File structure:
-```
+```bash
 .
 ├── ext_analyzer # Files for manual analysis
 │   ├── prompts
