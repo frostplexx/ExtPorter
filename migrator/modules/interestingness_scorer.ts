@@ -112,7 +112,7 @@ export class InterestingnessScorer implements MigrationModule {
         InterestingnessScorer.analyzeMigrationChanges(extension, scores);
 
         // Check if a webRequest to DNR migration was performed during this run
-        if ((extension as any).metrics?.webRequest_to_dnr_migration) {
+        if ((extension as any).metrics?.webRequest_to_dnr_migrations) {
             scores.webRequest_to_dnr_migrations = 1;
         }
 
