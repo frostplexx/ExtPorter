@@ -56,31 +56,26 @@ export class WebRequestMigrator implements MigrationModule {
 
             // Analyze each usage to determine if it can be migrated
             const staticRules: Rule[] = [];
-            const dynamicLogicCases: WebRequestUsage[] = [];
 
             for (const usage of webRequestUsages) {
                 const analysis = WebRequestMigrator.analyzeWebRequestUsage(usage);
 
                 if (analysis.hasDynamicLogic) {
-                    if (!analysis.canBeRewritten) {
-                        // Migration must fail - dynamic logic that cannot be converted
-                        logger.error(
-                            extension,
-                            `Cannot migrate blocking webRequest usage with dynamic logic: ${usage.eventType}`,
-                            {
-                                file: usage.file.path,
-                                reason: analysis.reason,
-                            }
-                        );
-                        return new MigrationError(
-                            extension,
-                            new Error(
-                                `Blocking webRequest migration failed: ${usage.eventType} in ${usage.file.path} contains non-migratable dynamic logic: ${analysis.reason}`
-                            )
-                        );
-                    } else {
-                        dynamicLogicCases.push(usage);
-                    }
+                    // Migration must fail - dynamic logic that cannot be converted
+                    logger.error(
+                        extension,
+                        `Cannot migrate blocking webRequest usage with dynamic logic: ${usage.eventType}`,
+                        {
+                            file: usage.file.path,
+                            reason: analysis.reason,
+                        }
+                    );
+                    return new MigrationError(
+                        extension,
+                        new Error(
+                            `Blocking webRequest migration failed: ${usage.eventType} in ${usage.file.path} contains non-migratable dynamic logic: ${analysis.reason}`
+                        )
+                    );
                 } else {
                     // Static pattern - convert to DNR rule
                     const rule = WebRequestMigrator.convertToStaticRule(usage);
@@ -90,24 +85,17 @@ export class WebRequestMigrator implements MigrationModule {
                 }
             }
 
-            // If we have dynamic logic cases that can be rewritten, generate the rewrite code
-            const updatedFiles = WebRequestMigrator.rewriteDynamicLogic(
-                extension.files,
-                // dynamicLogicCases
-            );
-
             // Create rules.json file if we have static rules
-            let finalFiles = updatedFiles;
+            let finalFiles = extension.files;
             if (staticRules.length > 0) {
                 const rulesFile = WebRequestMigrator.createRulesFile(staticRules);
-                finalFiles = [...updatedFiles, rulesFile];
+                finalFiles = [...extension.files, rulesFile];
                 logger.info(extension, `Generated ${staticRules.length} static DNR rule(s)`);
             }
 
             const duration = Date.now() - startTime;
             logger.info(extension, 'Blocking webRequest to declarativeNetRequest migration completed', {
                 staticRules: staticRules.length,
-                dynamicRewrites: dynamicLogicCases.length,
                 duration,
             });
 
@@ -243,7 +231,6 @@ export class WebRequestMigrator implements MigrationModule {
         if (!callbackNode) {
             return {
                 hasDynamicLogic: false,
-                canBeRewritten: false,
                 reason: 'No callback function found',
             };
         }
@@ -257,7 +244,6 @@ export class WebRequestMigrator implements MigrationModule {
             // For now, treat as dynamic logic
             return {
                 hasDynamicLogic: true,
-                canBeRewritten: false,
                 reason: 'Callback is a named function reference',
             };
         }
@@ -265,7 +251,6 @@ export class WebRequestMigrator implements MigrationModule {
         if (!callbackBody) {
             return {
                 hasDynamicLogic: false,
-                canBeRewritten: false,
                 reason: 'Cannot extract callback body',
             };
         }
@@ -277,20 +262,13 @@ export class WebRequestMigrator implements MigrationModule {
             // No dynamic logic detected - can convert to static rule
             return {
                 hasDynamicLogic: false,
-                canBeRewritten: false,
             };
         }
 
-        // Has dynamic logic - check if it can be rewritten
-        const canRewrite = WebRequestMigrator.canRewriteDynamicLogic(
-            dynamicPatterns, 
-            // usage
-        );
-
+        // Has dynamic logic - cannot be migrated
         return {
             hasDynamicLogic: true,
-            canBeRewritten: canRewrite,
-            reason: canRewrite ? undefined : dynamicPatterns.join(', '),
+            reason: dynamicPatterns.join(', '),
         };
     }
 
@@ -331,29 +309,6 @@ export class WebRequestMigrator implements MigrationModule {
         });
 
         return [...new Set(patterns)]; // Remove duplicates
-    }
-
-    /**
-     * Check if dynamic logic can be rewritten using updateDynamicRules
-     */
-    private static canRewriteDynamicLogic(
-        patterns: string[],
-        // usage: WebRequestUsage
-    ): boolean {
-        // TODO: For now, we consider dynamic logic non-rewritable
-        // In a more sophisticated implementation, we could attempt to:
-        // 1. Convert simple conditionals to multiple rules
-        // 2. Use updateDynamicRules for user preference-based rules
-        // 3. Etc.
-
-        // Simple heuristic: if it's just conditional logic, it might be rewritable
-        if (patterns.length === 1 && patterns[0] === 'conditional logic') {
-            // Check if the conditional is based on simple URL patterns
-            // This is a simplified check - a full implementation would be more sophisticated
-            return false; // For safety, mark as non-rewritable for now
-        }
-
-        return false;
     }
 
     /**
@@ -446,6 +401,7 @@ export class WebRequestMigrator implements MigrationModule {
 
         // Only emit a blocking rule if explicitly detected; do not default to block for onBeforeRequest
         let returnAction: string | null = null;
+        let redirectUrl: string | null = null;
 
         if (callback && (callback.type === 'FunctionExpression' || callback.type === 'ArrowFunctionExpression')) {
             const body = callback.body;
@@ -465,6 +421,10 @@ export class WebRequestMigrator implements MigrationModule {
                             // Check for redirectUrl (redirect)
                             if (prop.key?.name === 'redirectUrl' || prop.key?.value === 'redirectUrl') {
                                 returnAction = 'redirect';
+                                // Extract the literal URL value
+                                if (prop.value.type === 'Literal' && typeof prop.value.value === 'string') {
+                                    redirectUrl = prop.value.value;
+                                }
                             }
                         }
                     }
@@ -476,30 +436,15 @@ export class WebRequestMigrator implements MigrationModule {
         if (returnAction === 'block') {
             return { type: RuleActionType.BLOCK };
         } else if (returnAction === 'redirect') {
-            // Note: actual redirect URL would need to be extracted
-            return { type: RuleActionType.REDIRECT, redirect: { url: 'about:blank' } };
+            // Use the extracted redirect URL if available, otherwise fall back to about:blank
+            const url = redirectUrl || 'about:blank';
+            return { type: RuleActionType.REDIRECT, redirect: { url } };
         } else if (eventType === 'onBeforeRequest') {
             // Default blocking for onBeforeRequest
             return { type: RuleActionType.BLOCK };
         }
 
         return null;
-    }
-
-    /**
-     * Rewrite files with dynamic logic to use updateDynamicRules
-     */
-    private static rewriteDynamicLogic(
-        files: LazyFile[],
-        // dynamicCases: WebRequestUsage[]
-    ): LazyFile[] {
-        // TODO: For now, we're marking dynamic cases as migration failures
-        // In a full implementation, this would:
-        // 1. Remove webRequest event listeners
-        // 2. Add code to use chrome.declarativeNetRequest.updateDynamicRules
-        // 3. Convert simple dynamic patterns to rule updates
-
-        return files;
     }
 
     /**
@@ -569,6 +514,5 @@ interface WebRequestUsage {
  */
 interface UsageAnalysis {
     hasDynamicLogic: boolean;
-    canBeRewritten: boolean;
     reason?: string;
 }
