@@ -492,9 +492,12 @@ export class WebRequestMigrator implements MigrationModule {
         if (returnAction === 'block') {
             return { type: RuleActionType.BLOCK };
         } else if (returnAction === 'redirect') {
-            // Use the extracted redirect URL if available, otherwise fall back to about:blank
-            const url = redirectUrl || 'about:blank';
-            return { type: RuleActionType.REDIRECT, redirect: { url } };
+            // Use the extracted redirect URL if available, otherwise log a warning and skip rule creation
+            if (!redirectUrl) {
+                logger.warn('Skipping redirect rule: redirectUrl is not a literal and cannot be migrated safely.');
+                return null;
+            }
+            return { type: RuleActionType.REDIRECT, redirect: { url: redirectUrl } };
         }
 
         return null;
