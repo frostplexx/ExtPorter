@@ -397,9 +397,9 @@ export class WebRequestMigrator implements MigrationModule {
     /**
      * Determine the rule action based on webRequest usage
      */
-        }
-
-        // Only emit a blocking rule if explicitly detected; do not default to block for onBeforeRequest
+    private static determineRuleAction(usage: WebRequestUsage): any {
+        // Analyze callback to determine action
+        const callback = usage.callback;
         let returnAction: string | null = null;
         let redirectUrl: string | null = null;
 
@@ -439,9 +439,6 @@ export class WebRequestMigrator implements MigrationModule {
             // Use the extracted redirect URL if available, otherwise fall back to about:blank
             const url = redirectUrl || 'about:blank';
             return { type: RuleActionType.REDIRECT, redirect: { url } };
-        } else if (eventType === 'onBeforeRequest') {
-            // Default blocking for onBeforeRequest
-            return { type: RuleActionType.BLOCK };
         }
 
         return null;
