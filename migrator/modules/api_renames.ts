@@ -7,6 +7,8 @@ import * as ESTree from 'estree';
 import * as fs from 'fs';
 import * as path from 'path';
 import { logger } from '../utils/logger';
+import { Database } from '../features/database/db_manager';
+import { Tags } from '../types/tags';
 import { TwinningMapping } from '../types/twinning_mapping';
 import { BlacklistChecker } from '../utils/blacklist_checker';
 import { FormatPreservingGenerator } from '../utils/format_preserving_generator';
@@ -56,7 +58,7 @@ export class RenameAPIS implements MigrationModule {
      * Processes all JavaScript files in the extension and
      * applies API transformations based on the loaded mapping rules.
      */
-    public static migrate(extension: Extension): Extension | MigrationError {
+    public static async migrate(extension: Extension): Promise<Extension | MigrationError> {
         const startTime = Date.now();
         // logger.info(extension, "Starting API rename migration");
 
@@ -119,6 +121,9 @@ export class RenameAPIS implements MigrationModule {
             if (!hasChanges) {
                 return extension;
             }
+
+            // Add API_RENAMES_APPLIED tag
+            await Database.shared.extensionAppendTag(extension, Tags.API_RENAMES_APPLIED);
 
             // Return new extension with transformed files
             return {

@@ -1,6 +1,8 @@
 import { Extension } from '../types/extension';
 import { MigrationError, MigrationModule } from '../types/migration_module';
 import { logger } from '../utils/logger';
+import { Database } from '../features/database/db_manager';
+import { Tags } from '../types/tags';
 import { ExtFileType } from '../types/ext_file_types';
 
 // Configuration weights similar to extension_analyzer.py
@@ -57,7 +59,7 @@ export class InterestingnessScorer implements MigrationModule {
         'declarativeNetRequest',
     ]);
 
-    public static migrate(extension: Extension): Extension | MigrationError {
+    public static async migrate(extension: Extension): Promise<Extension | MigrationError> {
         try {
             const score = InterestingnessScorer.calculateInterestingnessScore(extension);
 
@@ -68,6 +70,9 @@ export class InterestingnessScorer implements MigrationModule {
             logger.debug(extension, `Calculated interestingness score: ${score.total}`, {
                 breakdown: score.breakdown,
             });
+
+            // Add feature/characteristic tags based on the analysis
+            await InterestingnessScorer.addFeatureTags(extension, score.breakdown);
 
             return extension;
         } catch (error) {
@@ -310,5 +315,102 @@ export class InterestingnessScorer implements MigrationModule {
     private static countPattern(content: string, pattern: RegExp): number {
         const matches = content.match(pattern);
         return matches ? matches.length : 0;
+    }
+
+    /**
+     * Adds feature/characteristic tags based on the interestingness breakdown
+     */
+    private static async addFeatureTags(extension: Extension, breakdown: InterestingnessBreakdown): Promise<void> {
+        const db = Database.shared;
+        const manifest = extension.manifest;
+
+        // Extension Features
+        if (manifest?.action || manifest?.browser_action || manifest?.page_action) {
+            await db.extensionAppendTag(extension, Tags.HAS_BROWSER_POPUP);
+        }
+
+        if (breakdown.background_page > 0) {
+            await db.extensionAppendTag(extension, Tags.HAS_BACKGROUND_PAGE);
+        }
+
+        if (breakdown.content_scripts > 0) {
+            await db.extensionAppendTag(extension, Tags.HAS_CONTENT_SCRIPTS);
+        }
+
+        if (manifest?.background?.service_worker) {
+            await db.extensionAppendTag(extension, Tags.HAS_SERVICE_WORKER);
+        }
+
+        if (manifest?.chrome_url_overrides?.newtab) {
+            await db.extensionAppendTag(extension, Tags.NEW_TAB_OVERRIDE);
+        }
+
+        // Permission Categories
+        if (breakdown.host_permissions > 0) {
+            await db.extensionAppendTag(extension, Tags.HAS_HOST_PERMISSIONS);
+        }
+
+        if (breakdown.webRequest > 0) {
+            await db.extensionAppendTag(extension, Tags.USES_WEB_REQUEST);
+        }
+
+        if (breakdown.storage_local > 0) {
+            await db.extensionAppendTag(extension, Tags.USES_STORAGE_LOCAL);
+        }
+
+        // Check for tabs API usage
+        const permissions = manifest?.permissions || [];
+        if (permissions.includes('tabs') || permissions.includes('activeTab')) {
+            await db.extensionAppendTag(extension, Tags.USES_TABS_API);
+        }
+
+        // Code Characteristics
+        // Detect webpack bundles
+        let hasWebpack = false;
+        let hasEval = false;
+        let hasMinified = false;
+
+        for (const file of extension.files) {
+            if (file.filetype === ExtFileType.JS) {
+                try {
+                    const content = file.getContent();
+
+                    // Check for webpack
+                    if (content.includes('__webpack_require__') ||
+                        content.includes('webpackChunk') ||
+                        /\(\d+,\s*function\s*\(\s*\w+,\s*\w+,\s*\w+\s*\)/.test(content.substring(0, 10000))) {
+                        hasWebpack = true;
+                    }
+
+                    // Check for eval
+                    if (/eval\(/.test(content)) {
+                        hasEval = true;
+                    }
+
+                    // Check for minified code (long lines without spaces)
+                    const lines = content.split('\n');
+                    for (const line of lines) {
+                        if (line.length > 500 && line.split(' ').length < line.length / 20) {
+                            hasMinified = true;
+                            break;
+                        }
+                    }
+                } catch (error) {
+                    // Skip files that can't be read
+                }
+            }
+        }
+
+        if (hasWebpack) {
+            await db.extensionAppendTag(extension, Tags.WEBPACK_BUNDLED);
+        }
+
+        if (hasEval) {
+            await db.extensionAppendTag(extension, Tags.CONTAINS_EVAL);
+        }
+
+        if (hasMinified) {
+            await db.extensionAppendTag(extension, Tags.MINIFIED_CODE);
+        }
     }
 }

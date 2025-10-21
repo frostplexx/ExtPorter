@@ -5,6 +5,8 @@ import { ExtFileType } from '../types/ext_file_types';
 import * as fs from 'fs';
 import * as path from 'path';
 import { logger } from '../utils/logger';
+import { Database } from '../features/database/db_manager';
+import { Tags } from '../types/tags';
 import { FileContentUpdater } from '../utils/file_content_updater';
 
 /**
@@ -298,7 +300,7 @@ export class BridgeInjector implements MigrationModule {
     /**
      * Main migration method that injects the bridge into extensions that need it.
      */
-    public static migrate(extension: Extension): Extension | MigrationError {
+    public static async migrate(extension: Extension): Promise<Extension | MigrationError> {
         const startTime = Date.now();
 
         try {
@@ -339,6 +341,9 @@ export class BridgeInjector implements MigrationModule {
                 duration,
                 bridgeFile: BridgeInjector.BRIDGE_FILENAME,
             });
+
+            // Add BRIDGE_INJECTED tag
+            await Database.shared.extensionAppendTag(extension, Tags.BRIDGE_INJECTED);
 
             // Return updated extension
             return {
