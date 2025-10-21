@@ -27,7 +27,7 @@ export interface Extension {
         file_modifications: number;
         webRequest_to_dnr_migrations: number;
     };
-    tags: string[]  // Store tag names as strings for readability in MongoDB
+    tags: string[]  // Store tag names as enum string names (e.g., 'MANIFEST_MIGRATED') for readability in MongoDB
 }
 
 
