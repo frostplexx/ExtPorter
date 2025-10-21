@@ -1,6 +1,7 @@
 import { Db, MongoClient } from 'mongodb';
 import { Extension } from '../../types/extension';
 import { logger, LogLevel } from '../../utils/logger';
+import { Tags } from '../../types/tags';
 
 export enum Collections {
     EXTENSIONS = 'extensions',
@@ -16,7 +17,7 @@ export class Database {
     private isShuttingDown: boolean = false;
     public static shared = new Database();
 
-    private constructor() {}
+    private constructor() { }
 
     async init() {
         if (!process.env.MONGODB_URI) {
@@ -221,6 +222,84 @@ export class Database {
             );
         }
         return result;
+    }
+
+    /**
+     * Appends a tag to an extension (avoids duplicates using $addToSet)
+     * @param extension - The extension to add the tag to
+     * @param tag - The tag to append
+     * @returns The update result or null if extension not found
+     */
+    async extensionAppendTag(extension: Extension, tag: Tags) {
+        if (!this.database) throw new Error('Database not initialized');
+
+        try {
+            // Use $addToSet to add the tag only if it doesn't already exist
+            const result = await this.database
+                .collection(Collections.EXTENSIONS)
+                .updateOne(
+                    { id: extension.id },
+                    { $addToSet: { tags: tag } }
+                );
+
+            if (result.matchedCount === 0) {
+                logger.error(
+                    extension,
+                    `Couldn't find extension with id ${extension.id} for tag insertion`
+                );
+                return null;
+            }
+
+            if (result.modifiedCount > 0) {
+                logger.debug(extension, `Added tag ${Tags[tag]} to extension ${extension.name}`);
+            } else {
+                logger.debug(extension, `Tag ${Tags[tag]} already exists on extension ${extension.name}`);
+            }
+
+            return result;
+        } catch (error) {
+            logger.error(extension, `Failed to append tag to extension:`, error);
+            throw error;
+        }
+    }
+
+    /**
+     * Removes a tag from an extension
+     * @param extension - The extension to remove the tag from
+     * @param tag - The tag to remove
+     * @returns The update result or null if extension not found
+     */
+    async extensionRemoveTag(extension: Extension, tag: Tags) {
+        if (!this.database) throw new Error('Database not initialized');
+
+        try {
+            // Use $pull to remove the tag from the array
+            const result = await this.database
+                .collection(Collections.EXTENSIONS)
+                .updateOne(
+                    { id: extension.id },
+                    { $pull: { tags: tag } }
+                );
+
+            if (result.matchedCount === 0) {
+                logger.error(
+                    extension,
+                    `Couldn't find extension with id ${extension.id} for tag removal`
+                );
+                return null;
+            }
+
+            if (result.modifiedCount > 0) {
+                logger.debug(extension, `Removed tag ${Tags[tag]} from extension ${extension.name}`);
+            } else {
+                logger.debug(extension, `Tag ${Tags[tag]} was not present on extension ${extension.name}`);
+            }
+
+            return result;
+        } catch (error) {
+            logger.error(extension, `Failed to remove tag from extension:`, error);
+            throw error;
+        }
     }
 
     async insertFoundExtensions(extensions: Extension[]) {
