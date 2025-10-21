@@ -7,7 +7,6 @@ import * as ESTree from 'estree';
 import * as fs from 'fs';
 import * as path from 'path';
 import { logger } from '../utils/logger';
-import { Database } from '../features/database/db_manager';
 import { Tags } from '../types/tags';
 import { TwinningMapping } from '../types/twinning_mapping';
 import { BlacklistChecker } from '../utils/blacklist_checker';
@@ -122,14 +121,22 @@ export class RenameAPIS implements MigrationModule {
                 return extension;
             }
 
-            // Add API_RENAMES_APPLIED tag
-            await Database.shared.extensionAppendTag(extension, Tags.API_RENAMES_APPLIED);
-
-            // Return new extension with transformed files
-            return {
+            // Create updated extension with transformed files
+            const updatedExtension = {
                 ...extension,
                 files: transformedFilesArray,
             };
+
+            // Add API_RENAMES_APPLIED tag to extension object
+            if (!updatedExtension.tags) {
+                updatedExtension.tags = [];
+            }
+            const apiRenameTag = Tags[Tags.API_RENAMES_APPLIED];
+            if (!updatedExtension.tags.includes(apiRenameTag)) {
+                updatedExtension.tags.push(apiRenameTag);
+            }
+
+            return updatedExtension;
         } catch (error) {
             RenameAPIS.handleMigrationError(error, extension, startTime);
             return new MigrationError(extension, error);

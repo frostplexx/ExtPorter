@@ -1,7 +1,6 @@
 import { Extension } from '../types/extension';
 import { MigrationError, MigrationModule } from '../types/migration_module';
 import { logger } from '../utils/logger';
-import { Database } from '../features/database/db_manager';
 import { Tags } from '../types/tags';
 
 /**
@@ -53,8 +52,14 @@ export class MigrateCSP implements MigrationModule {
                 };
                 logger.warn(extension, `Transformed non-compliant CSP from: "${csp}" to: "${compliantCSP}"`);
 
-                // Add CSP_VALUE_MODIFIED tag
-                await Database.shared.extensionAppendTag(extension, Tags.CSP_VALUE_MODIFIED);
+                // Add CSP_VALUE_MODIFIED tag to extension object
+                if (!extension.tags) {
+                    extension.tags = [];
+                }
+                const cspTag = Tags[Tags.CSP_VALUE_MODIFIED];
+                if (!extension.tags.includes(cspTag)) {
+                    extension.tags.push(cspTag);
+                }
 
                 return extension;
             }

@@ -1,7 +1,6 @@
 import { Extension } from '../types/extension';
 import { MigrationError, MigrationModule } from '../types/migration_module';
 import { logger } from '../utils/logger';
-import { Database } from '../features/database/db_manager';
 import { Tags } from '../types/tags';
 import crypto from 'crypto';
 
@@ -232,8 +231,14 @@ export class MigrateManifest implements MigrationModule {
 
             // logger.debug(extension, JSON.stringify(extension.manifest))
 
-            // Add MANIFEST_MIGRATED tag
-            await Database.shared.extensionAppendTag(extension, Tags.MANIFEST_MIGRATED);
+            // Add MANIFEST_MIGRATED tag to extension object
+            if (!extension.tags) {
+                extension.tags = [];
+            }
+            const manifestTag = Tags[Tags.MANIFEST_MIGRATED];
+            if (!extension.tags.includes(manifestTag)) {
+                extension.tags.push(manifestTag);
+            }
 
             return extension;
         } catch (error) {

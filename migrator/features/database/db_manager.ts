@@ -1,7 +1,6 @@
 import { Db, MongoClient } from 'mongodb';
 import { Extension } from '../../types/extension';
 import { logger, LogLevel } from '../../utils/logger';
-import { Tags } from '../../types/tags';
 
 export enum Collections {
     EXTENSIONS = 'extensions',
@@ -227,10 +226,10 @@ export class Database {
     /**
      * Appends a tag to an extension (avoids duplicates using $addToSet)
      * @param extension - The extension to add the tag to
-     * @param tag - The tag to append
+     * @param tag - The tag string to append
      * @returns The update result or null if extension not found
      */
-    async extensionAppendTag(extension: Extension, tag: Tags) {
+    async extensionAppendTag(extension: Extension, tag: string) {
         if (!this.database) throw new Error('Database not initialized');
 
         try {
@@ -251,9 +250,9 @@ export class Database {
             }
 
             if (result.modifiedCount > 0) {
-                logger.debug(extension, `Added tag ${Tags[tag]} to extension ${extension.name}`);
+                logger.debug(extension, `Added tag ${tag} to extension ${extension.name}`);
             } else {
-                logger.debug(extension, `Tag ${Tags[tag]} already exists on extension ${extension.name}`);
+                logger.debug(extension, `Tag ${tag} already exists on extension ${extension.name}`);
             }
 
             return result;
@@ -266,10 +265,10 @@ export class Database {
     /**
      * Removes a tag from an extension
      * @param extension - The extension to remove the tag from
-     * @param tag - The tag to remove
+     * @param tag - The tag string to remove
      * @returns The update result or null if extension not found
      */
-    async extensionRemoveTag(extension: Extension, tag: Tags) {
+    async extensionRemoveTag(extension: Extension, tag: string) {
         if (!this.database) throw new Error('Database not initialized');
 
         try {
@@ -290,9 +289,9 @@ export class Database {
             }
 
             if (result.modifiedCount > 0) {
-                logger.debug(extension, `Removed tag ${Tags[tag]} from extension ${extension.name}`);
+                logger.debug(extension, `Removed tag ${tag} from extension ${extension.name}`);
             } else {
-                logger.debug(extension, `Tag ${Tags[tag]} was not present on extension ${extension.name}`);
+                logger.debug(extension, `Tag ${tag} was not present on extension ${extension.name}`);
             }
 
             return result;
