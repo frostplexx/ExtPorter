@@ -11,6 +11,7 @@ import { getMv2Path, getMv3Path, execCommand, collectExtensionFiles } from './fi
 import { llmManager } from './llm-manager';
 import { waitForKeypress } from './input-handler';
 import { buildChatMessagesFromFile } from '../migrator/features/llm';
+import { Tags } from '../migrator/types/tags';
 
 export async function viewSource(ext: ExtensionSearchResult): Promise<void> {
     const mv2Path = getMv2Path(ext);
@@ -234,6 +235,64 @@ export async function showInfo(ext: ExtensionSearchResult): Promise<void> {
                 .forEach(([key, value]) => {
                     console.log(chalk.dim('  • ') + chalk.cyan(key.replace(/_/g, ' ')) + chalk.dim(': ') + chalk.yellow(value.toString()));
                 });
+        }
+    }
+
+    // Display tags
+    if (ext.tags && ext.tags.length > 0) {
+        console.log('');
+        console.log(chalk.bold('🏷️  Tags:'));
+
+        // Group tags by category
+        const migrationTags = ext.tags.filter(tag =>
+            [Tags.MANIFEST_MIGRATED, Tags.DECLARATIVE_NET_REQUEST_MIGRATED,
+             Tags.CSP_VALUE_MODIFIED, Tags.API_RENAMES_APPLIED, Tags.BRIDGE_INJECTED].includes(tag)
+        );
+        const featureTags = ext.tags.filter(tag =>
+            [Tags.HAS_BROWSER_POPUP, Tags.HAS_BACKGROUND_PAGE, Tags.HAS_CONTENT_SCRIPTS,
+             Tags.HAS_SERVICE_WORKER, Tags.NEW_TAB_OVERRIDE].includes(tag)
+        );
+        const permissionTags = ext.tags.filter(tag =>
+            [Tags.HAS_HOST_PERMISSIONS, Tags.USES_WEB_REQUEST,
+             Tags.USES_STORAGE_LOCAL, Tags.USES_TABS_API].includes(tag)
+        );
+        const codeTags = ext.tags.filter(tag =>
+            [Tags.WEBPACK_BUNDLED, Tags.CONTAINS_EVAL, Tags.MINIFIED_CODE].includes(tag)
+        );
+        const issueTags = ext.tags.filter(tag =>
+            [Tags.MIGRATION_FAILED, Tags.PARTIAL_MIGRATION, Tags.COMPATIBILITY_ISSUES].includes(tag)
+        );
+
+        // Helper function to format tag name
+        const formatTagName = (tag: Tags): string => {
+            return Tags[tag].replace(/_/g, ' ').toLowerCase();
+        };
+
+        // Display grouped tags
+        if (migrationTags.length > 0) {
+            console.log(chalk.dim('  Migration: ') + migrationTags.map(tag =>
+                chalk.green(formatTagName(tag))
+            ).join(chalk.dim(', ')));
+        }
+        if (featureTags.length > 0) {
+            console.log(chalk.dim('  Features: ') + featureTags.map(tag =>
+                chalk.blue(formatTagName(tag))
+            ).join(chalk.dim(', ')));
+        }
+        if (permissionTags.length > 0) {
+            console.log(chalk.dim('  Permissions: ') + permissionTags.map(tag =>
+                chalk.magenta(formatTagName(tag))
+            ).join(chalk.dim(', ')));
+        }
+        if (codeTags.length > 0) {
+            console.log(chalk.dim('  Code: ') + codeTags.map(tag =>
+                chalk.yellow(formatTagName(tag))
+            ).join(chalk.dim(', ')));
+        }
+        if (issueTags.length > 0) {
+            console.log(chalk.dim('  Issues: ') + issueTags.map(tag =>
+                chalk.red(formatTagName(tag))
+            ).join(chalk.dim(', ')));
         }
     }
 
