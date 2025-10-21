@@ -1,6 +1,8 @@
 import { Extension } from '../types/extension';
 import { MigrationError, MigrationModule } from '../types/migration_module';
 import { logger } from '../utils/logger';
+import { Database } from '../features/database/db_manager';
+import { Tags } from '../types/tags';
 
 /**
  * Migration module for handling Content Security Policy (CSP) transformation
@@ -15,7 +17,7 @@ export class MigrateCSP implements MigrationModule {
      * @param extension The extension to migrate CSP for
      * @returns The extension with migrated CSP or a MigrationError
      */
-    public static migrate(extension: Extension): Extension | MigrationError {
+    public static async migrate(extension: Extension): Promise<Extension | MigrationError> {
         MigrateCSP.current_ext = extension;
         try {
             const csp = extension.manifest["content_security_policy"];
@@ -50,6 +52,10 @@ export class MigrateCSP implements MigrationModule {
                     "sandbox": defaultMV3CSP.sandbox
                 };
                 logger.warn(extension, `Transformed non-compliant CSP from: "${csp}" to: "${compliantCSP}"`);
+
+                // Add CSP_VALUE_MODIFIED tag
+                await Database.shared.extensionAppendTag(extension, Tags.CSP_VALUE_MODIFIED);
+
                 return extension;
             }
 

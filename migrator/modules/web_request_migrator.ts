@@ -3,6 +3,8 @@ import { MigrationError, MigrationModule } from '../types/migration_module';
 import { LazyFile } from '../types/abstract_file';
 import { ExtFileType } from '../types/ext_file_types';
 import { logger } from '../utils/logger';
+import { Database } from '../features/database/db_manager';
+import { Tags } from '../types/tags';
 import {
     Rule,
     RuleActionType,
@@ -28,7 +30,7 @@ import {
 export class WebRequestMigrator implements MigrationModule {
     private static ruleIdCounter = 1;
 
-    public static migrate(extension: Extension): Extension | MigrationError {
+    public static async migrate(extension: Extension): Promise<Extension | MigrationError> {
         const startTime = Date.now();
 
         try {
@@ -99,6 +101,12 @@ export class WebRequestMigrator implements MigrationModule {
                     updatedBreakdown.webRequest_to_dnr_migrations = 1;
                 }
             }
+
+            // Add DECLARATIVE_NET_REQUEST_MIGRATED tag if rules were generated
+            if (staticRules.length > 0) {
+                await Database.shared.extensionAppendTag(extension, Tags.DECLARATIVE_NET_REQUEST_MIGRATED);
+            }
+
             return {
                 ...extension,
                 files: finalFiles,
