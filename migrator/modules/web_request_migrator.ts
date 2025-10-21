@@ -3,7 +3,6 @@ import { MigrationError, MigrationModule } from '../types/migration_module';
 import { LazyFile } from '../types/abstract_file';
 import { ExtFileType } from '../types/ext_file_types';
 import { logger } from '../utils/logger';
-import { Database } from '../features/database/db_manager';
 import { Tags } from '../types/tags';
 import {
     Rule,
@@ -102,16 +101,25 @@ export class WebRequestMigrator implements MigrationModule {
                 }
             }
 
-            // Add DECLARATIVE_NET_REQUEST_MIGRATED tag if rules were generated
-            if (staticRules.length > 0) {
-                await Database.shared.extensionAppendTag(extension, Tags.DECLARATIVE_NET_REQUEST_MIGRATED);
-            }
-
-            return {
+            // Prepare updated extension object
+            const updatedExtension = {
                 ...extension,
                 files: finalFiles,
                 ...(updatedBreakdown && { interestingness_breakdown: updatedBreakdown }),
             };
+
+            // Add DECLARATIVE_NET_REQUEST_MIGRATED tag if rules were generated
+            if (staticRules.length > 0) {
+                if (!updatedExtension.tags) {
+                    updatedExtension.tags = [];
+                }
+                const dnrTag = Tags[Tags.DECLARATIVE_NET_REQUEST_MIGRATED];
+                if (!updatedExtension.tags.includes(dnrTag)) {
+                    updatedExtension.tags.push(dnrTag);
+                }
+            }
+
+            return updatedExtension;
         } catch (error) {
             logger.error(extension, 'Blocking webRequest migration failed', {
                 error: error instanceof Error ? error.message : String(error),

@@ -1,7 +1,6 @@
 import { Extension } from '../types/extension';
 import { MigrationError, MigrationModule } from '../types/migration_module';
 import { logger } from '../utils/logger';
-import { Database } from '../features/database/db_manager';
 import { Tags } from '../types/tags';
 import { ExtFileType } from '../types/ext_file_types';
 
@@ -321,47 +320,58 @@ export class InterestingnessScorer implements MigrationModule {
      * Adds feature/characteristic tags based on the interestingness breakdown
      */
     private static async addFeatureTags(extension: Extension, breakdown: InterestingnessBreakdown): Promise<void> {
-        const db = Database.shared;
         const manifest = extension.manifest;
+
+        // Initialize tags array if it doesn't exist
+        if (!extension.tags) {
+            extension.tags = [];
+        }
+
+        const addTag = (tag: Tags) => {
+            const tagName = Tags[tag];  // Convert enum value to string name
+            if (!extension.tags!.includes(tagName)) {
+                extension.tags!.push(tagName);
+            }
+        };
 
         // Extension Features
         if (manifest?.action || manifest?.browser_action || manifest?.page_action) {
-            await db.extensionAppendTag(extension, Tags.HAS_BROWSER_POPUP);
+            addTag(Tags.HAS_BROWSER_POPUP);
         }
 
         if (breakdown.background_page > 0) {
-            await db.extensionAppendTag(extension, Tags.HAS_BACKGROUND_PAGE);
+            addTag(Tags.HAS_BACKGROUND_PAGE);
         }
 
         if (breakdown.content_scripts > 0) {
-            await db.extensionAppendTag(extension, Tags.HAS_CONTENT_SCRIPTS);
+            addTag(Tags.HAS_CONTENT_SCRIPTS);
         }
 
         if (manifest?.background?.service_worker) {
-            await db.extensionAppendTag(extension, Tags.HAS_SERVICE_WORKER);
+            addTag(Tags.HAS_SERVICE_WORKER);
         }
 
         if (manifest?.chrome_url_overrides?.newtab) {
-            await db.extensionAppendTag(extension, Tags.NEW_TAB_OVERRIDE);
+            addTag(Tags.NEW_TAB_OVERRIDE);
         }
 
         // Permission Categories
         if (breakdown.host_permissions > 0) {
-            await db.extensionAppendTag(extension, Tags.HAS_HOST_PERMISSIONS);
+            addTag(Tags.HAS_HOST_PERMISSIONS);
         }
 
         if (breakdown.webRequest > 0) {
-            await db.extensionAppendTag(extension, Tags.USES_WEB_REQUEST);
+            addTag(Tags.USES_WEB_REQUEST);
         }
 
         if (breakdown.storage_local > 0) {
-            await db.extensionAppendTag(extension, Tags.USES_STORAGE_LOCAL);
+            addTag(Tags.USES_STORAGE_LOCAL);
         }
 
         // Check for tabs API usage
         const permissions = manifest?.permissions || [];
         if (permissions.includes('tabs') || permissions.includes('activeTab')) {
-            await db.extensionAppendTag(extension, Tags.USES_TABS_API);
+            addTag(Tags.USES_TABS_API);
         }
 
         // Code Characteristics
@@ -402,15 +412,15 @@ export class InterestingnessScorer implements MigrationModule {
         }
 
         if (hasWebpack) {
-            await db.extensionAppendTag(extension, Tags.WEBPACK_BUNDLED);
+            addTag(Tags.WEBPACK_BUNDLED);
         }
 
         if (hasEval) {
-            await db.extensionAppendTag(extension, Tags.CONTAINS_EVAL);
+            addTag(Tags.CONTAINS_EVAL);
         }
 
         if (hasMinified) {
-            await db.extensionAppendTag(extension, Tags.MINIFIED_CODE);
+            addTag(Tags.MINIFIED_CODE);
         }
     }
 }

@@ -5,7 +5,6 @@ import { ExtFileType } from '../types/ext_file_types';
 import * as fs from 'fs';
 import * as path from 'path';
 import { logger } from '../utils/logger';
-import { Database } from '../features/database/db_manager';
 import { Tags } from '../types/tags';
 import { FileContentUpdater } from '../utils/file_content_updater';
 
@@ -342,15 +341,23 @@ export class BridgeInjector implements MigrationModule {
                 bridgeFile: BridgeInjector.BRIDGE_FILENAME,
             });
 
-            // Add BRIDGE_INJECTED tag
-            await Database.shared.extensionAppendTag(extension, Tags.BRIDGE_INJECTED);
-
-            // Return updated extension
-            return {
+            // Create updated extension
+            const updatedExtension = {
                 ...extension,
                 manifest: updatedManifest,
                 files: updatedFiles,
             };
+
+            // Add BRIDGE_INJECTED tag to extension object
+            if (!updatedExtension.tags) {
+                updatedExtension.tags = [];
+            }
+            const bridgeTag = Tags[Tags.BRIDGE_INJECTED];
+            if (!updatedExtension.tags.includes(bridgeTag)) {
+                updatedExtension.tags.push(bridgeTag);
+            }
+
+            return updatedExtension;
         } catch (error) {
             const duration = Date.now() - startTime;
             logger.error(extension, 'Bridge injection failed', {
