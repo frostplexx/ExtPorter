@@ -1,0 +1,31 @@
+export enum Tags {
+    // Migration Status
+    MANIFEST_MIGRATED,
+    DECLARATIVE_NET_REQUEST_MIGRATED,
+    CSP_VALUE_MODIFIED,
+    API_RENAMES_APPLIED,
+    BRIDGE_INJECTED,
+
+    // Extension Features
+    HAS_BROWSER_POPUP,
+    HAS_BACKGROUND_PAGE,
+    HAS_CONTENT_SCRIPTS,
+    HAS_SERVICE_WORKER,
+    NEW_TAB_OVERRIDE,
+
+    // Permission Categories
+    HAS_HOST_PERMISSIONS,
+    USES_WEB_REQUEST,
+    USES_STORAGE_LOCAL,
+    USES_TABS_API,
+
+    // Code Characteristics
+    WEBPACK_BUNDLED,
+    CONTAINS_EVAL,
+    MINIFIED_CODE,
+
+    // Migration Issues/Warnings
+    MIGRATION_FAILED,
+    PARTIAL_MIGRATION,
+    COMPATIBILITY_ISSUES,
+}

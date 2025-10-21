@@ -130,7 +130,7 @@ async function main() {
             const migrationOnly = migrationModules.slice(0, -1); // All except WriteMigrated
             for (const migrateFunction of migrationOnly) {
                 // logger.info(extension, `Applying migration function: ${migrateFunction.name}`);
-                const migrated = migrateFunction(extension); // call migrate function of each module.
+                const migrated = await migrateFunction(extension); // call migrate function of each module.
                 if (migrated && !(migrated instanceof MigrationError)) {
                     // if not null assign migrated extension to current one
                     extension = migrated;

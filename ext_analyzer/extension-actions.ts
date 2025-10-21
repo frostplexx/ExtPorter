@@ -185,7 +185,8 @@ export async function runExtension(ext: ExtensionSearchResult): Promise<void> {
             name: "tmp",
             manifest_v2_path: pathToRun,
             manifest: {},
-            files: []
+            files: [],
+            tags: [],
         }
 
         await Promise.all([
@@ -205,13 +206,12 @@ export async function runExtension(ext: ExtensionSearchResult): Promise<void> {
 
 export async function showInfo(ext: ExtensionSearchResult): Promise<void> {
     console.clear();
-    console.log('');
-    console.log(chalk.bold.cyan('  EXTENSION DETAILS'));
-    console.log('');
     console.log(chalk.bold('Name: ') + chalk.cyan(ext.name || ext.manifest?.name || 'Unknown'));
     console.log(chalk.bold('Version: ') + chalk.yellow(ext.manifest?.version || 'Unknown'));
+    if (ext.interestingness_score !== undefined) {
+        console.log(chalk.bold(`Interestingness Score: ${chalk.dim(ext.interestingness_score.toString())}`));
+    }
     console.log(chalk.bold('MV2 ID: ') + chalk.gray(ext.id));
-
     if (ext.mv3_extension_id) {
         console.log(chalk.bold('MV3 ID: ') + chalk.green(ext.mv3_extension_id));
     } else {
@@ -219,47 +219,23 @@ export async function showInfo(ext: ExtensionSearchResult): Promise<void> {
     }
 
     console.log('');
-    console.log(chalk.bold('Description: ') + chalk.dim(ext.manifest?.description || 'No description'));
+    console.log(chalk.blue(' Description: '))
+    console.log(ext.manifest?.description || 'No description');
 
-    if (ext.interestingness_score !== undefined) {
+
+    // Display tags
+    if (ext.tags && ext.tags.length > 0) {
         console.log('');
-        console.log(chalk.yellow('⭐ Interestingness Score: ') + chalk.bold(ext.interestingness_score.toString()));
-
-        if (ext.interestingness_breakdown) {
-            console.log('');
-            console.log(chalk.bold('Score Breakdown:'));
-            Object.entries(ext.interestingness_breakdown)
-                .filter(([_, value]) => value > 0)
-                .sort(([_, a], [__, b]) => b - a)
-                .forEach(([key, value]) => {
-                    console.log(chalk.dim('  • ') + chalk.cyan(key.replace(/_/g, ' ')) + chalk.dim(': ') + chalk.yellow(value.toString()));
-                });
-        }
+        console.log(chalk.blue(' Tags:'));
+        console.log(ext.tags.map(t => { return t.toLowerCase(); }).join(chalk.dim(", ")));
     }
 
-    if (ext.manifest?.permissions && ext.manifest.permissions.length > 0) {
-        console.log('');
-        console.log(chalk.bold('🔑 Permissions:'));
-        ext.manifest.permissions.forEach((perm: string) => {
-            console.log(chalk.dim('  • ') + chalk.magenta(perm));
-        });
-    }
-
-    if (ext.manifest) {
-        console.log('');
-        console.log(chalk.bold('📄 Manifest Keys:'));
-        Object.keys(ext.manifest)
-            .filter(key => !['name', 'description', 'version', 'permissions'].includes(key))
-            .forEach((key) => {
-                console.log(chalk.dim('  • ') + chalk.gray(key));
-            });
-    }
 
     const mv2Path = getMv2Path(ext);
     const mv3Path = getMv3Path(ext);
 
     console.log('');
-    console.log(chalk.bold('📂 File Paths:'));
+    console.log(chalk.blue(' File Paths:'));
     if (mv2Path) console.log(chalk.dim('  MV2: ') + chalk.blue(mv2Path));
     if (mv3Path) console.log(chalk.dim('  MV3: ') + chalk.green(mv3Path));
 
