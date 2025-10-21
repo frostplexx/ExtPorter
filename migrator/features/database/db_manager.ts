@@ -278,7 +278,7 @@ export class Database {
                 .collection(Collections.EXTENSIONS)
                 .updateOne(
                     { id: extension.id },
-                    { $pull: { tags: tag } }
+                    { $pull: { tags: tag } } as any
                 );
 
             if (result.matchedCount === 0) {
