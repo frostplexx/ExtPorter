@@ -219,14 +219,15 @@ export async function showInfo(ext: ExtensionSearchResult): Promise<void> {
     }
 
     console.log('');
-    console.log(chalk.bold('Description: ') + chalk.dim(ext.manifest?.description || 'No description'));
+    console.log(chalk.blue(' Description: '))
+    console.log(ext.manifest?.description || 'No description');
 
 
     // Display tags
     if (ext.tags && ext.tags.length > 0) {
         console.log('');
-        console.log(chalk.bold('  Tags:'));
-        console.log(chalk.blue(ext.tags.join(chalk.dim(", "))));
+        console.log(chalk.blue(' Tags:'));
+        console.log(ext.tags.map(t => { return t.toLowerCase(); }).join(chalk.dim(", ")));
     }
 
 
@@ -234,7 +235,7 @@ export async function showInfo(ext: ExtensionSearchResult): Promise<void> {
     const mv3Path = getMv3Path(ext);
 
     console.log('');
-    console.log(chalk.bold('  File Paths:'));
+    console.log(chalk.blue(' File Paths:'));
     if (mv2Path) console.log(chalk.dim('  MV2: ') + chalk.blue(mv2Path));
     if (mv3Path) console.log(chalk.dim('  MV3: ') + chalk.green(mv3Path));
 
