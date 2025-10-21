@@ -1,5 +1,7 @@
+import { Database } from '../features/database/db_manager';
 import { logger } from '../utils/logger';
 import { LazyFile } from './abstract_file';
+import { Tags } from './tags';
 
 export interface Extension {
     id: string;
@@ -27,7 +29,10 @@ export interface Extension {
         file_modifications: number;
         webRequest_to_dnr_migrations: number;
     };
+    tags?: Tags[]
 }
+
+
 
 export function closeExtensionFiles(extension: Extension): void {
     // Close all file descriptors for LazyFile objects
