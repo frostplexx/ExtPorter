@@ -97,7 +97,7 @@ describe('Bridge Injection Puppeteer Tests', () => {
 
         // Create migrated extension using BridgeInjector
         const originalExtension = createExtensionFromDirectory(originalExtensionPath);
-        const migratedExtension = BridgeInjector.migrate(originalExtension);
+        const migratedExtension = await BridgeInjector.migrate(originalExtension);
 
         if (migratedExtension instanceof MigrationError) {
             throw new Error(`Migration failed: ${migratedExtension.error}`);
@@ -320,7 +320,6 @@ describe('Bridge Injection Puppeteer Tests', () => {
             const finalText = await page.$eval('#bridge-test-indicator', (el) => el.textContent);
 
             // Debug: Check what attributes are set
-            const testStatus = await page.$eval('#bridge-test-indicator', (el) => el.getAttribute('data-test-status'));
             const errorAttribute = await page.$eval('#bridge-test-indicator', (el) => el.getAttribute('data-error'));
 
             expect(finalText).toMatch(/Bridge Test: (Passed|Active)/);
@@ -390,6 +389,7 @@ describe('Bridge Injection Puppeteer Tests', () => {
                     // Should work on all domains (though some might have restrictions)
                     expect(['success', 'error']).toContain(testStatus);
                 } catch (error) {
+                    console.log(error as any)
                     // Some domains might block extension injection or timeout, that's okay
                 }
             }

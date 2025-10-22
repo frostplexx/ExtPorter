@@ -22,8 +22,8 @@ describe('MigrateCSP', () => {
     });
 
     describe('migrate', () => {
-        it('should add default CSP when no CSP is present', () => {
-            const result = MigrateCSP.migrate(baseExtension);
+        it('should add default CSP when no CSP is present', async () => {
+            const result = await MigrateCSP.migrate(baseExtension);
 
             expect(result).not.toBeInstanceOf(MigrationError);
             if (!(result instanceof MigrationError)) {
@@ -36,11 +36,11 @@ describe('MigrateCSP', () => {
         });
 
         describe('MV2 string format to MV3 object format', () => {
-            it('should convert MV2 CSP string to MV3 object format', () => {
+            it('should convert MV2 CSP string to MV3 object format', async () => {
                 baseExtension.manifest.content_security_policy =
                     "script-src 'self'; object-src 'self';";
 
-                const result = MigrateCSP.migrate(baseExtension);
+                const result = await MigrateCSP.migrate(baseExtension);
 
                 expect(result).not.toBeInstanceOf(MigrationError);
                 if (!(result instanceof MigrationError)) {
@@ -52,11 +52,11 @@ describe('MigrateCSP', () => {
                 }
             });
 
-            it('should validate and sanitize insecure MV2 CSP', () => {
+            it('should validate and sanitize insecure MV2 CSP', async () => {
                 baseExtension.manifest.content_security_policy =
                     "script-src 'self' 'unsafe-eval'; object-src 'self';";
 
-                const result = MigrateCSP.migrate(baseExtension);
+                const result = await MigrateCSP.migrate(baseExtension);
 
                 expect(result).not.toBeInstanceOf(MigrationError);
                 if (!(result instanceof MigrationError)) {
@@ -71,12 +71,12 @@ describe('MigrateCSP', () => {
         });
 
         describe('MV3 allowed directives', () => {
-            it('should preserve SHA256 hashes as they are allowed in MV3', () => {
+            it('should preserve SHA256 hashes as they are allowed in MV3', async () => {
                 const hashCSP =
                     "script-src 'self' 'sha256-abc123=='; object-src 'self';";
                 baseExtension.manifest.content_security_policy = hashCSP;
 
-                const result = MigrateCSP.migrate(baseExtension);
+                const result = await MigrateCSP.migrate(baseExtension);
 
                 expect(result).not.toBeInstanceOf(MigrationError);
                 if (!(result instanceof MigrationError)) {
@@ -89,12 +89,12 @@ describe('MigrateCSP', () => {
                 }
             });
 
-            it('should preserve all SHA hash variants (256, 384, 512) as they are allowed in MV3', () => {
+            it('should preserve all SHA hash variants (256, 384, 512) as they are allowed in MV3', async () => {
                 const hashCSP =
                     "script-src 'self' 'sha256-abc123==' 'sha384-def456==' 'sha512-ghi789=='; object-src 'self';";
                 baseExtension.manifest.content_security_policy = hashCSP;
 
-                const result = MigrateCSP.migrate(baseExtension);
+                const result = await MigrateCSP.migrate(baseExtension);
 
                 expect(result).not.toBeInstanceOf(MigrationError);
                 if (!(result instanceof MigrationError)) {
@@ -106,11 +106,11 @@ describe('MigrateCSP', () => {
                 }
             });
 
-            it('should preserve nonce directives as they are allowed in MV3', () => {
+            it('should preserve nonce directives as they are allowed in MV3', async () => {
                 const nonceCSP = "script-src 'self' 'nonce-random123'; object-src 'self';";
                 baseExtension.manifest.content_security_policy = nonceCSP;
 
-                const result = MigrateCSP.migrate(baseExtension);
+                const result = await MigrateCSP.migrate(baseExtension);
 
                 expect(result).not.toBeInstanceOf(MigrationError);
                 if (!(result instanceof MigrationError)) {
@@ -120,12 +120,12 @@ describe('MigrateCSP', () => {
                 }
             });
 
-            it('should preserve wasm-unsafe-eval as it is allowed in MV3', () => {
+            it('should preserve wasm-unsafe-eval as it is allowed in MV3', async () => {
                 const wasmCSP =
                     "script-src 'self' 'wasm-unsafe-eval'; object-src 'self';";
                 baseExtension.manifest.content_security_policy = wasmCSP;
 
-                const result = MigrateCSP.migrate(baseExtension);
+                const result = await MigrateCSP.migrate(baseExtension);
 
                 expect(result).not.toBeInstanceOf(MigrationError);
                 if (!(result instanceof MigrationError)) {
@@ -137,11 +137,11 @@ describe('MigrateCSP', () => {
         });
 
         describe('Unsafe directive removal', () => {
-            it('should remove unsafe-inline from CSP', () => {
+            it('should remove unsafe-inline from CSP', async () => {
                 const unsafeCSP = "script-src 'self' 'unsafe-inline'; object-src 'self';";
                 baseExtension.manifest.content_security_policy = unsafeCSP;
 
-                const result = MigrateCSP.migrate(baseExtension);
+                const result = await MigrateCSP.migrate(baseExtension);
 
                 expect(result).not.toBeInstanceOf(MigrationError);
                 if (!(result instanceof MigrationError)) {
@@ -151,11 +151,11 @@ describe('MigrateCSP', () => {
                 }
             });
 
-            it('should remove unsafe-eval from CSP', () => {
+            it('should remove unsafe-eval from CSP', async () => {
                 const unsafeCSP = "script-src 'self' 'unsafe-eval'; object-src 'self';";
                 baseExtension.manifest.content_security_policy = unsafeCSP;
 
-                const result = MigrateCSP.migrate(baseExtension);
+                const result = await MigrateCSP.migrate(baseExtension);
 
                 expect(result).not.toBeInstanceOf(MigrationError);
                 if (!(result instanceof MigrationError)) {
@@ -165,11 +165,11 @@ describe('MigrateCSP', () => {
                 }
             });
 
-            it('should remove data: URLs from script-src', () => {
+            it('should remove data: URLs from script-src', async () => {
                 const dataCSP = "script-src 'self' data:; object-src 'self';";
                 baseExtension.manifest.content_security_policy = dataCSP;
 
-                const result = MigrateCSP.migrate(baseExtension);
+                const result = await MigrateCSP.migrate(baseExtension);
 
                 expect(result).not.toBeInstanceOf(MigrationError);
                 if (!(result instanceof MigrationError)) {
@@ -179,11 +179,11 @@ describe('MigrateCSP', () => {
                 }
             });
 
-            it('should remove blob: URLs from script-src', () => {
+            it('should remove blob: URLs from script-src', async () => {
                 const blobCSP = "script-src 'self' blob:; object-src 'self';";
                 baseExtension.manifest.content_security_policy = blobCSP;
 
-                const result = MigrateCSP.migrate(baseExtension);
+                const result = await MigrateCSP.migrate(baseExtension);
 
                 expect(result).not.toBeInstanceOf(MigrationError);
                 if (!(result instanceof MigrationError)) {
@@ -193,11 +193,11 @@ describe('MigrateCSP', () => {
                 }
             });
 
-            it('should remove non-localhost HTTP URLs', () => {
+            it('should remove non-localhost HTTP URLs', async () => {
                 const httpCSP = "script-src 'self' http://example.com; object-src 'self';";
                 baseExtension.manifest.content_security_policy = httpCSP;
 
-                const result = MigrateCSP.migrate(baseExtension);
+                const result = await MigrateCSP.migrate(baseExtension);
 
                 expect(result).not.toBeInstanceOf(MigrationError);
                 if (!(result instanceof MigrationError)) {
@@ -207,11 +207,11 @@ describe('MigrateCSP', () => {
                 }
             });
 
-            it('should preserve localhost HTTP URLs', () => {
+            it('should preserve localhost HTTP URLs', async () => {
                 const localhostCSP = "script-src 'self' http://localhost:3000; object-src 'self';";
                 baseExtension.manifest.content_security_policy = localhostCSP;
 
-                const result = MigrateCSP.migrate(baseExtension);
+                const result = await MigrateCSP.migrate(baseExtension);
 
                 expect(result).not.toBeInstanceOf(MigrationError);
                 if (!(result instanceof MigrationError)) {
@@ -223,12 +223,12 @@ describe('MigrateCSP', () => {
         });
 
         describe('MV3 object format handling', () => {
-            it('should use default CSP when MV3 object format is provided (migration is from MV2 only)', () => {
+            it('should use default CSP when MV3 object format is provided (migration is from MV2 only)', async () => {
                 baseExtension.manifest.content_security_policy = {
                     extension_pages: "script-src 'self' 'sha256-someHash=='; object-src 'self';",
                 };
 
-                const result = MigrateCSP.migrate(baseExtension);
+                const result = await MigrateCSP.migrate(baseExtension);
 
                 expect(result).not.toBeInstanceOf(MigrationError);
                 if (!(result instanceof MigrationError)) {
@@ -242,10 +242,10 @@ describe('MigrateCSP', () => {
         });
 
         describe('Fallback behavior', () => {
-            it('should use safe default CSP when validation fails completely', () => {
+            it('should use safe default CSP when validation fails completely', async () => {
                 baseExtension.manifest.content_security_policy = 'completely invalid csp syntax!!!';
 
-                const result = MigrateCSP.migrate(baseExtension);
+                const result = await MigrateCSP.migrate(baseExtension);
 
                 expect(result).not.toBeInstanceOf(MigrationError);
                 if (!(result instanceof MigrationError)) {
@@ -257,11 +257,11 @@ describe('MigrateCSP', () => {
                 }
             });
 
-            it('should remove HTTPS sources as remote scripts are not allowed in MV3', () => {
+            it('should remove HTTPS sources as remote scripts are not allowed in MV3', async () => {
                 const remoteCSP = "script-src 'self' https://cdn.example.com; object-src 'self';";
                 baseExtension.manifest.content_security_policy = remoteCSP;
 
-                const result = MigrateCSP.migrate(baseExtension);
+                const result = await MigrateCSP.migrate(baseExtension);
 
                 expect(result).not.toBeInstanceOf(MigrationError);
                 if (!(result instanceof MigrationError)) {
@@ -276,12 +276,12 @@ describe('MigrateCSP', () => {
         });
 
         describe('Complex CSP scenarios', () => {
-            it('should handle multiple problematic directives in one CSP', () => {
+            it('should handle multiple problematic directives in one CSP', async () => {
                 const complexCSP =
                     "script-src 'self' 'unsafe-eval' 'unsafe-inline' 'sha256-abc123==' data: http://bad.com 'nonce-xyz'; style-src 'self' 'unsafe-inline'; object-src 'self';";
                 baseExtension.manifest.content_security_policy = complexCSP;
 
-                const result = MigrateCSP.migrate(baseExtension);
+                const result = await MigrateCSP.migrate(baseExtension);
 
                 expect(result).not.toBeInstanceOf(MigrationError);
                 if (!(result instanceof MigrationError)) {
@@ -297,12 +297,12 @@ describe('MigrateCSP', () => {
                 }
             });
 
-            it('should handle real-world CSP from Chrome Web Store extensions', () => {
+            it('should handle real-world CSP from Chrome Web Store extensions', async () => {
                 const realWorldCSP =
                     "script-src 'self' 'wasm-unsafe-eval' 'sha256-iZBJenro+ON4QTZuWnyvHk3Yj9s/TfHgJLTCP8EJzhE='; object-src 'self';";
                 baseExtension.manifest.content_security_policy = realWorldCSP;
 
-                const result = MigrateCSP.migrate(baseExtension);
+                const result = await MigrateCSP.migrate(baseExtension);
 
                 expect(result).not.toBeInstanceOf(MigrationError);
                 if (!(result instanceof MigrationError)) {
@@ -314,12 +314,12 @@ describe('MigrateCSP', () => {
                 }
             });
 
-            it('should remove bare JavaScript file paths that cause Chrome MV3 errors', () => {
+            it('should remove bare JavaScript file paths that cause Chrome MV3 errors', async () => {
                 const filePathCSP =
                     "script-src 'self' remote_resources/f3d11240_ga.js; object-src 'self';";
                 baseExtension.manifest.content_security_policy = filePathCSP;
 
-                const result = MigrateCSP.migrate(baseExtension);
+                const result = await MigrateCSP.migrate(baseExtension);
 
                 expect(result).not.toBeInstanceOf(MigrationError);
                 if (!(result instanceof MigrationError)) {
@@ -330,12 +330,12 @@ describe('MigrateCSP', () => {
                 }
             });
 
-            it('should remove various bare file paths from script-src', () => {
+            it('should remove various bare file paths from script-src', async () => {
                 const multipleFilePathsCSP =
                     "script-src 'self' content.js background.js libs/jquery.min.js vendor/analytics.js; object-src 'self';";
                 baseExtension.manifest.content_security_policy = multipleFilePathsCSP;
 
-                const result = MigrateCSP.migrate(baseExtension);
+                const result = await MigrateCSP.migrate(baseExtension);
 
                 expect(result).not.toBeInstanceOf(MigrationError);
                 if (!(result instanceof MigrationError)) {
@@ -350,12 +350,12 @@ describe('MigrateCSP', () => {
         });
 
         describe('Generic pattern detection', () => {
-            it('should preserve any SHA hash variant (256, 384, 512) as they are allowed in MV3', () => {
+            it('should preserve any SHA hash variant (256, 384, 512) as they are allowed in MV3', async () => {
                 const multiHashCSP =
                     "script-src 'self' 'sha256-randomhash1==' 'sha384-anotherhash2==' 'sha512-thirdhash3=='; object-src 'self';";
                 baseExtension.manifest.content_security_policy = multiHashCSP;
 
-                const result = MigrateCSP.migrate(baseExtension);
+                const result = await MigrateCSP.migrate(baseExtension);
 
                 expect(result).not.toBeInstanceOf(MigrationError);
                 if (!(result instanceof MigrationError)) {
@@ -367,12 +367,12 @@ describe('MigrateCSP', () => {
                 }
             });
 
-            it('should preserve nonce directives as they are allowed in MV3', () => {
+            it('should preserve nonce directives as they are allowed in MV3', async () => {
                 const nonceCSP =
                     "script-src 'self' 'nonce-abc123' 'nonce-xyz789' 'nonce-random456'; object-src 'self';";
                 baseExtension.manifest.content_security_policy = nonceCSP;
 
-                const result = MigrateCSP.migrate(baseExtension);
+                const result = await MigrateCSP.migrate(baseExtension);
 
                 expect(result).not.toBeInstanceOf(MigrationError);
                 if (!(result instanceof MigrationError)) {
@@ -384,12 +384,12 @@ describe('MigrateCSP', () => {
                 }
             });
 
-            it('should handle generic JavaScript file patterns in any directory structure', () => {
+            it('should handle generic JavaScript file patterns in any directory structure', async () => {
                 const complexFilePathsCSP =
                     "script-src 'self' app.js src/main.js lib/vendor/analytics.js assets/js/tracking.js components/ui/modal.js; object-src 'self';";
                 baseExtension.manifest.content_security_policy = complexFilePathsCSP;
 
-                const result = MigrateCSP.migrate(baseExtension);
+                const result = await MigrateCSP.migrate(baseExtension);
 
                 expect(result).not.toBeInstanceOf(MigrationError);
                 if (!(result instanceof MigrationError)) {
@@ -403,12 +403,12 @@ describe('MigrateCSP', () => {
                 }
             });
 
-            it('should remove any non-localhost HTTP URLs while preserving localhost', () => {
+            it('should remove any non-localhost HTTP URLs while preserving localhost', async () => {
                 const mixedHTTPCSP =
                     "script-src 'self' http://example.com/script.js http://api.service.com/data http://localhost:3000 http://cdn.provider.net/lib.js; object-src 'self';";
                 baseExtension.manifest.content_security_policy = mixedHTTPCSP;
 
-                const result = MigrateCSP.migrate(baseExtension);
+                const result = await MigrateCSP.migrate(baseExtension);
 
                 expect(result).not.toBeInstanceOf(MigrationError);
                 if (!(result instanceof MigrationError)) {
@@ -421,12 +421,12 @@ describe('MigrateCSP', () => {
                 }
             });
 
-            it('should handle any combination of unsafe directives', () => {
+            it('should handle any combination of unsafe directives', async () => {
                 const unsafeComboCSP =
                     "script-src 'self' 'unsafe-eval' 'unsafe-inline' data: blob:; style-src 'self' 'unsafe-inline'; object-src 'self';";
                 baseExtension.manifest.content_security_policy = unsafeComboCSP;
 
-                const result = MigrateCSP.migrate(baseExtension);
+                const result = await MigrateCSP.migrate(baseExtension);
 
                 expect(result).not.toBeInstanceOf(MigrationError);
                 if (!(result instanceof MigrationError)) {
@@ -449,9 +449,9 @@ describe('MigrateCSP', () => {
                     '   \t\n   ',
                 ];
 
-                malformedCSPs.forEach((malformedCSP) => {
+                malformedCSPs.forEach(async (malformedCSP) => {
                     baseExtension.manifest.content_security_policy = malformedCSP;
-                    const result = MigrateCSP.migrate(baseExtension);
+                    const result = await MigrateCSP.migrate(baseExtension);
 
                     expect(result).not.toBeInstanceOf(MigrationError);
                     if (!(result instanceof MigrationError)) {
@@ -464,12 +464,12 @@ describe('MigrateCSP', () => {
                 });
             });
 
-            it('should remove remote HTTPS sources and invalid patterns while preserving valid hashes', () => {
+            it('should remove remote HTTPS sources and invalid patterns while preserving valid hashes', async () => {
                 const mixedValidInvalidCSP =
                     "script-src 'self' https://cdn.jsdelivr.net/npm/jquery@3.6.0/dist/jquery.min.js 'sha256-validhash==' badfile.js 'unsafe-eval' https://apis.google.com/js/platform.js data:; object-src 'self';";
                 baseExtension.manifest.content_security_policy = mixedValidInvalidCSP;
 
-                const result = MigrateCSP.migrate(baseExtension);
+                const result = await MigrateCSP.migrate(baseExtension);
 
                 expect(result).not.toBeInstanceOf(MigrationError);
                 if (!(result instanceof MigrationError)) {
@@ -487,12 +487,12 @@ describe('MigrateCSP', () => {
                 }
             });
 
-            it('should handle edge cases in file path detection', () => {
+            it('should handle edge cases in file path detection', async () => {
                 const edgeCaseCSP =
                     "script-src 'self' file.js path/to/file.js deep/nested/path/to/script.js single.js; object-src 'self';";
                 baseExtension.manifest.content_security_policy = edgeCaseCSP;
 
-                const result = MigrateCSP.migrate(baseExtension);
+                const result = await MigrateCSP.migrate(baseExtension);
 
                 expect(result).not.toBeInstanceOf(MigrationError);
                 if (!(result instanceof MigrationError)) {
@@ -505,12 +505,12 @@ describe('MigrateCSP', () => {
                 }
             });
 
-            it('should be extensible for future MV3 violations', () => {
+            it('should be extensible for future MV3 violations', async () => {
                 const futureProblemCSP =
                     "script-src 'self' 'sha1-oldhash==' 'md5-evenworsehash=='; object-src 'self';";
                 baseExtension.manifest.content_security_policy = futureProblemCSP;
 
-                const result = MigrateCSP.migrate(baseExtension);
+                const result = await MigrateCSP.migrate(baseExtension);
 
                 expect(result).not.toBeInstanceOf(MigrationError);
                 if (!(result instanceof MigrationError)) {
@@ -522,19 +522,19 @@ describe('MigrateCSP', () => {
         });
 
         describe('Error handling', () => {
-            it('should return MigrationError when extension is null', () => {
-                const result = MigrateCSP.migrate(null as any);
+            it('should return MigrationError when extension is null', async () => {
+                const result = await MigrateCSP.migrate(null as any);
 
                 expect(result).toBeInstanceOf(MigrationError);
             });
 
-            it('should return MigrationError when manifest is corrupted', () => {
+            it('should return MigrationError when manifest is corrupted', async () => {
                 const corruptedExtension = {
                     ...baseExtension,
                     manifest: null as any,
                 };
 
-                const result = MigrateCSP.migrate(corruptedExtension);
+                const result = await MigrateCSP.migrate(corruptedExtension);
 
                 expect(result).toBeInstanceOf(MigrationError);
             });

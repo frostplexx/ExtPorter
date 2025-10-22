@@ -22,8 +22,8 @@ describe('MigrateManifest', () => {
     });
 
     describe('migrate', () => {
-        it('should update manifest version from 2 to 3', () => {
-            const result = MigrateManifest.migrate(baseExtension);
+        it('should update manifest version from 2 to 3', async () => {
+            const result = await MigrateManifest.migrate(baseExtension);
 
             expect(result).not.toBeInstanceOf(MigrationError);
             if (!(result instanceof MigrationError)) {
@@ -31,8 +31,8 @@ describe('MigrateManifest', () => {
             }
         });
 
-        it('should not add Content Security Policy (handled by MigrateCSP module)', () => {
-            const result = MigrateManifest.migrate(baseExtension);
+        it('should not add Content Security Policy (handled by MigrateCSP module)', async () => {
+            const result = await MigrateManifest.migrate(baseExtension);
 
             expect(result).not.toBeInstanceOf(MigrationError);
             if (!(result instanceof MigrationError)) {
@@ -42,7 +42,7 @@ describe('MigrateManifest', () => {
         });
 
         describe('permissions migration', () => {
-            it('should split permissions into API permissions and host permissions', () => {
+            it('should split permissions into API permissions and host permissions', async () => {
                 baseExtension.manifest.permissions = [
                     'activeTab',
                     'storage',
@@ -50,7 +50,7 @@ describe('MigrateManifest', () => {
                     'https://api.example.com/*',
                 ];
 
-                const result = MigrateManifest.migrate(baseExtension);
+                const result = await MigrateManifest.migrate(baseExtension);
 
                 expect(result).not.toBeInstanceOf(MigrationError);
                 if (!(result instanceof MigrationError)) {
@@ -62,10 +62,10 @@ describe('MigrateManifest', () => {
                 }
             });
 
-            it('should convert webRequestBlocking to declarativeNetRequest', () => {
+            it('should convert webRequestBlocking to declarativeNetRequest', async () => {
                 baseExtension.manifest.permissions = ['webRequestBlocking', 'activeTab'];
 
-                const result = MigrateManifest.migrate(baseExtension);
+                const result = await MigrateManifest.migrate(baseExtension);
 
                 expect(result).not.toBeInstanceOf(MigrationError);
                 if (!(result instanceof MigrationError)) {
@@ -75,10 +75,10 @@ describe('MigrateManifest', () => {
                 }
             });
 
-            it('should handle empty permissions array', () => {
+            it('should handle empty permissions array', async () => {
                 baseExtension.manifest.permissions = [];
 
-                const result = MigrateManifest.migrate(baseExtension);
+                const result = await MigrateManifest.migrate(baseExtension);
 
                 expect(result).not.toBeInstanceOf(MigrationError);
                 if (!(result instanceof MigrationError)) {
@@ -87,10 +87,10 @@ describe('MigrateManifest', () => {
                 }
             });
 
-            it('should handle undefined permissions', () => {
+            it('should handle undefined permissions', async () => {
                 delete baseExtension.manifest.permissions;
 
-                const result = MigrateManifest.migrate(baseExtension);
+                const result = await MigrateManifest.migrate(baseExtension);
 
                 expect(result).not.toBeInstanceOf(MigrationError);
                 if (!(result instanceof MigrationError)) {
@@ -101,14 +101,14 @@ describe('MigrateManifest', () => {
         });
 
         describe('web_accessible_resources migration', () => {
-            it('should convert array format to object format', () => {
+            it('should convert array format to object format', async () => {
                 baseExtension.manifest.web_accessible_resources = [
                     'images/*',
                     'styles/content.css',
                     'scripts/injected.js',
                 ];
 
-                const result = MigrateManifest.migrate(baseExtension);
+                const result = await MigrateManifest.migrate(baseExtension);
 
                 expect(result).not.toBeInstanceOf(MigrationError);
                 if (!(result instanceof MigrationError)) {
@@ -121,10 +121,10 @@ describe('MigrateManifest', () => {
                 }
             });
 
-            it('should handle empty web_accessible_resources', () => {
+            it('should handle empty web_accessible_resources', async () => {
                 baseExtension.manifest.web_accessible_resources = [];
 
-                const result = MigrateManifest.migrate(baseExtension);
+                const result = await MigrateManifest.migrate(baseExtension);
 
                 expect(result).not.toBeInstanceOf(MigrationError);
                 if (!(result instanceof MigrationError)) {
@@ -137,10 +137,10 @@ describe('MigrateManifest', () => {
                 }
             });
 
-            it('should handle undefined web_accessible_resources', () => {
+            it('should handle undefined web_accessible_resources', async () => {
                 // web_accessible_resources not set
 
-                const result = MigrateManifest.migrate(baseExtension);
+                const result = await MigrateManifest.migrate(baseExtension);
 
                 expect(result).not.toBeInstanceOf(MigrationError);
                 if (!(result instanceof MigrationError)) {
@@ -151,7 +151,7 @@ describe('MigrateManifest', () => {
         });
 
         describe('action migration', () => {
-            it('should migrate browser_action to action', () => {
+            it('should migrate browser_action to action', async () => {
                 baseExtension.manifest.browser_action = {
                     default_popup: 'popup.html',
                     default_title: 'Test Extension',
@@ -161,7 +161,7 @@ describe('MigrateManifest', () => {
                     },
                 };
 
-                const result = MigrateManifest.migrate(baseExtension);
+                const result = await MigrateManifest.migrate(baseExtension);
 
                 expect(result).not.toBeInstanceOf(MigrationError);
                 if (!(result instanceof MigrationError)) {
@@ -177,13 +177,13 @@ describe('MigrateManifest', () => {
                 }
             });
 
-            it('should migrate page_action to action', () => {
+            it('should migrate page_action to action', async () => {
                 baseExtension.manifest.page_action = {
                     default_popup: 'page_popup.html',
                     default_title: 'Page Action',
                 };
 
-                const result = MigrateManifest.migrate(baseExtension);
+                const result = await MigrateManifest.migrate(baseExtension);
 
                 expect(result).not.toBeInstanceOf(MigrationError);
                 if (!(result instanceof MigrationError)) {
@@ -195,7 +195,7 @@ describe('MigrateManifest', () => {
                 }
             });
 
-            it('should handle both browser_action and page_action', () => {
+            it('should handle both browser_action and page_action', async () => {
                 baseExtension.manifest.browser_action = {
                     default_popup: 'browser_popup.html',
                 };
@@ -203,7 +203,7 @@ describe('MigrateManifest', () => {
                     default_title: 'Page Title',
                 };
 
-                const result = MigrateManifest.migrate(baseExtension);
+                const result = await MigrateManifest.migrate(baseExtension);
 
                 expect(result).not.toBeInstanceOf(MigrationError);
                 if (!(result instanceof MigrationError)) {
@@ -214,10 +214,10 @@ describe('MigrateManifest', () => {
                 }
             });
 
-            it('should handle no actions', () => {
+            it('should handle no actions', async () => {
                 // No browser_action or page_action
 
-                const result = MigrateManifest.migrate(baseExtension);
+                const result = await MigrateManifest.migrate(baseExtension);
 
                 expect(result).not.toBeInstanceOf(MigrationError);
                 if (!(result instanceof MigrationError)) {
@@ -227,13 +227,13 @@ describe('MigrateManifest', () => {
         });
 
         describe('background migration', () => {
-            it('should convert background scripts to service worker', () => {
+            it('should convert background scripts to service worker', async () => {
                 baseExtension.manifest.background = {
                     scripts: ['background.js', 'helper.js'],
                     persistent: false,
                 };
 
-                const result = MigrateManifest.migrate(baseExtension);
+                const result = await MigrateManifest.migrate(baseExtension);
 
                 expect(result).not.toBeInstanceOf(MigrationError);
                 if (!(result instanceof MigrationError)) {
@@ -243,13 +243,13 @@ describe('MigrateManifest', () => {
                 }
             });
 
-            it('should convert background page to service worker', () => {
+            it('should convert background page to service worker', async () => {
                 baseExtension.manifest.background = {
                     page: 'background.html',
                     persistent: true,
                 };
 
-                const result = MigrateManifest.migrate(baseExtension);
+                const result = await MigrateManifest.migrate(baseExtension);
 
                 expect(result).not.toBeInstanceOf(MigrationError);
                 if (!(result instanceof MigrationError)) {
@@ -259,12 +259,12 @@ describe('MigrateManifest', () => {
                 }
             });
 
-            it('should handle single background script', () => {
+            it('should handle single background script', async () => {
                 baseExtension.manifest.background = {
                     scripts: ['single-script.js'],
                 };
 
-                const result = MigrateManifest.migrate(baseExtension);
+                const result = await MigrateManifest.migrate(baseExtension);
 
                 expect(result).not.toBeInstanceOf(MigrationError);
                 if (!(result instanceof MigrationError)) {
@@ -274,12 +274,12 @@ describe('MigrateManifest', () => {
                 }
             });
 
-            it('should handle empty background scripts', () => {
+            it('should handle empty background scripts', async () => {
                 baseExtension.manifest.background = {
                     scripts: [],
                 };
 
-                const result = MigrateManifest.migrate(baseExtension);
+                const result = await MigrateManifest.migrate(baseExtension);
 
                 expect(result).not.toBeInstanceOf(MigrationError);
                 if (!(result instanceof MigrationError)) {
@@ -288,10 +288,10 @@ describe('MigrateManifest', () => {
                 }
             });
 
-            it('should handle undefined background', () => {
+            it('should handle undefined background', async () => {
                 // No background field
 
-                const result = MigrateManifest.migrate(baseExtension);
+                const result = await MigrateManifest.migrate(baseExtension);
 
                 expect(result).not.toBeInstanceOf(MigrationError);
                 if (!(result instanceof MigrationError)) {
@@ -299,12 +299,12 @@ describe('MigrateManifest', () => {
                 }
             });
 
-            it('should handle background with service_worker already set', () => {
+            it('should handle background with service_worker already set', async () => {
                 baseExtension.manifest.background = {
                     service_worker: 'existing-worker.js',
                 };
 
-                const result = MigrateManifest.migrate(baseExtension);
+                const result = await MigrateManifest.migrate(baseExtension);
 
                 expect(result).not.toBeInstanceOf(MigrationError);
                 if (!(result instanceof MigrationError)) {
@@ -317,13 +317,13 @@ describe('MigrateManifest', () => {
         });
 
         describe('error handling', () => {
-            it('should return MigrationError when manifest is corrupted', () => {
+            it('should return MigrationError when manifest is corrupted', async () => {
                 const corruptedExtension = {
                     ...baseExtension,
                     manifest: null as any,
                 };
 
-                const result = MigrateManifest.migrate(corruptedExtension);
+                const result = await MigrateManifest.migrate(corruptedExtension);
 
                 expect(result).toBeInstanceOf(MigrationError);
                 if (result instanceof MigrationError) {
@@ -332,7 +332,7 @@ describe('MigrateManifest', () => {
                 }
             });
 
-            it('should handle invalid permissions gracefully', () => {
+            it('should handle invalid permissions gracefully', async () => {
                 baseExtension.manifest.permissions = [
                     null, // Invalid permission
                     'activeTab',
@@ -340,7 +340,7 @@ describe('MigrateManifest', () => {
                     'storage',
                 ];
 
-                const result = MigrateManifest.migrate(baseExtension);
+                const result = await MigrateManifest.migrate(baseExtension);
 
                 expect(result).not.toBeInstanceOf(MigrationError);
                 if (!(result instanceof MigrationError)) {
@@ -351,7 +351,7 @@ describe('MigrateManifest', () => {
         });
 
         describe('complex scenarios', () => {
-            it('should handle complete extension migration', () => {
+            it('should handle complete extension migration', async () => {
                 const complexExtension: Extension = {
                     id: 'complex-extension',
                     name: 'Complex Extension',
@@ -387,7 +387,7 @@ describe('MigrateManifest', () => {
                     files: [],
                 };
 
-                const result = MigrateManifest.migrate(complexExtension);
+                const result = await MigrateManifest.migrate(complexExtension);
 
                 expect(result).not.toBeInstanceOf(MigrationError);
                 if (!(result instanceof MigrationError)) {

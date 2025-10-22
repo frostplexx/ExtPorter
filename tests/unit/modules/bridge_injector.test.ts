@@ -81,12 +81,12 @@ describe('BridgeInjector', () => {
     });
 
     describe('migrate', () => {
-        it('should inject bridge for extension with callback patterns', () => {
+        it('should inject bridge for extension with callback patterns', async () => {
             (mockJsFile.getContent as jest.Mock).mockReturnValue(
                 'chrome.tabs.query({}, function(tabs) { console.log(tabs); });'
             );
 
-            const result = BridgeInjector.migrate(baseExtension);
+            const result = await BridgeInjector.migrate(baseExtension);
 
             expect(result).not.toBeInstanceOf(MigrationError);
             if (!(result instanceof MigrationError)) {
@@ -95,12 +95,12 @@ describe('BridgeInjector', () => {
             }
         });
 
-        it('should return unchanged extension when no callback patterns found', () => {
+        it('should return unchanged extension when no callback patterns found', async () => {
             (mockJsFile.getContent as jest.Mock).mockReturnValue(
                 'const data = chrome.storage.sync.get("key").then(result => console.log(result));'
             );
 
-            const result = BridgeInjector.migrate(baseExtension);
+            const result = await BridgeInjector.migrate(baseExtension);
 
             expect(result).not.toBeInstanceOf(MigrationError);
             if (!(result instanceof MigrationError)) {
@@ -109,7 +109,7 @@ describe('BridgeInjector', () => {
             }
         });
 
-        it('should return unchanged when bridge already exists', () => {
+        it('should return unchanged when bridge already exists', async () => {
             (mockJsFile.getContent as jest.Mock).mockReturnValue(
                 'chrome.tabs.query({}, function(tabs) { console.log(tabs); });'
             );
@@ -121,7 +121,7 @@ describe('BridgeInjector', () => {
 
             baseExtension.files.push(bridgeFile);
 
-            const result = BridgeInjector.migrate(baseExtension);
+            const result = await BridgeInjector.migrate(baseExtension);
 
             expect(result).not.toBeInstanceOf(MigrationError);
             if (!(result instanceof MigrationError)) {
@@ -130,7 +130,7 @@ describe('BridgeInjector', () => {
             }
         });
 
-        it('should return MigrationError for invalid extension structure', () => {
+        it('should return MigrationError for invalid extension structure', async () => {
             const invalidExtension = {
                 id: null,
                 name: null,
@@ -139,7 +139,7 @@ describe('BridgeInjector', () => {
                 files: null,
             } as unknown as Extension;
 
-            const result = BridgeInjector.migrate(invalidExtension);
+            const result = await BridgeInjector.migrate(invalidExtension);
 
             expect(result).toBeInstanceOf(MigrationError);
             if (result instanceof MigrationError) {
@@ -148,7 +148,7 @@ describe('BridgeInjector', () => {
             }
         });
 
-        it('should return MigrationError when bridge file loading fails', () => {
+        it('should return MigrationError when bridge file loading fails', async () => {
             (mockJsFile.getContent as jest.Mock).mockReturnValue(
                 'chrome.tabs.query({}, function(tabs) { console.log(tabs); });'
             );
@@ -156,7 +156,7 @@ describe('BridgeInjector', () => {
                 throw new Error('File not found');
             });
 
-            const result = BridgeInjector.migrate(baseExtension);
+            const result = await BridgeInjector.migrate(baseExtension);
 
             expect(result).toBeInstanceOf(MigrationError);
             if (result instanceof MigrationError) {
@@ -165,7 +165,7 @@ describe('BridgeInjector', () => {
             }
         });
 
-        it('should update manifest to include bridge in content scripts', () => {
+        it('should update manifest to include bridge in content scripts', async () => {
             (mockJsFile.getContent as jest.Mock).mockReturnValue(
                 'chrome.storage.local.get("key", function(result) { console.log(result); });'
             );
@@ -177,7 +177,7 @@ describe('BridgeInjector', () => {
                 },
             ];
 
-            const result = BridgeInjector.migrate(baseExtension);
+            const result = await BridgeInjector.migrate(baseExtension);
 
             expect(result).not.toBeInstanceOf(MigrationError);
             if (!(result instanceof MigrationError)) {
@@ -188,7 +188,7 @@ describe('BridgeInjector', () => {
             }
         });
 
-        it('should add web_accessible_resources for MV3', () => {
+        it('should add web_accessible_resources for MV3', async () => {
             (mockJsFile.getContent as jest.Mock).mockReturnValue(
                 'chrome.tabs.query({}, callback);'
             );
@@ -201,7 +201,7 @@ describe('BridgeInjector', () => {
                 },
             ];
 
-            const result = BridgeInjector.migrate(baseExtension);
+            const result = await BridgeInjector.migrate(baseExtension);
 
             expect(result).not.toBeInstanceOf(MigrationError);
             if (!(result instanceof MigrationError)) {
@@ -212,13 +212,13 @@ describe('BridgeInjector', () => {
             }
         });
 
-        it('should measure and log performance metrics', () => {
+        it('should measure and log performance metrics', async () => {
             (mockJsFile.getContent as jest.Mock).mockReturnValue(
                 'chrome.tabs.query({}, function(tabs) {});'
             );
 
             const startTime = Date.now();
-            const result = BridgeInjector.migrate(baseExtension);
+            const result = await BridgeInjector.migrate(baseExtension);
 
             expect(result).not.toBeInstanceOf(MigrationError);
             // Verify that the migration completed within reasonable time
@@ -941,13 +941,13 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
     });
 
     describe('error handling and edge cases', () => {
-        it('should handle extension with no files', () => {
+        it('should handle extension with no files', async () => {
             const extensionNoFiles = {
                 ...baseExtension,
                 files: [],
             };
 
-            const result = BridgeInjector.migrate(extensionNoFiles);
+            const result = await BridgeInjector.migrate(extensionNoFiles);
 
             expect(result).not.toBeInstanceOf(MigrationError);
             if (!(result instanceof MigrationError)) {
@@ -1024,7 +1024,7 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
     });
 
     describe('integration scenarios', () => {
-        it('should handle complete complex extension migration', () => {
+        it('should handle complete complex extension migration', async () => {
             const complexExtension: Extension = {
                 id: 'complex-extension',
                 name: 'Complex Extension',
@@ -1076,7 +1076,7 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
                 ],
             };
 
-            const result = BridgeInjector.migrate(complexExtension);
+            const result = await BridgeInjector.migrate(complexExtension);
 
             expect(result).not.toBeInstanceOf(MigrationError);
             if (!(result instanceof MigrationError)) {
@@ -1102,7 +1102,7 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
             }
         });
 
-        it('should handle extension with mixed promise and callback APIs', () => {
+        it('should handle extension with mixed promise and callback APIs', async () => {
             const mixedApiFile = {
                 path: 'mixed.js',
                 filetype: ExtFileType.JS,
@@ -1129,7 +1129,7 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
                 files: [mixedApiFile],
             };
 
-            const result = BridgeInjector.migrate(mixedExtension);
+            const result = await BridgeInjector.migrate(mixedExtension);
 
             expect(result).not.toBeInstanceOf(MigrationError);
             if (!(result instanceof MigrationError)) {
@@ -1138,7 +1138,7 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
             }
         });
 
-        it('should handle extension with existing web_accessible_resources and content scripts', () => {
+        it('should handle extension with existing web_accessible_resources and content scripts', async () => {
             baseExtension.manifest = {
                 ...baseExtension.manifest,
                 manifest_version: 3,
@@ -1160,7 +1160,7 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
                 'chrome.runtime.sendMessage(data, function(response) {});'
             );
 
-            const result = BridgeInjector.migrate(baseExtension);
+            const result = await BridgeInjector.migrate(baseExtension);
 
             expect(result).not.toBeInstanceOf(MigrationError);
             if (!(result instanceof MigrationError)) {
@@ -1178,7 +1178,7 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
             }
         });
 
-        it('should handle extension with service worker and content scripts', () => {
+        it('should handle extension with service worker and content scripts', async () => {
             const mockServiceWorkerFile = {
                 path: 'background.js',
                 filetype: ExtFileType.JS,
@@ -1215,7 +1215,7 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
                 'chrome.tabs.query({}, function(tabs) {});'
             );
 
-            const result = BridgeInjector.migrate(serviceWorkerExtension);
+            const result = await BridgeInjector.migrate(serviceWorkerExtension);
 
             expect(result).not.toBeInstanceOf(MigrationError);
             if (!(result instanceof MigrationError)) {
@@ -1236,7 +1236,7 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
             }
         });
 
-        it('should handle extension transitioning from MV2 to MV3', () => {
+        it('should handle extension transitioning from MV2 to MV3', async () => {
             const mv2Extension = {
                 ...baseExtension,
                 manifest: {
@@ -1256,7 +1256,7 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
                 'chrome.tabs.executeScript(tabId, {code: "console.log();"}, callback);'
             );
 
-            const result = BridgeInjector.migrate(mv2Extension);
+            const result = await BridgeInjector.migrate(mv2Extension);
 
             expect(result).not.toBeInstanceOf(MigrationError);
             if (!(result instanceof MigrationError)) {

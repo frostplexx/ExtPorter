@@ -1,6 +1,5 @@
 import puppeteer, { Browser, Page } from 'puppeteer';
 import path from 'path';
-import { execSync } from 'child_process';
 
 declare global {
     interface Window {
