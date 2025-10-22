@@ -3,12 +3,13 @@ import { ExtensionSearchResult, SearchOptions } from './types';
 import { displayExtensionList, filterExtensions } from './display-utils';
 import { getKeypress, showActionsMenu } from './input-handler';
 import * as actions from './extension-actions';
+import { Extension } from '../migrator/types/extension';
 
 export class ExtensionExplorer {
     private lastSearchQuery: string = '';
     private lastSelectedIndex: number = 0;
 
-    constructor() { }
+    constructor() {}
 
     async getAllExtensions(options: SearchOptions = {}): Promise<ExtensionSearchResult[]> {
         if (!Database.shared.database) throw new Error('Database not initialized');
@@ -45,21 +46,24 @@ export class ExtensionExplorer {
             .find(query)
             .toArray();
 
-        return allExtensions.map((ext) => ({
-            id: ext.id,
-            name: ext.name || ext.manifest?.name || 'Unknown',
-            manifest_v2_path: ext.manifest_v2_path || '',
-            manifest: ext.manifest || {},
-            files: ext.files || [],
-            isNewTabExtension: ext.isNewTabExtension,
-            mv3_extension_id: ext.mv3_extension_id,
-            manifest_v3_path: ext.manifest_v3_path,
-            interestingness_score: ext.interestingness_score || 0,
-            interestingness_breakdown: ext.interestingness_breakdown,
-        }));
+        // return allExtensions.map((ext) => ({
+        //     id: ext.id,
+        //     name: ext.name || ext.manifest?.name || 'Unknown',
+        //     manifest_v2_path: ext.manifest_v2_path || '',
+        //     manifest: ext.manifest || {},
+        //     files: ext.files || [],
+        //     isNewTabExtension: ext.isNewTabExtension,
+        //     mv3_extension_id: ext.mv3_extension_id,
+        //     manifest_v3_path: ext.manifest_v3_path,
+        //     interestingness_score: ext.interestingness_score || 0,
+        //     interestingness_breakdown: ext.interestingness_breakdown,
+        // }));
+        return allExtensions as any as Extension[];
     }
 
-    async searchExtensions(extensions: ExtensionSearchResult[]): Promise<ExtensionSearchResult | null> {
+    async searchExtensions(
+        extensions: ExtensionSearchResult[]
+    ): Promise<ExtensionSearchResult | null> {
         const sortedExtensions = extensions.sort(
             (a, b) => (b.interestingness_score || 0) - (a.interestingness_score || 0)
         );
@@ -69,7 +73,12 @@ export class ExtensionExplorer {
         let selectedIndex = Math.min(this.lastSelectedIndex, filteredExtensions.length - 1);
 
         while (true) {
-            displayExtensionList(searchQuery, filteredExtensions, sortedExtensions.length, selectedIndex);
+            displayExtensionList(
+                searchQuery,
+                filteredExtensions,
+                sortedExtensions.length,
+                selectedIndex
+            );
 
             const key = await getKeypress();
             if (!key) continue;

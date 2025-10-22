@@ -1,6 +1,5 @@
 import puppeteer, { Browser, Page } from 'puppeteer';
 import path from 'path';
-import { execSync } from 'child_process';
 
 declare global {
     interface Window {
@@ -29,7 +28,9 @@ describe('Mock Extensions Puppeteer Tests', () => {
         if (process.env.IN_NIX_SHELL) {
             // Use Chrome 138 for MV2 extension support
             if (!process.env.CHROME_138) {
-                throw new Error("CHROME_138 environment variable is not set. Please ensure your flake.nix exports CHROME_138.");
+                throw new Error(
+                    'CHROME_138 environment variable is not set. Please ensure your flake.nix exports CHROME_138.'
+                );
             }
             return `${process.env.CHROME_138}/Applications/Google Chrome.app/Contents/MacOS/Google Chrome`;
         } else {

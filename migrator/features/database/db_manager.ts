@@ -186,7 +186,6 @@ export class Database {
 
     async close() {
         if (this.client) {
-
             // Flush all pending logs before shutting down
             await logger.flush();
 
@@ -221,6 +220,81 @@ export class Database {
             );
         }
         return result;
+    }
+
+    /**
+     * Appends a tag to an extension (avoids duplicates using $addToSet)
+     * @param extension - The extension to add the tag to
+     * @param tag - The tag string to append
+     * @returns The update result or null if extension not found
+     */
+    async extensionAppendTag(extension: Extension, tag: string) {
+        if (!this.database) throw new Error('Database not initialized');
+
+        try {
+            // Use $addToSet to add the tag only if it doesn't already exist
+            const result = await this.database
+                .collection(Collections.EXTENSIONS)
+                .updateOne({ id: extension.id }, { $addToSet: { tags: tag } });
+
+            if (result.matchedCount === 0) {
+                logger.error(
+                    extension,
+                    `Couldn't find extension with id ${extension.id} for tag insertion`
+                );
+                return null;
+            }
+
+            if (result.modifiedCount > 0) {
+                logger.debug(extension, `Added tag ${tag} to extension ${extension.name}`);
+            } else {
+                logger.debug(extension, `Tag ${tag} already exists on extension ${extension.name}`);
+            }
+
+            return result;
+        } catch (error) {
+            logger.error(extension, `Failed to append tag to extension:`, error);
+            throw error;
+        }
+    }
+
+    /**
+     * Removes a tag from an extension
+     * @param extension - The extension to remove the tag from
+     * @param tag - The tag string to remove
+     * @returns The update result or null if extension not found
+     */
+    async extensionRemoveTag(extension: Extension, tag: string) {
+        if (!this.database) throw new Error('Database not initialized');
+
+        try {
+            // Use $pull to remove the tag from the array
+            const result = await this.database
+                .collection(Collections.EXTENSIONS)
+                .updateOne({ id: extension.id }, { $pull: { tags: tag } } as any);
+
+            if (result.matchedCount === 0) {
+                logger.error(
+                    extension,
+                    `Couldn't find extension with id ${extension.id} for tag removal`
+                );
+                return null;
+            }
+
+            if (result.modifiedCount > 0) {
+                logger.debug(extension, `Removed tag ${tag} from extension ${extension.name}`);
+            } else {
+                logger.debug(
+                    extension,
+                    `Tag ${tag} was not present on extension ${extension.name}`
+                );
+            }
+
+            return result;
+        } catch (error) {
+            logger.error(extension, `Failed to remove tag from extension:`, error);
+            throw error;
+        }
     }
 
     async insertFoundExtensions(extensions: Extension[]) {

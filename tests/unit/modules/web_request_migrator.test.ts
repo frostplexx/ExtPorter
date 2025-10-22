@@ -54,20 +54,17 @@ function createMockExtension(files: LazyFile[]): Extension {
 
 describe('WebRequestMigrator', () => {
     describe('migrate', () => {
-        it('should return original extension if no webRequest usage found', () => {
-            const file = createMockJSFile(
-                'background.js',
-                'console.log("No webRequest here");'
-            );
+        it('should return original extension if no webRequest usage found', async () => {
+            const file = createMockJSFile('background.js', 'console.log("No webRequest here");');
             const extension = createMockExtension([file]);
 
-            const result = WebRequestMigrator.migrate(extension);
+            const result = await WebRequestMigrator.migrate(extension);
 
             expect(result).toEqual(extension);
             expect(result).not.toBeInstanceOf(MigrationError);
         });
 
-        it('should ignore non-blocking webRequest listeners', () => {
+        it('should ignore non-blocking webRequest listeners', async () => {
             const file = createMockJSFile(
                 'background.js',
                 `
@@ -91,7 +88,7 @@ describe('WebRequestMigrator', () => {
             );
             const extension = createMockExtension([file]);
 
-            const result = WebRequestMigrator.migrate(extension);
+            const result = await WebRequestMigrator.migrate(extension);
 
             // Should not create any rules since these are non-blocking
             expect(result).not.toBeInstanceOf(MigrationError);
@@ -101,7 +98,7 @@ describe('WebRequestMigrator', () => {
             }
         });
 
-        it('should only migrate blocking listeners when mixed with non-blocking', () => {
+        it('should only migrate blocking listeners when mixed with non-blocking', async () => {
             const file = createMockJSFile(
                 'background.js',
                 `
@@ -133,7 +130,7 @@ describe('WebRequestMigrator', () => {
             );
             const extension = createMockExtension([file]);
 
-            const result = WebRequestMigrator.migrate(extension);
+            const result = await WebRequestMigrator.migrate(extension);
 
             // Should create exactly 1 rule for the blocking listener
             expect(result).not.toBeInstanceOf(MigrationError);
@@ -149,7 +146,7 @@ describe('WebRequestMigrator', () => {
             }
         });
 
-        it('should create rules.json for static blocking webRequest', () => {
+        it('should create rules.json for static blocking webRequest', async () => {
             const file = createMockJSFile(
                 'background.js',
                 `
@@ -164,7 +161,7 @@ describe('WebRequestMigrator', () => {
             );
             const extension = createMockExtension([file]);
 
-            const result = WebRequestMigrator.migrate(extension);
+            const result = await WebRequestMigrator.migrate(extension);
 
             expect(result).not.toBeInstanceOf(MigrationError);
             if (!(result instanceof MigrationError)) {
@@ -186,7 +183,7 @@ describe('WebRequestMigrator', () => {
             }
         });
 
-        it('should fail migration for webRequest with dynamic logic', () => {
+        it('should fail migration for webRequest with dynamic logic', async () => {
             const file = createMockJSFile(
                 'background.js',
                 `
@@ -203,7 +200,7 @@ describe('WebRequestMigrator', () => {
             );
             const extension = createMockExtension([file]);
 
-            const result = WebRequestMigrator.migrate(extension);
+            const result = await WebRequestMigrator.migrate(extension);
 
             expect(result).toBeInstanceOf(MigrationError);
             if (result instanceof MigrationError) {
@@ -211,7 +208,7 @@ describe('WebRequestMigrator', () => {
             }
         });
 
-        it('should fail migration for webRequest with external API calls', () => {
+        it('should fail migration for webRequest with external API calls', async () => {
             const file = createMockJSFile(
                 'background.js',
                 `
@@ -229,12 +226,12 @@ describe('WebRequestMigrator', () => {
             );
             const extension = createMockExtension([file]);
 
-            const result = WebRequestMigrator.migrate(extension);
+            const result = await WebRequestMigrator.migrate(extension);
 
             expect(result).toBeInstanceOf(MigrationError);
         });
 
-        it('should fail migration for webRequest with XMLHttpRequest', () => {
+        it('should fail migration for webRequest with XMLHttpRequest', async () => {
             const file = createMockJSFile(
                 'background.js',
                 `
@@ -252,7 +249,7 @@ describe('WebRequestMigrator', () => {
             );
             const extension = createMockExtension([file]);
 
-            const result = WebRequestMigrator.migrate(extension);
+            const result = await WebRequestMigrator.migrate(extension);
 
             expect(result).toBeInstanceOf(MigrationError);
             if (result instanceof MigrationError) {
@@ -260,7 +257,7 @@ describe('WebRequestMigrator', () => {
             }
         });
 
-        it('should fail migration for webRequest with loops', () => {
+        it('should fail migration for webRequest with loops', async () => {
             const file = createMockJSFile(
                 'background.js',
                 `
@@ -278,12 +275,12 @@ describe('WebRequestMigrator', () => {
             );
             const extension = createMockExtension([file]);
 
-            const result = WebRequestMigrator.migrate(extension);
+            const result = await WebRequestMigrator.migrate(extension);
 
             expect(result).toBeInstanceOf(MigrationError);
         });
 
-        it('should handle multiple webRequest listeners', () => {
+        it('should handle multiple webRequest listeners', async () => {
             const file = createMockJSFile(
                 'background.js',
                 `
@@ -306,7 +303,7 @@ describe('WebRequestMigrator', () => {
             );
             const extension = createMockExtension([file]);
 
-            const result = WebRequestMigrator.migrate(extension);
+            const result = await WebRequestMigrator.migrate(extension);
 
             expect(result).not.toBeInstanceOf(MigrationError);
             if (!(result instanceof MigrationError)) {
@@ -320,7 +317,7 @@ describe('WebRequestMigrator', () => {
             }
         });
 
-        it('should handle redirect action', () => {
+        it('should handle redirect action', async () => {
             const file = createMockJSFile(
                 'background.js',
                 `
@@ -335,7 +332,7 @@ describe('WebRequestMigrator', () => {
             );
             const extension = createMockExtension([file]);
 
-            const result = WebRequestMigrator.migrate(extension);
+            const result = await WebRequestMigrator.migrate(extension);
 
             expect(result).not.toBeInstanceOf(MigrationError);
             if (!(result instanceof MigrationError)) {
@@ -351,7 +348,7 @@ describe('WebRequestMigrator', () => {
             }
         });
 
-        it('should fail for named function callback', () => {
+        it('should fail for named function callback', async () => {
             const file = createMockJSFile(
                 'background.js',
                 `
@@ -368,13 +365,13 @@ describe('WebRequestMigrator', () => {
             );
             const extension = createMockExtension([file]);
 
-            const result = WebRequestMigrator.migrate(extension);
+            const result = await WebRequestMigrator.migrate(extension);
 
             // Named functions are treated as dynamic logic since we can't easily analyze them
             expect(result).toBeInstanceOf(MigrationError);
         });
 
-        it('should handle resourceTypes filter', () => {
+        it('should handle resourceTypes filter', async () => {
             const file = createMockJSFile(
                 'background.js',
                 `
@@ -392,7 +389,7 @@ describe('WebRequestMigrator', () => {
             );
             const extension = createMockExtension([file]);
 
-            const result = WebRequestMigrator.migrate(extension);
+            const result = await WebRequestMigrator.migrate(extension);
 
             expect(result).not.toBeInstanceOf(MigrationError);
             if (!(result instanceof MigrationError)) {
@@ -407,7 +404,7 @@ describe('WebRequestMigrator', () => {
             }
         });
 
-        it('should create one rule per URL pattern when multiple patterns are specified', () => {
+        it('should create one rule per URL pattern when multiple patterns are specified', async () => {
             const file = createMockJSFile(
                 'background.js',
                 `
@@ -425,7 +422,7 @@ describe('WebRequestMigrator', () => {
             );
             const extension = createMockExtension([file]);
 
-            const result = WebRequestMigrator.migrate(extension);
+            const result = await WebRequestMigrator.migrate(extension);
 
             expect(result).not.toBeInstanceOf(MigrationError);
             if (!(result instanceof MigrationError)) {

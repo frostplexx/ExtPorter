@@ -12,7 +12,10 @@ describe('Bridge Injection Simple Test', () => {
     let browser: Browser;
     let page: Page;
 
-    const migratedExtensionPath = path.join(__dirname, '../fixtures/mock-extensions/bridge_test_simple');
+    const migratedExtensionPath = path.join(
+        __dirname,
+        '../fixtures/mock-extensions/bridge_test_simple'
+    );
 
     // Helper to get Chrome path
     const getChromePath = () => {
@@ -43,11 +46,11 @@ describe('Bridge Injection Simple Test', () => {
                 content_scripts: [
                     {
                         matches: ['*://*/*'],
-                        js: ['content.js']
-                    }
+                        js: ['content.js'],
+                    },
                 ],
                 permissions: ['storage'],
-                host_permissions: ['*://*/*']
+                host_permissions: ['*://*/*'],
             },
             files: [
                 {
@@ -246,13 +249,13 @@ console.log('✅ Bridge test content script setup complete');
                     getAST: () => undefined,
                     getSize: () => 1000,
                     getBuffer: () => Buffer.from(''),
-                    close: () => { },
-                } as LazyFile
-            ]
+                    close: () => {},
+                } as LazyFile,
+            ],
         };
 
         // Migrate the extension using BridgeInjector
-        const migratedExtension = BridgeInjector.migrate(testExtension);
+        const migratedExtension = await BridgeInjector.migrate(testExtension);
 
         if (migratedExtension instanceof MigrationError) {
             throw new Error(`Migration failed: ${migratedExtension.error}`);
@@ -350,7 +353,7 @@ console.log('✅ Bridge test content script setup complete');
         // Verify web_accessible_resources includes bridge
         expect(manifest.web_accessible_resources).toContainEqual({
             resources: ['ext_bridge.js'],
-            matches: ['<all_urls>']
+            matches: ['<all_urls>'],
         });
     });
 
@@ -369,7 +372,7 @@ console.log('✅ Bridge test content script setup complete');
             await page.waitForSelector('#bridge-test-indicator', { timeout: 15000 });
 
             // Wait a bit more for the tests to complete
-            await new Promise(resolve => setTimeout(resolve, 3000));
+            await new Promise((resolve) => setTimeout(resolve, 3000));
 
             // Check the test status
             const testStatus = await page.$eval('body', (el: Element) =>
@@ -379,12 +382,6 @@ console.log('✅ Bridge test content script setup complete');
             const testResults = await page.$eval('body', (el: Element) =>
                 el.getAttribute('data-bridge-test-results')
             );
-
-            // Log console messages for debugging
-            const bridgeLogs = consoleLogs.filter(log =>
-                log.includes('Bridge') || log.includes('bridge') || log.includes('🌐') || log.includes('🧪')
-            );
-
 
             // Verify the test executed
             expect(testStatus).not.toBeNull();
@@ -398,19 +395,22 @@ console.log('✅ Bridge test content script setup complete');
                 expect(results.storageGet?.success).toBe(true);
                 expect(results.storageGet?.valid).toBe(true);
             } else {
-
                 // As long as the content script executed, we know the bridge injection worked
                 expect(['passed', 'failed', 'error']).toContain(testStatus);
             }
-
         } catch (error) {
+            console.log(error as any);
             // Content script might not have run due to security restrictions
 
             // Log any bridge-related console messages that did occur
-            const bridgeLogs = consoleLogs.filter(log =>
-                log.includes('Bridge') || log.includes('bridge') || log.includes('content script')
+            const bridgeLogs = consoleLogs.filter(
+                (log) =>
+                    log.includes('Bridge') ||
+                    log.includes('bridge') ||
+                    log.includes('content script')
             );
             if (bridgeLogs.length > 0) {
+                console.log(bridgeLogs);
             }
 
             // Just verify the files were created correctly (which we know works from other tests)
@@ -425,13 +425,13 @@ console.log('✅ Bridge test content script setup complete');
         // Verify key bridge functionality
         expect(bridgeContent).toContain('createCallbackCompatibleMethod');
         expect(bridgeContent).toContain('chrome.runtime.lastError');
-        expect(bridgeContent).toContain('typeof result.then === \'function\'');
+        expect(bridgeContent).toContain("typeof result.then === 'function'");
 
         // Verify the bridge prevents double loading
         expect(bridgeContent).toContain('_chromeExtBridgeLoaded');
 
         // Verify it handles both callbacks and promises
-        expect(bridgeContent).toContain('typeof lastArg === \'function\'');
+        expect(bridgeContent).toContain("typeof lastArg === 'function'");
     });
 
     test('should verify manifest modifications are correct', () => {
@@ -448,7 +448,7 @@ console.log('✅ Bridge test content script setup complete');
         // Should have web_accessible_resources for MV3
         expect(manifest.web_accessible_resources).toContainEqual({
             resources: ['ext_bridge.js'],
-            matches: ['<all_urls>']
+            matches: ['<all_urls>'],
         });
 
         // Should preserve original permissions

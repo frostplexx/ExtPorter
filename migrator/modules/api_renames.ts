@@ -7,6 +7,7 @@ import * as ESTree from 'estree';
 import * as fs from 'fs';
 import * as path from 'path';
 import { logger } from '../utils/logger';
+import { Tags } from '../types/tags';
 import { TwinningMapping } from '../types/twinning_mapping';
 import { BlacklistChecker } from '../utils/blacklist_checker';
 import { FormatPreservingGenerator } from '../utils/format_preserving_generator';
@@ -56,7 +57,7 @@ export class RenameAPIS implements MigrationModule {
      * Processes all JavaScript files in the extension and
      * applies API transformations based on the loaded mapping rules.
      */
-    public static migrate(extension: Extension): Extension | MigrationError {
+    public static async migrate(extension: Extension): Promise<Extension | MigrationError> {
         const startTime = Date.now();
         // logger.info(extension, "Starting API rename migration");
 
@@ -99,12 +100,17 @@ export class RenameAPIS implements MigrationModule {
                 }
 
                 processedFiles++;
-                return RenameAPIS.processJavaScriptFile(file, mappings, extension, (transformed) => {
-                    if (transformed) {
-                        hasChanges = true;
-                        transformedFiles++;
+                return RenameAPIS.processJavaScriptFile(
+                    file,
+                    mappings,
+                    extension,
+                    (transformed) => {
+                        if (transformed) {
+                            hasChanges = true;
+                            transformedFiles++;
+                        }
                     }
-                });
+                );
             });
 
             RenameAPIS.logMigrationResults(
@@ -120,11 +126,22 @@ export class RenameAPIS implements MigrationModule {
                 return extension;
             }
 
-            // Return new extension with transformed files
-            return {
+            // Create updated extension with transformed files
+            const updatedExtension = {
                 ...extension,
                 files: transformedFilesArray,
             };
+
+            // Add API_RENAMES_APPLIED tag to extension object
+            if (!updatedExtension.tags) {
+                updatedExtension.tags = [];
+            }
+            const apiRenameTag = Tags[Tags.API_RENAMES_APPLIED];
+            if (!updatedExtension.tags.includes(apiRenameTag)) {
+                updatedExtension.tags.push(apiRenameTag);
+            }
+
+            return updatedExtension;
         } catch (error) {
             RenameAPIS.handleMigrationError(error, extension, startTime);
             return new MigrationError(extension, error);
@@ -163,74 +180,90 @@ export class RenameAPIS implements MigrationModule {
             );
 
             // Check if this is a webpack bundle
-            const isWebpackBundle = content.includes('__webpack_require__') ||
-                                   content.includes('webpackChunk') ||
-                                   /\(\d+,\s*function\s*\(\s*\w+,\s*\w+,\s*\w+\s*\)/.test(content.substring(0, 10000));
+            const isWebpackBundle =
+                content.includes('__webpack_require__') ||
+                content.includes('webpackChunk') ||
+                /\(\d+,\s*function\s*\(\s*\w+,\s*\w+,\s*\w+\s*\)/.test(content.substring(0, 10000));
 
             if (isLargeFile && potentialTransformations > 0) {
                 if (isWebpackBundle) {
-                // This is a critical issue - large file with APIs that need transformation
-                logger.error(
-                    null,
-                    'AST parsing failed for large file with API transformations needed',
-                    {
-                        path: file.path,
-                        fileSizeKB: fileSizeKB,
-                        potentialTransformations: potentialTransformations,
-                        issue: 'Large files (>100KB) cannot be parsed for API transformations',
-                    }
-                );
+                    // This is a critical issue - large file with APIs that need transformation
+                    logger.error(
+                        null,
+                        'AST parsing failed for large file with API transformations needed',
+                        {
+                            path: file.path,
+                            fileSizeKB: fileSizeKB,
+                            potentialTransformations: potentialTransformations,
+                            issue: 'Large files (>100KB) cannot be parsed for API transformations',
+                        }
+                    );
 
                     // Enhanced user-visible warning for webpack bundles
-                    logger.warn(extension, "Webpack bundle detected with API transformations needed", {
-                        path: file.path,
-                        fileSizeKB: fileSizeKB,
-                        potentialTransformations: potentialTransformations,
-                        solutions: [
-                            "Use development/unminified build for migration",
-                            "Migrate source files before webpack bundling",
-                            "Manual migration may be required"
-                        ]
-                    });
+                    logger.warn(
+                        extension,
+                        'Webpack bundle detected with API transformations needed',
+                        {
+                            path: file.path,
+                            fileSizeKB: fileSizeKB,
+                            potentialTransformations: potentialTransformations,
+                            solutions: [
+                                'Use development/unminified build for migration',
+                                'Migrate source files before webpack bundling',
+                                'Manual migration may be required',
+                            ],
+                        }
+                    );
                 } else {
                     // Large non-webpack file with APIs that need transformation
-                    logger.error(null, "AST parsing failed for large file with API transformations needed", {
-                        path: file.path,
-                        fileSizeKB: fileSizeKB,
-                        potentialTransformations: potentialTransformations,
-                        issue: "Large files (>100KB) cannot be parsed for API transformations"
-                    });
+                    logger.error(
+                        null,
+                        'AST parsing failed for large file with API transformations needed',
+                        {
+                            path: file.path,
+                            fileSizeKB: fileSizeKB,
+                            potentialTransformations: potentialTransformations,
+                            issue: 'Large files (>100KB) cannot be parsed for API transformations',
+                        }
+                    );
 
                     // Log user-visible warning
-                    logger.warn(extension, "Large file API transformations skipped - may cause MV3 runtime errors", {
-                        path: file.path,
-                        fileSizeKB: fileSizeKB,
-                        potentialTransformations: potentialTransformations,
-                        issue: "File exceeds 100KB AST parsing limit",
-                        impact: "May cause runtime errors in Manifest V3"
-                    });
+                    logger.warn(
+                        extension,
+                        'Large file API transformations skipped - may cause MV3 runtime errors',
+                        {
+                            path: file.path,
+                            fileSizeKB: fileSizeKB,
+                            potentialTransformations: potentialTransformations,
+                            issue: 'File exceeds 100KB AST parsing limit',
+                            impact: 'May cause runtime errors in Manifest V3',
+                        }
+                    );
                 }
             } else if (potentialTransformations > 0) {
-                    // Smaller webpack bundle that failed to parse
-                    logger.error(null, "Webpack bundle detected with API transformations needed", {
-                        path: file.path,
-                        fileSizeKB: fileSizeKB,
-                        potentialTransformations: potentialTransformations,
-                        issue: "Webpack bundles cannot be automatically migrated",
+                // Smaller webpack bundle that failed to parse
+                logger.error(null, 'Webpack bundle detected with API transformations needed', {
+                    path: file.path,
+                    fileSizeKB: fileSizeKB,
+                    potentialTransformations: potentialTransformations,
+                    issue: 'Webpack bundles cannot be automatically migrated',
                 });
-
             } else {
                 // File failed to parse but no APIs detected
                 if (isWebpackBundle) {
-                    logger.debug(null, "Webpack bundle detected but no API transformations needed", {
+                    logger.debug(
+                        null,
+                        'Webpack bundle detected but no API transformations needed',
+                        {
+                            path: file.path,
+                            fileSizeKB: fileSizeKB,
+                            bundleType: 'webpack',
+                        }
+                    );
+                } else {
+                    logger.debug(null, 'AST parsing failed but no API transformations needed', {
                         path: file.path,
                         fileSizeKB: fileSizeKB,
-                        bundleType: "webpack"
-                    });
-                } else {
-                    logger.debug(null, "AST parsing failed but no API transformations needed", {
-                        path: file.path,
-                        fileSizeKB: fileSizeKB
                     });
                 }
             }
@@ -926,21 +959,26 @@ export class RenameAPIS implements MigrationModule {
     /**
      * Provides user guidance for webpack-based extensions
      */
-    private static logWebpackGuidance(extension: Extension | undefined, blacklistedFiles: number): void {
+    private static logWebpackGuidance(
+        extension: Extension | undefined,
+        blacklistedFiles: number
+    ): void {
         // Check if any blacklisted files are likely webpack bundles
-        const hasWebpackFiles = extension?.files?.some(file => {
+        const hasWebpackFiles = extension?.files?.some((file) => {
             if (file.filetype !== ExtFileType.JS) return false;
             const content = file.getContent();
-            return content.includes('__webpack_require__') ||
-                   content.includes('webpackChunk') ||
-                   file.path.includes('bundle') ||
-                   file.path.includes('webpack');
+            return (
+                content.includes('__webpack_require__') ||
+                content.includes('webpackChunk') ||
+                file.path.includes('bundle') ||
+                file.path.includes('webpack')
+            );
         });
 
         if (hasWebpackFiles) {
-            logger.info(extension, "Webpack extension detected - providing migration guidance", {
+            logger.info(extension, 'Webpack extension detected - providing migration guidance', {
                 blacklistedFiles,
-                guidance: "webpack-specific migration workflow recommended"
+                guidance: 'webpack-specific migration workflow recommended',
             });
 
             const guidanceMessages = [
@@ -970,11 +1008,11 @@ export class RenameAPIS implements MigrationModule {
                 '',
                 `${blacklistedFiles} bundled files were skipped during migration.`,
                 '═══════════════════════════════════════════════════',
-                ''
+                '',
             ];
 
             // Log guidance messages as user-visible info
-            guidanceMessages.forEach(message => {
+            guidanceMessages.forEach((message) => {
                 logger.info(extension, message);
             });
         }
