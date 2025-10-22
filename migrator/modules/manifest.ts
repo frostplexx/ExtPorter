@@ -199,7 +199,7 @@ export class MigrateManifest implements MigrationModule {
                                 }
                             );
                             extension.manifest['background'] = {
-                                service_worker: script
+                                service_worker: script,
                             };
                         } else {
                             extension.manifest['background'] = {
