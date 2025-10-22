@@ -1069,11 +1069,11 @@
     mongodb "*"
 
 "@types/node@*":
-  version "24.8.1"
-  resolved "https://registry.yarnpkg.com/@types/node/-/node-24.8.1.tgz#74c8ae00b045a0a351f2837ec00f25dfed0053be"
-  integrity sha512-alv65KGRadQVfVcG69MuB4IzdYVpRwMG/mq8KWOaoOdyY617P5ivaDiMCGOFDWD2sAn5Q0mR3mRtUOgm99hL9Q==
+  version "24.9.1"
+  resolved "https://registry.yarnpkg.com/@types/node/-/node-24.9.1.tgz#b7360b3c789089e57e192695a855aa4f6981a53c"
+  integrity sha512-QoiaXANRkSXK6p0Duvt56W208du4P9Uye9hWLWgGMDTEoKPhuenzNcC4vGUmrNkiOKTlIrBoyNQYNpSwfEZXSg==
   dependencies:
-    undici-types "~7.14.0"
+    undici-types "~7.16.0"
 
 "@types/node@^22.0.0":
   version "22.18.12"
@@ -1595,9 +1595,9 @@ bare-stream@^2.6.4:
     streamx "^2.21.0"
 
 bare-url@^2.2.2:
-  version "2.3.0"
-  resolved "https://registry.yarnpkg.com/bare-url/-/bare-url-2.3.0.tgz#06bb523cfdd5bb8dd224bf4e0062ff0231eca998"
-  integrity sha512-c+RCqMSZbkz97Mw1LWR0gcOqwK82oyYKfLoHJ8k13ybi1+I80ffdDzUy0TdAburdrR/kI0/VuN8YgEnJqX+Nyw==
+  version "2.3.1"
+  resolved "https://registry.yarnpkg.com/bare-url/-/bare-url-2.3.1.tgz#95e33e99bdc768766ca94246fdc397e88675ec9c"
+  integrity sha512-v2yl0TnaZTdEnelkKtXZGnotiV6qATBlnNuUMrHl6v9Lmmrh9mw9RYyImPU7/4RahumSwQS1k2oKXcRfXcbjJw==
   dependencies:
     bare-path "^3.0.0"
 
@@ -1798,10 +1798,10 @@ chokidar@^3.5.1:
   optionalDependencies:
     fsevents "~2.3.2"
 
-chromium-bidi@9.1.0:
-  version "9.1.0"
-  resolved "https://registry.yarnpkg.com/chromium-bidi/-/chromium-bidi-9.1.0.tgz#356eaea018eecc7977644305ee9fd27874b2b676"
-  integrity sha512-rlUzQ4WzIAWdIbY/viPShhZU2n21CxDUgazXVbw4Hu1MwaeUSEksSeM6DqPgpRjCLXRk702AVRxJxoOz0dw4OA==
+chromium-bidi@10.5.1:
+  version "10.5.1"
+  resolved "https://registry.yarnpkg.com/chromium-bidi/-/chromium-bidi-10.5.1.tgz#2aad9791509442bb39e96c4f3aeef4dfdb424979"
+  integrity sha512-rlj6OyhKhVTnk4aENcUme3Jl9h+cq4oXu4AzBcvr8RMmT6BR4a3zSNT9dbIfXr9/BS6ibzRyDhowuw4n2GgzsQ==
   dependencies:
     mitt "^3.0.1"
     zod "^3.24.1"
@@ -3945,29 +3945,29 @@ punycode@^2.1.0, punycode@^2.3.1:
   resolved "https://registry.npmjs.org/punycode/-/punycode-2.3.1.tgz"
   integrity sha512-vYt7UD1U9Wg6138shLtLOvdAu+8DsC/ilFtEVHcH+wydcSpNE20AfSOduf6MkRFahL5FY7X1oU7nKVZFtfq8Fg==
 
-puppeteer-core@24.25.0:
-  version "24.25.0"
-  resolved "https://registry.yarnpkg.com/puppeteer-core/-/puppeteer-core-24.25.0.tgz#fee272077d89485628de44faaf7968c5eb84d4c2"
-  integrity sha512-8Xs6q3Ut+C8y7sAaqjIhzv1QykGWG4gc2mEZ2mYE7siZFuRp4xQVehOf8uQKSQAkeL7jXUs3mknEeiqnRqUKvQ==
+puppeteer-core@24.26.0:
+  version "24.26.0"
+  resolved "https://registry.yarnpkg.com/puppeteer-core/-/puppeteer-core-24.26.0.tgz#aba3eac2f3a54c94581d40d1f2ff6b5fcfb3f179"
+  integrity sha512-l3aMYhTdSzazZ14rfpNAPGhnYHsd8mwduqybhu5aO/OR+d24P/V/eo8XTB3GB2yX2ZWf9GLAVcx8nnVPFZpP/A==
   dependencies:
     "@puppeteer/browsers" "2.10.12"
-    chromium-bidi "9.1.0"
+    chromium-bidi "10.5.1"
     debug "^4.4.3"
     devtools-protocol "0.0.1508733"
     typed-query-selector "^2.12.0"
-    webdriver-bidi-protocol "0.3.7"
+    webdriver-bidi-protocol "0.3.8"
     ws "^8.18.3"
 
 puppeteer@^24.19.0:
-  version "24.25.0"
-  resolved "https://registry.yarnpkg.com/puppeteer/-/puppeteer-24.25.0.tgz#a6985f9b3e121a329ea7071d4662fd6643dff39c"
-  integrity sha512-P3rUaom2w/Ubrnz3v3kSbxGkN7SpbtQeGRPb7iO86Bv/dAz2WUmGQBHr37W/Rp1fbAocMvu0rHFbCIJvjiNhGw==
+  version "24.26.0"
+  resolved "https://registry.yarnpkg.com/puppeteer/-/puppeteer-24.26.0.tgz#f2ac677314d450070610e9ea740c99e207c81ec6"
+  integrity sha512-5F4A3dGeuw0jJOR3hGV969TO8oi+JG2TzqxAFvH+gxzxh0ILZmiFskWPlhcWQh5s9HAtgZyktOBDqs6zOi7IKA==
   dependencies:
     "@puppeteer/browsers" "2.10.12"
-    chromium-bidi "9.1.0"
+    chromium-bidi "10.5.1"
     cosmiconfig "^9.0.0"
     devtools-protocol "0.0.1508733"
-    puppeteer-core "24.25.0"
+    puppeteer-core "24.26.0"
     typed-query-selector "^2.12.0"
 
 pure-rand@^7.0.0:
@@ -4677,10 +4677,10 @@ undici-types@~6.21.0:
   resolved "https://registry.yarnpkg.com/undici-types/-/undici-types-6.21.0.tgz#691d00af3909be93a7faa13be61b3a5b50ef12cb"
   integrity sha512-iwDZqg0QAGrg9Rav5H4n0M64c3mkR59cJ6wQp+7C4nI0gsmExaedaYLNO44eT4AtBBwjbTiGPMlt2Md0T9H9JQ==
 
-undici-types@~7.14.0:
-  version "7.14.0"
-  resolved "https://registry.yarnpkg.com/undici-types/-/undici-types-7.14.0.tgz#4c037b32ca4d7d62fae042174604341588bc0840"
-  integrity sha512-QQiYxHuyZ9gQUIrmPo3IA+hUl4KYk8uSA7cHrcKd/l3p1OTpZcM0Tbp9x7FAtXdAYhlasd60ncPpgu6ihG6TOA==
+undici-types@~7.16.0:
+  version "7.16.0"
+  resolved "https://registry.yarnpkg.com/undici-types/-/undici-types-7.16.0.tgz#ffccdff36aea4884cbfce9a750a0580224f58a46"
+  integrity sha512-Zz+aZWSj8LE6zoxD+xrjh4VfkIG8Ya6LvYkZqtUQGJPZjYl53ypCaUwWqo7eI0x66KBGeRo+mlBEkMSeSZ38Nw==
 
 universalify@^2.0.0:
   version "2.0.1"
@@ -4770,10 +4770,10 @@ walker@^1.0.8:
   dependencies:
     makeerror "1.0.12"
 
-webdriver-bidi-protocol@0.3.7:
-  version "0.3.7"
-  resolved "https://registry.yarnpkg.com/webdriver-bidi-protocol/-/webdriver-bidi-protocol-0.3.7.tgz#c6851beb28195c0b02f6d399cbf18519836f113b"
-  integrity sha512-wIx5Gu/LLTeexxilpk8WxU2cpGAKlfbWRO5h+my6EMD1k5PYqM1qQO1MHUFf4f3KRnhBvpbZU7VkizAgeSEf7g==
+webdriver-bidi-protocol@0.3.8:
+  version "0.3.8"
+  resolved "https://registry.yarnpkg.com/webdriver-bidi-protocol/-/webdriver-bidi-protocol-0.3.8.tgz#9c822b2647fd16d22b1b6fd730d4a3b863c93b93"
+  integrity sha512-21Yi2GhGntMc671vNBCjiAeEVknXjVRoyu+k+9xOMShu+ZQfpGQwnBqbNz/Sv4GXZ6JmutlPAi2nIJcrymAWuQ==
 
 webidl-conversions@^7.0.0:
   version "7.0.0"
@@ -4918,7 +4918,7 @@ yallist@^3.0.2:
 
 yargs-parser@^21.1.1:
   version "21.1.1"
-  resolved "https://registry.npmjs.org/yargs-parser/-/yargs-parser-21.1.1.tgz"
+  resolved "https://registry.yarnpkg.com/yargs-parser/-/yargs-parser-21.1.1.tgz#9096bceebf990d21bb31fa9516e0ede294a77d35"
   integrity sha512-tVpsJW7DdjecAiFpbIB1e3qxIQsE6NoPc5/eTdrbbIC4h0LVsWhnoa3g+m2HclBIujHzsxZ4VJVA+GUuc2/LBw==
 
 yargs@^17.7.2:
