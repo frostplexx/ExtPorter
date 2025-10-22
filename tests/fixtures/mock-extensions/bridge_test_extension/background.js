@@ -7,7 +7,7 @@ let testsCompleted = false;
 
 // Storage API test with callback
 function testStorageAPI(onComplete) {
-    chrome.storage.local.set({ testKey: 'testValue' }, function() {
+    chrome.storage.local.set({ testKey: 'testValue' }, function () {
         if (chrome.runtime.lastError) {
             testResults.storageSet = { success: false, error: chrome.runtime.lastError.message };
             if (onComplete) onComplete();
@@ -15,14 +15,17 @@ function testStorageAPI(onComplete) {
             testResults.storageSet = { success: true };
 
             // Test get with callback
-            chrome.storage.local.get(['testKey'], function(result) {
+            chrome.storage.local.get(['testKey'], function (result) {
                 if (chrome.runtime.lastError) {
-                    testResults.storageGet = { success: false, error: chrome.runtime.lastError.message };
+                    testResults.storageGet = {
+                        success: false,
+                        error: chrome.runtime.lastError.message,
+                    };
                 } else {
                     testResults.storageGet = {
                         success: true,
                         value: result.testKey,
-                        matches: result.testKey === 'testValue'
+                        matches: result.testKey === 'testValue',
                     };
                 }
                 if (onComplete) onComplete();
@@ -33,14 +36,14 @@ function testStorageAPI(onComplete) {
 
 // Tabs API test with callback
 function testTabsAPI(onComplete) {
-    chrome.tabs.query({ active: true, currentWindow: true }, function(tabs) {
+    chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
         if (chrome.runtime.lastError) {
             testResults.tabsQuery = { success: false, error: chrome.runtime.lastError.message };
         } else {
             testResults.tabsQuery = {
                 success: true,
                 tabCount: tabs.length,
-                hasActiveTab: tabs.length > 0 && tabs[0].active
+                hasActiveTab: tabs.length > 0 && tabs[0].active,
             };
         }
         if (onComplete) onComplete();
@@ -48,7 +51,7 @@ function testTabsAPI(onComplete) {
 }
 
 // Message handling with callback response
-chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
+chrome.runtime.onMessage.addListener(function (request, sender, sendResponse) {
     console.log('Background received message:', request.type);
 
     if (request.type === 'GET_TEST_RESULTS') {
@@ -56,7 +59,7 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
         sendResponse({
             success: true,
             results: testResults,
-            bridgeWorking: typeof testResults.storageSet !== 'undefined'
+            bridgeWorking: typeof testResults.storageSet !== 'undefined',
         });
         return true; // Async response
     }
@@ -64,7 +67,7 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
     if (request.type === 'RUN_TESTS') {
         console.log('Running tests in background...');
         // Clear previous results
-        Object.keys(testResults).forEach(key => delete testResults[key]);
+        Object.keys(testResults).forEach((key) => delete testResults[key]);
         testsCompleted = false;
 
         // Run tests with completion tracking
@@ -76,7 +79,7 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
                 sendResponse({
                     success: true,
                     message: 'Tests completed',
-                    results: testResults
+                    results: testResults,
                 });
             }
         };

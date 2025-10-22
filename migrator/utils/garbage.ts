@@ -1,5 +1,5 @@
-import { closeExtensionFiles, Extension } from "../types/extension";
-import { logger } from "./logger";
+import { closeExtensionFiles, Extension } from '../types/extension';
+import { logger } from './logger';
 
 /**
  * Memory management utilities
@@ -53,13 +53,19 @@ export function checkMemoryThreshold(): boolean {
     const heapUsedGB = memUsage.heapUsed / 1024 / 1024 / 1024;
     const rssGB = memUsage.rss / 1024 / 1024 / 1024;
 
-    if (heapUsedGB > ((process.env.MEMORY_CRIT_LIMIT || 1.0) as number)|| rssGB > ((process.env.MEMORY_CRIT_LIMIT || 1.0) as number)) {
+    if (
+        heapUsedGB > ((process.env.MEMORY_CRIT_LIMIT || 1.0) as number) ||
+        rssGB > ((process.env.MEMORY_CRIT_LIMIT || 1.0) as number)
+    ) {
         logger.error(
             null,
             `CRITICAL: Memory usage too high! Heap: ${heapUsedGB.toFixed(2)}GB, RSS: ${rssGB.toFixed(2)}GB`
         );
         return false;
-    } else if (heapUsedGB > ((process.env.MEMORY_WARN_LIMIT || 1.0) as number) || rssGB > ((process.env.MEMORY_WARN_LIMIT || 1.0) as number)) {
+    } else if (
+        heapUsedGB > ((process.env.MEMORY_WARN_LIMIT || 1.0) as number) ||
+        rssGB > ((process.env.MEMORY_WARN_LIMIT || 1.0) as number)
+    ) {
         logger.warn(
             null,
             `WARNING: High memory usage detected! Heap: ${heapUsedGB.toFixed(2)}GB, RSS: ${rssGB.toFixed(2)}GB`

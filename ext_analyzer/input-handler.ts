@@ -34,7 +34,7 @@ export async function waitForKeypress(message: string): Promise<void> {
             },
         ]);
     } catch (error) {
-        console.log(error as any)
+        console.log(error as any);
         // User pressed ESC or Ctrl+C - just return
     }
 }
@@ -43,7 +43,11 @@ export async function showActionsMenu(ext: ExtensionSearchResult): Promise<strin
     console.clear();
     console.log('');
     console.log(chalk.bold.cyan(`  ${ext.name || 'Unknown Extension'}`));
-    console.log(chalk.dim(`  ${ext.id}${ext.mv3_extension_id ? chalk.green(' → ' + ext.mv3_extension_id) : ''}`));
+    console.log(
+        chalk.dim(
+            `  ${ext.id}${ext.mv3_extension_id ? chalk.green(' → ' + ext.mv3_extension_id) : ''}`
+        )
+    );
     console.log('');
 
     const menuItems: MenuItem[] = [
@@ -96,7 +100,7 @@ export async function showActionsMenu(ext: ExtensionSearchResult): Promise<strin
                 }
 
                 // Check if pressed key matches a menu item
-                const item = menuItems.find(item => item.key === key.name);
+                const item = menuItems.find((item) => item.key === key.name);
                 if (item) {
                     resolve(item.key);
                     return;

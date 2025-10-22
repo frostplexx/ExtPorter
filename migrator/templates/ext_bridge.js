@@ -70,19 +70,28 @@
 
                     // Always expect a promise and bridge it to callback
                     if (result && typeof result.then === 'function') {
-                        bridgeLog(`⚡ Bridging promise to callback for ${methodPath || 'unknown method'}`);
+                        bridgeLog(
+                            `⚡ Bridging promise to callback for ${methodPath || 'unknown method'}`
+                        );
                         result
                             .then((data) => {
-                                bridgeLog(`✓ Promise resolved for ${methodPath || 'unknown method'}`);
+                                bridgeLog(
+                                    `✓ Promise resolved for ${methodPath || 'unknown method'}`
+                                );
                                 callbackWithError(null, data);
                             })
                             .catch((error) => {
-                                bridgeLog(`✗ Promise rejected for ${methodPath || 'unknown method'}:`, error.message);
+                                bridgeLog(
+                                    `✗ Promise rejected for ${methodPath || 'unknown method'}:`,
+                                    error.message
+                                );
                                 callbackWithError(error);
                             });
                     } else {
                         // Shouldn't happen in MV3, but handle gracefully
-                        bridgeLog(`⚠️ No promise returned for ${methodPath || 'unknown method'}, calling callback with result`);
+                        bridgeLog(
+                            `⚠️ No promise returned for ${methodPath || 'unknown method'}, calling callback with result`
+                        );
                         callbackWithError(null, result);
                     }
                 } catch (error) {
@@ -116,7 +125,10 @@
                 // 3. Are passed as parameters to user functions (sendResponse)
                 const blacklist = [
                     // Event listeners still use callbacks
-                    'addListener', 'removeListener', 'hasListener', 'hasListeners',
+                    'addListener',
+                    'removeListener',
+                    'hasListener',
+                    'hasListeners',
                     // // Messaging APIs - have special MV3 behavior where they accept callbacks
                     // // AND return promises simultaneously
                     // 'sendMessage', 'sendNativeMessage',

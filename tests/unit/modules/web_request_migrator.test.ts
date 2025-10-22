@@ -55,10 +55,7 @@ function createMockExtension(files: LazyFile[]): Extension {
 describe('WebRequestMigrator', () => {
     describe('migrate', () => {
         it('should return original extension if no webRequest usage found', async () => {
-            const file = createMockJSFile(
-                'background.js',
-                'console.log("No webRequest here");'
-            );
+            const file = createMockJSFile('background.js', 'console.log("No webRequest here");');
             const extension = createMockExtension([file]);
 
             const result = await WebRequestMigrator.migrate(extension);

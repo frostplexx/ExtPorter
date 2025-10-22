@@ -26,37 +26,51 @@ export async function viewSource(ext: ExtensionSearchResult): Promise<void> {
             console.log(`Opening Kitty with MV2 (left) and MV3 (right)...`);
 
             // Create new tab with MV2
-            await execCommand(
-                'kitten',
-                [
-                    '@', 'launch', '--type=tab',
-                    '--tab-title', `${ext.name} (MV2 ↔ MV3)`,
-                    '--cwd', mv2Path,
-                    '--title', `MV2: ${ext.id}`,
-                ]
-            );
+            await execCommand('kitten', [
+                '@',
+                'launch',
+                '--type=tab',
+                '--tab-title',
+                `${ext.name} (MV2 ↔ MV3)`,
+                '--cwd',
+                mv2Path,
+                '--title',
+                `MV2: ${ext.id}`,
+            ]);
 
             // Add MV3 split
-            await execCommand(
-                'kitten',
-                [
-                    '@', 'launch', '--location', 'vsplit',
-                    '--cwd', mv3Path,
-                    '--title', `MV3: ${ext.mv3_extension_id}`,
-                ]
-            );
+            await execCommand('kitten', [
+                '@',
+                'launch',
+                '--location',
+                'vsplit',
+                '--cwd',
+                mv3Path,
+                '--title',
+                `MV3: ${ext.mv3_extension_id}`,
+            ]);
         } else if (mv2Path) {
             console.log(`Opening Kitty with MV2 only...`);
-            await execCommand(
-                'kitten',
-                ['@', 'launch', '--type=tab', '--cwd', mv2Path, '--title', `MV2: ${ext.id}`]
-            );
+            await execCommand('kitten', [
+                '@',
+                'launch',
+                '--type=tab',
+                '--cwd',
+                mv2Path,
+                '--title',
+                `MV2: ${ext.id}`,
+            ]);
         } else if (mv3Path) {
             console.log(`Opening Kitty with MV3 only...`);
-            await execCommand(
-                'kitten',
-                ['@', 'launch', '--type=tab', '--cwd', mv3Path, '--title', `MV3: ${ext.mv3_extension_id}`]
-            );
+            await execCommand('kitten', [
+                '@',
+                'launch',
+                '--type=tab',
+                '--cwd',
+                mv3Path,
+                '--title',
+                `MV3: ${ext.mv3_extension_id}`,
+            ]);
         }
 
         console.log('✓ Opened in Kitty terminal');
@@ -125,7 +139,7 @@ export async function compareExtensions(ext: ExtensionSearchResult): Promise<voi
             })(),
         ]);
     } catch (error) {
-        console.log(error as any)
+        console.log(error as any);
     }
     console.log('✓ Both browsers launched successfully');
     console.log('  Close the browsers when done...');
@@ -153,7 +167,7 @@ export async function runExtension(ext: ExtensionSearchResult): Promise<void> {
         ]);
         choice = answer.choice;
     } catch (error) {
-        console.log(error as any)
+        console.log(error as any);
         // User pressed ESC or Ctrl+C
         return;
     }
@@ -179,15 +193,15 @@ export async function runExtension(ext: ExtensionSearchResult): Promise<void> {
         const tempDir = execSync('mktemp -d').toString().trim();
         console.log(`Using temporary profile: ${tempDir}`);
 
-        const browser = new ChromeTester()
+        const browser = new ChromeTester();
         const tmpExt: Extension = {
-            id: "00000",
-            name: "tmp",
+            id: '00000',
+            name: 'tmp',
             manifest_v2_path: pathToRun,
             manifest: {},
             files: [],
             tags: [],
-        }
+        };
 
         await Promise.all([
             (async () => {
@@ -209,7 +223,9 @@ export async function showInfo(ext: ExtensionSearchResult): Promise<void> {
     console.log(chalk.bold('Name: ') + chalk.cyan(ext.name || ext.manifest?.name || 'Unknown'));
     console.log(chalk.bold('Version: ') + chalk.yellow(ext.manifest?.version || 'Unknown'));
     if (ext.interestingness_score !== undefined) {
-        console.log(chalk.bold(`Interestingness Score: ${chalk.dim(ext.interestingness_score.toString())}`));
+        console.log(
+            chalk.bold(`Interestingness Score: ${chalk.dim(ext.interestingness_score.toString())}`)
+        );
     }
     console.log(chalk.bold('MV2 ID: ') + chalk.gray(ext.id));
     if (ext.mv3_extension_id) {
@@ -219,17 +235,21 @@ export async function showInfo(ext: ExtensionSearchResult): Promise<void> {
     }
 
     console.log('');
-    console.log(chalk.blue(' Description: '))
+    console.log(chalk.blue(' Description: '));
     console.log(ext.manifest?.description || 'No description');
-
 
     // Display tags
     if (ext.tags && ext.tags.length > 0) {
         console.log('');
         console.log(chalk.blue(' Tags:'));
-        console.log(ext.tags.map(t => { return t.toLowerCase(); }).join(chalk.dim(", ")));
+        console.log(
+            ext.tags
+                .map((t) => {
+                    return t.toLowerCase();
+                })
+                .join(chalk.dim(', '))
+        );
     }
-
 
     const mv2Path = getMv2Path(ext);
     const mv3Path = getMv3Path(ext);
@@ -289,9 +309,10 @@ export async function showLogs(ext: ExtensionSearchResult): Promise<void> {
 
             if (log.meta) {
                 if (log.meta.error) {
-                    const errorStr = typeof log.meta.error === 'string'
-                        ? log.meta.error
-                        : JSON.stringify(log.meta.error, null, 2);
+                    const errorStr =
+                        typeof log.meta.error === 'string'
+                            ? log.meta.error
+                            : JSON.stringify(log.meta.error, null, 2);
                     logLines.push(`  Error: ${errorStr}`);
                 }
 
@@ -562,32 +583,32 @@ export async function generateDescription(ext: ExtensionSearchResult): Promise<v
         console.log(chalk.dim(`Collected ${codeFiles.length} files`));
 
         // Build description focused on the extension itself
-        const manifestFile = codeFiles.find(f => f.path.includes('manifest.json'));
+        const manifestFile = codeFiles.find((f) => f.path.includes('manifest.json'));
         const manifest = manifestFile ? JSON.parse(manifestFile.content) : null;
 
         // Get extension code files
         const extensionFiles = codeFiles
-            .filter(f => f.path.includes('extension/'))
-            .map(f => {
+            .filter((f) => f.path.includes('extension/'))
+            .map((f) => {
                 return `${f.path}:\n${f.content}`;
             })
             .join('\n\n---\n\n');
 
-        const manifestSummary = `Manifest.json: ${JSON.stringify(manifest)}`
+        const manifestSummary = `Manifest.json: ${JSON.stringify(manifest)}`;
 
         // Build chat messages from template file (uses chat API for better instruction following)
         const templatePath = path.join(__dirname, 'prompts', 'extension-description.txt');
         const messages = buildChatMessagesFromFile(templatePath, {
             extension_name: ext.name || 'Unknown',
             manifest_summary: manifestSummary,
-            extension_files: extensionFiles
+            extension_files: extensionFiles,
         });
 
         // Get persistent LLM service (reuses SSH tunnel if already open)
         const llmService = await llmManager.getService();
 
         // Calculate token estimate from combined message content
-        const combinedContent = messages.map(m => m.content).join('\n\n');
+        const combinedContent = messages.map((m) => m.content).join('\n\n');
         const promptTokens = Math.ceil(combinedContent.length / 4);
         const promptSizeKB = Math.ceil(combinedContent.length / 1024);
 
@@ -607,7 +628,9 @@ export async function generateDescription(ext: ExtensionSearchResult): Promise<v
         fs.writeFileSync(tmpFile, initialOutput);
 
         console.log(chalk.dim(`Sending to LLM (${llmEndpoint})...`));
-        console.log(chalk.dim(`Model: ${llmModel} | Tokens: ~${promptTokens} (~${promptSizeKB}KB)`));
+        console.log(
+            chalk.dim(`Model: ${llmModel} | Tokens: ~${promptTokens} (~${promptSizeKB}KB)`)
+        );
         console.log(chalk.dim(`Output: ${tmpFile}`));
         console.log(chalk.yellow('⏳ Generating description...'));
         console.log('');

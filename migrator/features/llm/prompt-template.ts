@@ -94,7 +94,9 @@ export function validateTemplate(templatePath: string, expectedPlaceholders?: st
 
         for (const expected of expectedPlaceholders) {
             if (!foundPlaceholders.has(expected)) {
-                throw new Error(`Template ${templatePath} is missing expected placeholder: {{${expected}}}`);
+                throw new Error(
+                    `Template ${templatePath} is missing expected placeholder: {{${expected}}}`
+                );
             }
         }
     }
@@ -137,7 +139,10 @@ export function getTemplatePlaceholders(templatePath: string): string[] {
  * //   { role: 'user', content: 'Extension Name: ...' }
  * // ]
  */
-export function promptToChatMessages(renderedPrompt: string, systemEndMarker?: string): ChatMessage[] {
+export function promptToChatMessages(
+    renderedPrompt: string,
+    systemEndMarker?: string
+): ChatMessage[] {
     // Find where system instructions end and user content begins
     // Default: look for "Extension Name:" or "Extension:" as the start of user content
     const marker = systemEndMarker || /^(Extension Name:|Extension:)/m;
@@ -149,12 +154,12 @@ export function promptToChatMessages(renderedPrompt: string, systemEndMarker?: s
         return [
             {
                 role: 'system',
-                content: 'You are a helpful assistant that follows instructions carefully.'
+                content: 'You are a helpful assistant that follows instructions carefully.',
             },
             {
                 role: 'user',
-                content: renderedPrompt
-            }
+                content: renderedPrompt,
+            },
         ];
     }
 
@@ -165,12 +170,12 @@ export function promptToChatMessages(renderedPrompt: string, systemEndMarker?: s
     return [
         {
             role: 'system',
-            content: systemContent
+            content: systemContent,
         },
         {
             role: 'user',
-            content: userContent
-        }
+            content: userContent,
+        },
     ];
 }
 
