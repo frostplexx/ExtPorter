@@ -406,6 +406,7 @@ export class InterestingnessScorer implements MigrationModule {
                         }
                     }
                 } catch (error) {
+                    logger.error(extension, `${error}`);
                     // Skip files that can't be read
                 }
             }

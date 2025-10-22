@@ -252,7 +252,7 @@ console.log('✅ Bridge test content script setup complete');
         };
 
         // Migrate the extension using BridgeInjector
-        const migratedExtension = BridgeInjector.migrate(testExtension);
+        const migratedExtension = await BridgeInjector.migrate(testExtension);
 
         if (migratedExtension instanceof MigrationError) {
             throw new Error(`Migration failed: ${migratedExtension.error}`);
@@ -380,11 +380,6 @@ console.log('✅ Bridge test content script setup complete');
                 el.getAttribute('data-bridge-test-results')
             );
 
-            // Log console messages for debugging
-            const bridgeLogs = consoleLogs.filter(log =>
-                log.includes('Bridge') || log.includes('bridge') || log.includes('🌐') || log.includes('🧪')
-            );
-
 
             // Verify the test executed
             expect(testStatus).not.toBeNull();
@@ -404,6 +399,7 @@ console.log('✅ Bridge test content script setup complete');
             }
 
         } catch (error) {
+            console.log(error as any)
             // Content script might not have run due to security restrictions
 
             // Log any bridge-related console messages that did occur
@@ -411,6 +407,7 @@ console.log('✅ Bridge test content script setup complete');
                 log.includes('Bridge') || log.includes('bridge') || log.includes('content script')
             );
             if (bridgeLogs.length > 0) {
+                console.log(bridgeLogs)
             }
 
             // Just verify the files were created correctly (which we know works from other tests)

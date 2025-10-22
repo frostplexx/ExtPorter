@@ -46,7 +46,7 @@ describe('RenameAPIS', () => {
   }
 
   describe('migrate', () => {
-    it('should rename chrome.browserAction to chrome.action', () => {
+    it('should rename chrome.browserAction to chrome.action', async () => {
       const extension = createTestExtension('browser-action', [{
         name: 'background.js',
         content: `
@@ -59,7 +59,7 @@ describe('RenameAPIS', () => {
         `
       }]);
 
-      const result = RenameAPIS.migrate(extension);
+      const result = await RenameAPIS.migrate(extension);
 
       expect(result).not.toBeInstanceOf(MigrationError);
       if (!(result instanceof MigrationError)) {
@@ -81,7 +81,7 @@ describe('RenameAPIS', () => {
       }
     });
 
-    it('should rename chrome.pageAction to chrome.action', () => {
+    it('should rename chrome.pageAction to chrome.action', async () => {
       const extension = createTestExtension('page-action', [{
         name: 'content.js',
         content: `
@@ -91,7 +91,7 @@ describe('RenameAPIS', () => {
         `
       }]);
 
-      const result = RenameAPIS.migrate(extension);
+      const result = await RenameAPIS.migrate(extension);
 
       expect(result).not.toBeInstanceOf(MigrationError);
       if (!(result instanceof MigrationError)) {
@@ -113,7 +113,7 @@ describe('RenameAPIS', () => {
       }
     });
 
-    it('should rename chrome.tabs.executeScript to chrome.scripting.executeScript and transform parameters', () => {
+    it('should rename chrome.tabs.executeScript to chrome.scripting.executeScript and transform parameters', async () => {
       const extension = createTestExtension('execute-script', [{
         name: 'popup.js',
         content: `
@@ -142,7 +142,7 @@ describe('RenameAPIS', () => {
         `
       }]);
 
-      const result = RenameAPIS.migrate(extension);
+      const result = await RenameAPIS.migrate(extension);
 
       expect(result).not.toBeInstanceOf(MigrationError);
       if (!(result instanceof MigrationError)) {
@@ -173,7 +173,7 @@ describe('RenameAPIS', () => {
       }
     });
 
-    it('should handle multiple API renames in the same file', () => {
+    it('should handle multiple API renames in the same file', async () => {
       const extension = createTestExtension('multiple-apis', [{
         name: 'background.js',
         content: `
@@ -193,7 +193,7 @@ describe('RenameAPIS', () => {
         `
       }]);
 
-      const result = RenameAPIS.migrate(extension);
+      const result = await RenameAPIS.migrate(extension);
 
       expect(result).not.toBeInstanceOf(MigrationError);
       if (!(result instanceof MigrationError)) {
@@ -222,7 +222,7 @@ describe('RenameAPIS', () => {
       }
     });
 
-    it('should handle files without API calls', () => {
+    it('should handle files without API calls', async () => {
       const extension = createTestExtension('no-apis', [{
         name: 'utility.js',
         content: `
@@ -239,7 +239,7 @@ describe('RenameAPIS', () => {
         `
       }]);
 
-      const result = RenameAPIS.migrate(extension);
+      const result = await RenameAPIS.migrate(extension);
 
       expect(result).not.toBeInstanceOf(MigrationError);
       if (!(result instanceof MigrationError)) {
@@ -260,7 +260,7 @@ describe('RenameAPIS', () => {
       }
     });
 
-    it('should handle non-JavaScript files gracefully', () => {
+    it('should handle non-JavaScript files gracefully', async () => {
       const extension = createTestExtension('mixed-files', [
         {
           name: 'script.js',
@@ -280,7 +280,7 @@ describe('RenameAPIS', () => {
       extension.files[1].filetype = ExtFileType.CSS;
       extension.files[2].filetype = ExtFileType.OTHER;
 
-      const result = RenameAPIS.migrate(extension);
+      const result = await RenameAPIS.migrate(extension);
 
       expect(result).not.toBeInstanceOf(MigrationError);
       if (!(result instanceof MigrationError)) {
@@ -302,7 +302,7 @@ describe('RenameAPIS', () => {
       }
     });
 
-    it('should handle edge cases in API renaming', () => {
+    it('should handle edge cases in API renaming', async () => {
       const extension = createTestExtension('edge-cases', [{
         name: 'edge-cases.js',
         content: `
@@ -321,7 +321,7 @@ describe('RenameAPIS', () => {
         `
       }]);
 
-      const result = RenameAPIS.migrate(extension);
+      const result = await RenameAPIS.migrate(extension);
 
       expect(result).not.toBeInstanceOf(MigrationError);
       if (!(result instanceof MigrationError)) {
@@ -357,7 +357,7 @@ describe('RenameAPIS', () => {
       }
     });
 
-    it('should return MigrationError on serious failures', () => {
+    it('should return MigrationError on serious failures', async () => {
       const badExtension = {
         id: 'bad-extension',
         name: 'bad-extension',
@@ -366,7 +366,7 @@ describe('RenameAPIS', () => {
         files: []
       };
 
-      const result: Extension | MigrationError = RenameAPIS.migrate(badExtension);
+      const result: Extension | MigrationError = await RenameAPIS.migrate(badExtension);
 
 
 
@@ -377,7 +377,7 @@ describe('RenameAPIS', () => {
       }
     });
 
-    it('should preserve file structure and metadata', () => {
+    it('should preserve file structure and metadata', async () => {
       const extension = createTestExtension('preserve-metadata', [{
         name: 'background.js',
         content: 'chrome.browserAction.onClicked.addListener(() => {});'
@@ -386,7 +386,7 @@ describe('RenameAPIS', () => {
       const originalFileCount = extension.files.length;
       const originalManifest = { ...extension.manifest };
 
-      const result = RenameAPIS.migrate(extension);
+      const result = await RenameAPIS.migrate(extension);
 
       expect(result).not.toBeInstanceOf(MigrationError);
       if (!(result instanceof MigrationError)) {
@@ -408,7 +408,7 @@ describe('RenameAPIS', () => {
       }
     });
 
-    it('should correctly transform variable assignments (GitHub issue #11)', () => {
+    it('should correctly transform variable assignments (GitHub issue #11)', async () => {
       const extension = createTestExtension('variable-assignments', [{
         name: 'issue11.js',
         content: `
@@ -445,7 +445,7 @@ describe('RenameAPIS', () => {
         `
       }]);
 
-      const result = RenameAPIS.migrate(extension);
+      const result = await RenameAPIS.migrate(extension);
 
       expect(result).not.toBeInstanceOf(MigrationError);
       if (!(result instanceof MigrationError)) {
@@ -489,7 +489,7 @@ describe('RenameAPIS', () => {
       }
     });
 
-    it('should fix shallow twinning implementation for executeScript (GitHub issue #9)', () => {
+    it('should fix shallow twinning implementation for executeScript (GitHub issue #9)', async () => {
       const extension = createTestExtension('issue-9-shallow-twinning', [{
         name: 'issue9.js',
         content: `
@@ -540,7 +540,7 @@ describe('RenameAPIS', () => {
         `
       }]);
 
-      const result = RenameAPIS.migrate(extension);
+      const result = await RenameAPIS.migrate(extension);
 
       expect(result).not.toBeInstanceOf(MigrationError);
       if (!(result instanceof MigrationError)) {
@@ -591,7 +591,7 @@ describe('RenameAPIS', () => {
       }
     });
 
-    it('should handle edge cases in executeScript parameter transformation', () => {
+    it('should handle edge cases in executeScript parameter transformation', async () => {
       const extension = createTestExtension('executeScript-edge-cases', [{
         name: 'edge-cases.js',
         content: `
@@ -624,7 +624,7 @@ describe('RenameAPIS', () => {
         `
       }]);
 
-      const result = RenameAPIS.migrate(extension);
+      const result = await RenameAPIS.migrate(extension);
 
       expect(result).not.toBeInstanceOf(MigrationError);
       if (!(result instanceof MigrationError)) {
@@ -654,7 +654,7 @@ describe('RenameAPIS', () => {
       }
     });
 
-    it('should NOT truncate very long files (>100KB) during migration', () => {
+    it('should NOT truncate very long files (>100KB) during migration', async () => {
       // Create a large JavaScript file with API calls distributed throughout
       const createLargeFileSegment = (segmentIndex: number) => `
 // ========== SEGMENT ${segmentIndex} START ==========
@@ -750,7 +750,7 @@ chrome.pageAction.setIcon({
       expect(executeScriptCallsBefore).toBeGreaterThan(0);
 
       // Migrate the extension
-      const result = RenameAPIS.migrate(extension);
+      const result = await RenameAPIS.migrate(extension);
 
       expect(result).not.toBeInstanceOf(MigrationError);
       if (!(result instanceof MigrationError)) {
@@ -850,7 +850,7 @@ chrome.pageAction.setIcon({
       }
     });
 
-    it('should transform chrome.tabs.getAllInWindow with null to chrome.tabs.query with currentWindow', () => {
+    it('should transform chrome.tabs.getAllInWindow with null to chrome.tabs.query with currentWindow', async () => {
       const extension = createTestExtension('getAllInWindow-null', [{
         name: 'background.js',
         content: `
@@ -866,7 +866,7 @@ chrome.pageAction.setIcon({
         `
       }]);
 
-      const result = RenameAPIS.migrate(extension);
+      const result = await RenameAPIS.migrate(extension);
 
       expect(result).not.toBeInstanceOf(MigrationError);
       if (!(result instanceof MigrationError)) {
@@ -894,7 +894,7 @@ chrome.pageAction.setIcon({
       }
     });
 
-    it('should transform chrome.tabs.getAllInWindow with windowId to chrome.tabs.query with windowId object', () => {
+    it('should transform chrome.tabs.getAllInWindow with windowId to chrome.tabs.query with windowId object', async () => {
       const extension = createTestExtension('getAllInWindow-windowId', [{
         name: 'popup.js',
         content: `
@@ -912,7 +912,7 @@ chrome.pageAction.setIcon({
         `
       }]);
 
-      const result = RenameAPIS.migrate(extension);
+      const result = await RenameAPIS.migrate(extension);
 
       expect(result).not.toBeInstanceOf(MigrationError);
       if (!(result instanceof MigrationError)) {
@@ -942,7 +942,7 @@ chrome.pageAction.setIcon({
       }
     });
 
-    it('should transform chrome.tabs.getSelected with null to chrome.tabs.query with active and currentWindow', () => {
+    it('should transform chrome.tabs.getSelected with null to chrome.tabs.query with active and currentWindow', async () => {
       const extension = createTestExtension('getSelected-null', [{
         name: 'content.js',
         content: `
@@ -957,7 +957,7 @@ chrome.pageAction.setIcon({
         `
       }]);
 
-      const result = RenameAPIS.migrate(extension);
+      const result = await RenameAPIS.migrate(extension);
 
       expect(result).not.toBeInstanceOf(MigrationError);
       if (!(result instanceof MigrationError)) {
@@ -987,7 +987,7 @@ chrome.pageAction.setIcon({
       }
     });
 
-    it('should transform chrome.tabs.getSelected with windowId to chrome.tabs.query with active and windowId', () => {
+    it('should transform chrome.tabs.getSelected with windowId to chrome.tabs.query with active and windowId', async () => {
       const extension = createTestExtension('getSelected-windowId', [{
         name: 'background.js',
         content: `
@@ -1004,7 +1004,7 @@ chrome.pageAction.setIcon({
         `
       }]);
 
-      const result = RenameAPIS.migrate(extension);
+      const result = await RenameAPIS.migrate(extension);
 
       expect(result).not.toBeInstanceOf(MigrationError);
       if (!(result instanceof MigrationError)) {
@@ -1035,7 +1035,7 @@ chrome.pageAction.setIcon({
       }
     });
 
-    it('should handle mixed getAllInWindow and getSelected transformations', () => {
+    it('should handle mixed getAllInWindow and getSelected transformations', async () => {
       const extension = createTestExtension('mixed-tabs-apis', [{
         name: 'popup.js',
         content: `
@@ -1053,7 +1053,7 @@ chrome.pageAction.setIcon({
         `
       }]);
 
-      const result = RenameAPIS.migrate(extension);
+      const result = await RenameAPIS.migrate(extension);
 
       expect(result).not.toBeInstanceOf(MigrationError);
       if (!(result instanceof MigrationError)) {
@@ -1085,7 +1085,7 @@ chrome.pageAction.setIcon({
     });
 
     describe('webpack bundle handling', () => {
-      it('should detect and blacklist webpack bundles by filename patterns', () => {
+      it('should detect and blacklist webpack bundles by filename patterns', async () => {
         const webpackFiles = [
           { name: 'main.bundle.js', content: 'chrome.browserAction.onClicked.addListener(() => {});' },
           { name: 'app-bundle.js', content: 'chrome.pageAction.show(123);' },
@@ -1094,7 +1094,7 @@ chrome.pageAction.setIcon({
         ];
 
         const extension = createTestExtension('webpack-filename-test', webpackFiles);
-        const result = RenameAPIS.migrate(extension);
+        const result = await RenameAPIS.migrate(extension);
 
         expect(result).not.toBeInstanceOf(MigrationError);
         if (!(result instanceof MigrationError)) {
@@ -1124,7 +1124,7 @@ chrome.pageAction.setIcon({
         }
       });
 
-      it('should detect webpack bundles by content signatures', () => {
+      it('should detect webpack bundles by content signatures', async () => {
         const webpackBundleContent = `
           /******/ (function(modules) {
           /******/    var installedModules = {};
@@ -1149,7 +1149,7 @@ chrome.pageAction.setIcon({
           content: webpackBundleContent
         }]);
 
-        const result = RenameAPIS.migrate(extension);
+        const result = await RenameAPIS.migrate(extension);
 
         expect(result).not.toBeInstanceOf(MigrationError);
         if (!(result instanceof MigrationError)) {
@@ -1168,7 +1168,7 @@ chrome.pageAction.setIcon({
         }
       });
 
-      it('should provide enhanced error reporting for webpack bundles', () => {
+      it('should provide enhanced error reporting for webpack bundles', async () => {
         const webpackContent = `
           __webpack_require__(123);
           webpackChunk.push([456]);
@@ -1181,7 +1181,7 @@ chrome.pageAction.setIcon({
           content: webpackContent.repeat(1000) // Make it large enough to trigger size-based detection
         }]);
 
-        const result = RenameAPIS.migrate(extension);
+        const result = await RenameAPIS.migrate(extension);
 
         expect(result).not.toBeInstanceOf(MigrationError);
 
@@ -1203,7 +1203,7 @@ chrome.pageAction.setIcon({
         }
       });
 
-      it('should provide webpack guidance when webpack files are detected', () => {
+      it('should provide webpack guidance when webpack files are detected', async () => {
         const extension = createTestExtension('webpack-guidance-test', [
           {
             name: 'background.js',
@@ -1215,7 +1215,7 @@ chrome.pageAction.setIcon({
           }
         ]);
 
-        const result = RenameAPIS.migrate(extension);
+        const result = await RenameAPIS.migrate(extension);
 
         expect(result).not.toBeInstanceOf(MigrationError);
 
@@ -1236,7 +1236,7 @@ chrome.pageAction.setIcon({
         }
       });
 
-      it('should handle mixed extension with both regular and webpack files', () => {
+      it('should handle mixed extension with both regular and webpack files', async () => {
         const extension = createTestExtension('mixed-webpack-test', [
           {
             name: 'background.js',
@@ -1252,7 +1252,7 @@ chrome.pageAction.setIcon({
           }
         ]);
 
-        const result = RenameAPIS.migrate(extension);
+        const result = await RenameAPIS.migrate(extension);
 
         expect(result).not.toBeInstanceOf(MigrationError);
         if (!(result instanceof MigrationError)) {
@@ -1276,7 +1276,7 @@ chrome.pageAction.setIcon({
         }
       });
 
-      it('should correctly count potential transformations in webpack bundles', () => {
+      it('should correctly count potential transformations in webpack bundles', async () => {
         const webpackContentWithAPIs = `
           /******/ ({
           /******/    123: function(module, exports) {
@@ -1296,7 +1296,7 @@ chrome.pageAction.setIcon({
         }]);
 
         // Since this will be blacklisted, we mainly want to verify no crashes occur
-        const result = RenameAPIS.migrate(extension);
+        const result = await RenameAPIS.migrate(extension);
         expect(result).not.toBeInstanceOf(MigrationError);
 
         extension.files.forEach(file => file.close());
