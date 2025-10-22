@@ -10,8 +10,8 @@ jest.mock('../../../migrator/utils/logger');
 jest.mock('fs/promises');
 jest.mock('../../../migrator/index', () => ({
     globals: {
-        outputDir: '/test/output'
-    }
+        outputDir: '/test/output',
+    },
 }));
 
 describe('MigrationWriter', () => {
@@ -28,7 +28,7 @@ describe('MigrationWriter', () => {
             getBuffer: jest.fn().mockReturnValue(Buffer.from('test content')),
             getPath: jest.fn().mockReturnValue('test.js'),
             getSize: jest.fn().mockReturnValue(100),
-            getType: jest.fn().mockReturnValue('js' as any)
+            getType: jest.fn().mockReturnValue('js' as any),
         } as any;
 
         mockExtension = {
@@ -36,7 +36,7 @@ describe('MigrationWriter', () => {
             name: 'Test Extension',
             manifest_v2_path: '/test/path',
             manifest: {},
-            files: [mockFile as any]
+            files: [mockFile as any],
         } as Extension;
 
         // Mock fs methods
@@ -120,9 +120,9 @@ describe('MigrationWriter', () => {
 
             (fs.writeFile as any).mockRejectedValue(error);
 
-            await expect(
-                writer.writeExtensionSync(mockExtension, outputPath)
-            ).rejects.toThrow('Write failed');
+            await expect(writer.writeExtensionSync(mockExtension, outputPath)).rejects.toThrow(
+                'Write failed'
+            );
         });
 
         it('should create output directory if it does not exist', async () => {

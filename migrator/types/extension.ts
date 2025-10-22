@@ -27,10 +27,8 @@ export interface Extension {
         file_modifications: number;
         webRequest_to_dnr_migrations: number;
     };
-    tags?: string[]  // Store tag names as enum string names (e.g., 'MANIFEST_MIGRATED') for readability in MongoDB
+    tags?: string[]; // Store tag names as enum string names (e.g., 'MANIFEST_MIGRATED') for readability in MongoDB
 }
-
-
 
 export function closeExtensionFiles(extension: Extension): void {
     // Close all file descriptors for LazyFile objects

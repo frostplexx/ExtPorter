@@ -8,7 +8,6 @@ import { Tags } from '../types/tags';
  * from Manifest V2 to Manifest V3 format
  */
 export class MigrateCSP implements MigrationModule {
-
     static current_ext: Extension | null = null;
 
     /**
@@ -19,38 +18,42 @@ export class MigrateCSP implements MigrationModule {
     public static async migrate(extension: Extension): Promise<Extension | MigrationError> {
         MigrateCSP.current_ext = extension;
         try {
-            const csp = extension.manifest["content_security_policy"];
+            const csp = extension.manifest['content_security_policy'];
 
             // Default MV3 CSP structure
             const defaultMV3CSP = {
-                "extension_pages": "script-src 'self'; object-src 'self';",
-                "sandbox": "sandbox allow-scripts allow-forms allow-popups allow-modals; script-src 'self' 'unsafe-inline' 'unsafe-eval'; child-src 'self';"
+                extension_pages: "script-src 'self'; object-src 'self';",
+                sandbox:
+                    "sandbox allow-scripts allow-forms allow-popups allow-modals; script-src 'self' 'unsafe-inline' 'unsafe-eval'; child-src 'self';",
             };
 
             // If no CSP exists, set the default
             if (!csp || typeof csp !== 'string') {
-                extension.manifest["content_security_policy"] = defaultMV3CSP;
-                logger.info(extension, "No CSP found, using default MV3 CSP");
+                extension.manifest['content_security_policy'] = defaultMV3CSP;
+                logger.info(extension, 'No CSP found, using default MV3 CSP');
                 return extension;
             }
 
             // MV2 CSP is a string - check if it's compliant
             if (MigrateCSP.isCSPStringCompliant(csp)) {
                 // Compliant - just convert to MV3 object format
-                extension.manifest["content_security_policy"] = {
-                    "extension_pages": csp,
-                    "sandbox": defaultMV3CSP.sandbox
+                extension.manifest['content_security_policy'] = {
+                    extension_pages: csp,
+                    sandbox: defaultMV3CSP.sandbox,
                 };
-                logger.info(extension, "Transformed compliant MV2 CSP to MV3 format");
+                logger.info(extension, 'Transformed compliant MV2 CSP to MV3 format');
                 return extension;
             } else {
                 // Non-compliant - transform to make it compliant
                 const compliantCSP = MigrateCSP.makeCSPStringCompliant(csp);
-                extension.manifest["content_security_policy"] = {
-                    "extension_pages": compliantCSP,
-                    "sandbox": defaultMV3CSP.sandbox
+                extension.manifest['content_security_policy'] = {
+                    extension_pages: compliantCSP,
+                    sandbox: defaultMV3CSP.sandbox,
                 };
-                logger.warn(extension, `Transformed non-compliant CSP from: "${csp}" to: "${compliantCSP}"`);
+                logger.warn(
+                    extension,
+                    `Transformed non-compliant CSP from: "${csp}" to: "${compliantCSP}"`
+                );
 
                 // Add CSP_VALUE_MODIFIED tag to extension object
                 if (!extension.tags) {
@@ -63,7 +66,6 @@ export class MigrateCSP implements MigrationModule {
 
                 return extension;
             }
-
         } catch (error) {
             logger.error(extension, 'Failed to migrate CSP', {
                 error: error instanceof Error ? error.message : String(error),
@@ -71,8 +73,6 @@ export class MigrateCSP implements MigrationModule {
             return new MigrationError(extension, error);
         }
     }
-
-
 
     /**
      * Checks if a CSP string is compliant with MV3 requirements
@@ -147,7 +147,11 @@ export class MigrateCSP implements MigrationModule {
             if (!token) continue;
 
             // Skip known good values
-            if (token.startsWith("'") || token.startsWith('http://localhost') || token.startsWith('http://127.0.0.1')) {
+            if (
+                token.startsWith("'") ||
+                token.startsWith('http://localhost') ||
+                token.startsWith('http://127.0.0.1')
+            ) {
                 continue;
             }
 
@@ -176,11 +180,14 @@ export class MigrateCSP implements MigrationModule {
             'http://localhost',
             'http://127.0.0.1',
             'https://localhost',
-            'https://127.0.0.1'
+            'https://127.0.0.1',
         ]);
 
         // Parse the CSP into directives
-        const directives = csp.split(';').map(d => d.trim()).filter(d => d.length > 0);
+        const directives = csp
+            .split(';')
+            .map((d) => d.trim())
+            .filter((d) => d.length > 0);
         const transformedDirectives: string[] = [];
 
         for (const directive of directives) {
@@ -199,8 +206,15 @@ export class MigrateCSP implements MigrationModule {
             const directiveValues = parts.slice(1);
 
             // Directives that need to be restricted in MV3
-            if (directiveName === 'script-src' || directiveName === 'object-src' || directiveName === 'worker-src') {
-                const compliantValues = MigrateCSP.filterCompliantValues(directiveValues, allowedValues);
+            if (
+                directiveName === 'script-src' ||
+                directiveName === 'object-src' ||
+                directiveName === 'worker-src'
+            ) {
+                const compliantValues = MigrateCSP.filterCompliantValues(
+                    directiveValues,
+                    allowedValues
+                );
 
                 // Ensure at least 'self' is present if no compliant values remain
                 if (compliantValues.length === 0) {
@@ -211,9 +225,10 @@ export class MigrateCSP implements MigrationModule {
             }
             // For style-src, remove unsafe-inline and unsafe-eval
             else if (directiveName === 'style-src') {
-                const filteredValues = directiveValues.filter(v =>
-                    !v.toLowerCase().includes('unsafe-inline') &&
-                    !v.toLowerCase().includes('unsafe-eval')
+                const filteredValues = directiveValues.filter(
+                    (v) =>
+                        !v.toLowerCase().includes('unsafe-inline') &&
+                        !v.toLowerCase().includes('unsafe-eval')
                 );
                 if (filteredValues.length > 0) {
                     transformedDirectives.push(`${directiveName} ${filteredValues.join(' ')}`);
@@ -226,8 +241,12 @@ export class MigrateCSP implements MigrationModule {
         }
 
         // Ensure required directives exist
-        const hasScriptSrc = transformedDirectives.some(d => d.toLowerCase().startsWith('script-src'));
-        const hasObjectSrc = transformedDirectives.some(d => d.toLowerCase().startsWith('object-src'));
+        const hasScriptSrc = transformedDirectives.some((d) =>
+            d.toLowerCase().startsWith('script-src')
+        );
+        const hasObjectSrc = transformedDirectives.some((d) =>
+            d.toLowerCase().startsWith('object-src')
+        );
 
         if (!hasScriptSrc) {
             transformedDirectives.push("script-src 'self'");
@@ -277,5 +296,4 @@ export class MigrateCSP implements MigrationModule {
 
         return compliantValues;
     }
-
 }

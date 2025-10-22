@@ -15,11 +15,15 @@ import { MigrationError } from './types/migration_module';
 import { ResourceDownloader } from './modules/resource_downloader';
 import { BridgeInjector } from './modules/bridge_injector';
 import { WebRequestMigrator } from './modules/web_request_migrator';
-import { checkMemoryThreshold, clearExtensionMemory, forceGarbageCollection, logMemoryUsage } from './utils/garbage';
+import {
+    checkMemoryThreshold,
+    clearExtensionMemory,
+    forceGarbageCollection,
+    logMemoryUsage,
+} from './utils/garbage';
 
 // Load environment variables once at application startup
 dotenv.config();
-
 
 // set global constants to be used accross the project
 // its ugly but it works
@@ -27,7 +31,6 @@ export const globals: Globals = {
     extensionsPath: '',
     outputDir: '',
 };
-
 
 /**
  * Set up database, global variables etc

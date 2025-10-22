@@ -6,7 +6,6 @@
     </div>
 </p>
 
-
 <!-- prettier-ignore -->
 > :red_circle: **IMPORTANT**:
 > This is an experimental research project! Breakages and instabilities are to be expected.
@@ -24,7 +23,6 @@ of Chrome extension migration in the face of Google's deprecation of Manifest V2
 - **Manual Analysis**: Provides tools for manually analysing if the migration succeeded
 
 ## Prerequisites
-
 
 ### When using nix
 
@@ -57,18 +55,22 @@ of Chrome extension migration in the face of Google's deprecation of Manifest V2
     ```
 
 2. **Install dependencies**
-    If you are using nix run either `direnv allow` if you have that installed, else run `nix develop`.
-    In any case install the yarn dependencies by running:
+   If you are using nix run either `direnv allow` if you have that installed, else run `nix develop`.
+   In any case install the yarn dependencies by running:
+
     ```bash
     yarn install
     ```
 
 3. **Set up environment**
+
     ```bash
     cp .env.example .env
     # Edit .env with your configuration
     ```
+
     Additionally make sure that the following environment variables are set if you are not using nix:
+
     ```bash
     export NODE_OPTIONS="--max-old-space-size=8192 --max-semi-space-size=512 --expose-gc"
     export CHROME_138="/path/to/chrome/138/" # the code will build the path as follows: `${process.env.CHROME_138}/Applications/Google Chrome.app/Contents/MacOS/Google Chrome`
@@ -83,20 +85,23 @@ of Chrome extension migration in the face of Google's deprecation of Manifest V2
 
 ## Usage
 
-
 Make sure that the environment is Initialized before running any commands by doing `yarn env:init`!
 
 ### Migration
 
 Before running the command configure the input and output directories in the `.env` file:
+
 ```env
 INPUT_DIR=/path/to/unpacked/extensions
 OUTPUT_DIR=/path/to/output/folder
 ```
+
 Then run the following command to migrate:
+
 ```bash
 yarn migrate
 ```
+
 ### Manual Analysis
 
 This project also provides a tool that helps you analyse if extensions got migrated successfully.
@@ -153,6 +158,7 @@ SSH_LOCAL_PORT=11434
 ## Development
 
 File structure:
+
 ```bash
 .
 ├── ext_analyzer # Files for manual analysis
@@ -175,7 +181,7 @@ File structure:
 │   ├── features # Database, llm integration etc
 │   ├── modules # Migraiton modules
 │   ├── templates # Files that are used by the migrator / get injected into each extension
-│   ├── types 
+│   ├── types
 │   ├── utils
 │   └── index.ts
 ├── scripts # Various scripts that help you set up and manage the migrator
@@ -193,6 +199,7 @@ File structure:
 ### Modules
 
 ExtPorter is made up of modules that can be added/removed to the migration pipeline. They are defined inside `migrator/index.ts`:
+
 ```ts
 const migrationModules = [
     MigrateManifest.migrate,
@@ -204,12 +211,11 @@ const migrationModules = [
     WriteMigrated.migrate,
 ];
 ```
-Modules are stored in `migrator/modules/` and get applied one after the other to the extension in the same order as they are defined in the array. 
 
-Each module **must** implement the abstract class of `MigrationModule` found in `migrator/types/migration_module.ts`. This class provides a migrate function that takes an extension as a parameter and returns either the modified extension or a migration error. 
+Modules are stored in `migrator/modules/` and get applied one after the other to the extension in the same order as they are defined in the array.
+
+Each module **must** implement the abstract class of `MigrationModule` found in `migrator/types/migration_module.ts`. This class provides a migrate function that takes an extension as a parameter and returns either the modified extension or a migration error.
 In addition to this mandatory function a module can include any arbitrary amount of code, however keep in mind that `migrate` is always the main entry point.
-
-
 
 ### Most important Scripts
 

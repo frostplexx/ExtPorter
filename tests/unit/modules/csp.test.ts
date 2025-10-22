@@ -44,7 +44,9 @@ describe('MigrateCSP', () => {
 
                 expect(result).not.toBeInstanceOf(MigrationError);
                 if (!(result instanceof MigrationError)) {
-                    expect(result.manifest.content_security_policy).toHaveProperty('extension_pages');
+                    expect(result.manifest.content_security_policy).toHaveProperty(
+                        'extension_pages'
+                    );
                     expect(result.manifest.content_security_policy).toHaveProperty('sandbox');
                     expect(result.manifest.content_security_policy.extension_pages).toBe(
                         "script-src 'self'; object-src 'self';"
@@ -72,8 +74,7 @@ describe('MigrateCSP', () => {
 
         describe('MV3 allowed directives', () => {
             it('should preserve SHA256 hashes as they are allowed in MV3', async () => {
-                const hashCSP =
-                    "script-src 'self' 'sha256-abc123=='; object-src 'self';";
+                const hashCSP = "script-src 'self' 'sha256-abc123=='; object-src 'self';";
                 baseExtension.manifest.content_security_policy = hashCSP;
 
                 const result = await MigrateCSP.migrate(baseExtension);
@@ -121,8 +122,7 @@ describe('MigrateCSP', () => {
             });
 
             it('should preserve wasm-unsafe-eval as it is allowed in MV3', async () => {
-                const wasmCSP =
-                    "script-src 'self' 'wasm-unsafe-eval'; object-src 'self';";
+                const wasmCSP = "script-src 'self' 'wasm-unsafe-eval'; object-src 'self';";
                 baseExtension.manifest.content_security_policy = wasmCSP;
 
                 const result = await MigrateCSP.migrate(baseExtension);
@@ -249,7 +249,9 @@ describe('MigrateCSP', () => {
 
                 expect(result).not.toBeInstanceOf(MigrationError);
                 if (!(result instanceof MigrationError)) {
-                    expect(result.manifest.content_security_policy).toHaveProperty('extension_pages');
+                    expect(result.manifest.content_security_policy).toHaveProperty(
+                        'extension_pages'
+                    );
                     expect(result.manifest.content_security_policy).toHaveProperty('sandbox');
                     // The trailing semicolon may or may not be present, both are valid
                     const csp = result.manifest.content_security_policy.extension_pages;
@@ -455,7 +457,9 @@ describe('MigrateCSP', () => {
 
                     expect(result).not.toBeInstanceOf(MigrationError);
                     if (!(result instanceof MigrationError)) {
-                        expect(result.manifest.content_security_policy).toHaveProperty('extension_pages');
+                        expect(result.manifest.content_security_policy).toHaveProperty(
+                            'extension_pages'
+                        );
                         expect(result.manifest.content_security_policy).toHaveProperty('sandbox');
                         // The trailing semicolon may or may not be present, both are valid
                         const csp = result.manifest.content_security_policy.extension_pages;
