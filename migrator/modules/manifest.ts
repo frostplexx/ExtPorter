@@ -207,7 +207,6 @@ export class MigrateManifest implements MigrationModule {
                             };
                         }
 
-
                         // // Take the first script as the service worker entry point
                         // extension.manifest['background'] = {
                         //     service_worker: scripts[0],
