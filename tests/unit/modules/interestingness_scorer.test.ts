@@ -65,7 +65,7 @@ describe('InterestingnessScorer', () => {
                 },
             };
 
-            const result = await await InterestingnessScorer.migrate(brokenExtension);
+            const result = await InterestingnessScorer.migrate(brokenExtension);
 
             expect(result).toBeInstanceOf(MigrationError);
             expect((result as MigrationError).extension).toBe(brokenExtension);
