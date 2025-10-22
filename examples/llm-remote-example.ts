@@ -32,8 +32,8 @@ async function main() {
                 username: 'ra24mif',
                 password: process.env.SSH_PASSWORD,
                 remotePort: 11434,
-                localPort: 11434
-            }
+                localPort: 11434,
+            },
         });
     } else {
         console.log('Using environment configuration...\n');
@@ -60,7 +60,6 @@ async function main() {
 
         console.log('\n--- Final Response ---');
         console.log(response);
-
     } catch (error: any) {
         console.error('Error:', error.message);
         process.exit(1);

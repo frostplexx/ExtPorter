@@ -49,7 +49,11 @@ export function displayExtensionList(
 ): void {
     console.clear();
     console.log(chalk.cyan('Search Extensions'));
-    console.log(chalk.dim(`Filter: ${searchQuery || '(none)'} | ${filteredExtensions.length} of ${totalCount} extensions | arrows to navigate, ESC to quit`));
+    console.log(
+        chalk.dim(
+            `Filter: ${searchQuery || '(none)'} | ${filteredExtensions.length} of ${totalCount} extensions | arrows to navigate, ESC to quit`
+        )
+    );
     console.log('');
 
     const displayStart = Math.max(0, selectedIndex - 10);
@@ -66,11 +70,14 @@ export function displayExtensionList(
     }
 }
 
-export function filterExtensions(extensions: ExtensionSearchResult[], query: string): ExtensionSearchResult[] {
+export function filterExtensions(
+    extensions: ExtensionSearchResult[],
+    query: string
+): ExtensionSearchResult[] {
     if (!query) return extensions;
 
     const lowerQuery = query.toLowerCase();
-    return extensions.filter(ext => {
+    return extensions.filter((ext) => {
         const name = (ext.name || ext.manifest?.name || '').toLowerCase();
         const desc = (ext.manifest?.description || '').toLowerCase();
         const id = ext.id.toLowerCase();

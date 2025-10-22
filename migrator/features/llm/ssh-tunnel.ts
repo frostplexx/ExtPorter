@@ -30,14 +30,22 @@ export class SSHTunnel {
 
             // Common SSH arguments
             args.push(
-                '-o', 'StrictHostKeyChecking=no',
-                '-o', 'UserKnownHostsFile=/dev/null',
-                '-o', 'LogLevel=ERROR',
-                '-o', 'PreferredAuthentications=password',
-                '-o', 'PubkeyAuthentication=no',
-                '-o', 'NumberOfPasswordPrompts=1',
-                '-p', this.config.port.toString(),
-                '-L', `${this.config.localPort}:localhost:${this.config.remotePort}`,
+                '-o',
+                'StrictHostKeyChecking=no',
+                '-o',
+                'UserKnownHostsFile=/dev/null',
+                '-o',
+                'LogLevel=ERROR',
+                '-o',
+                'PreferredAuthentications=password',
+                '-o',
+                'PubkeyAuthentication=no',
+                '-o',
+                'NumberOfPasswordPrompts=1',
+                '-p',
+                this.config.port.toString(),
+                '-L',
+                `${this.config.localPort}:localhost:${this.config.remotePort}`,
                 '-N' // Don't execute remote command
             );
 
@@ -51,11 +59,11 @@ export class SSHTunnel {
             console.log(chalk.dim(`Establishing SSH tunnel to ${this.config.host}...`));
 
             this.process = spawn(command, args, {
-                stdio: ['ignore', 'pipe', 'pipe']
+                stdio: ['ignore', 'pipe', 'pipe'],
             });
 
             let errorOutput = '';
-            let establishmentTimeout: NodeJS.Timeout  = setTimeout(() => {}, 0);
+            let establishmentTimeout: NodeJS.Timeout = setTimeout(() => {}, 0);
 
             // Capture any error output
             this.process.stderr?.on('data', (data) => {
@@ -67,7 +75,11 @@ export class SSHTunnel {
                 clearTimeout(establishmentTimeout);
                 this.connected = false;
                 if (error.message.includes('ENOENT') && command === 'sshpass') {
-                    reject(new Error('sshpass not found. Install it with: brew install hudochenkov/sshpass/sshpass (macOS) or apt-get install sshpass (Linux)'));
+                    reject(
+                        new Error(
+                            'sshpass not found. Install it with: brew install hudochenkov/sshpass/sshpass (macOS) or apt-get install sshpass (Linux)'
+                        )
+                    );
                 } else {
                     reject(new Error(`Failed to start SSH process: ${error.message}`));
                 }
@@ -87,9 +99,11 @@ export class SSHTunnel {
                 if (this.connected) return;
 
                 // Check if we have any error indicators
-                if (errorOutput.includes('Permission denied') ||
+                if (
+                    errorOutput.includes('Permission denied') ||
                     errorOutput.includes('Connection refused') ||
-                    errorOutput.includes('Could not resolve hostname')) {
+                    errorOutput.includes('Could not resolve hostname')
+                ) {
                     this.disconnect();
                     reject(new Error(`SSH connection failed: ${errorOutput}`));
                 } else {

@@ -63,11 +63,11 @@ export class ResourceDownloader extends MigrationModule {
             // Close all file descriptors before downloading to prevent EBADF errors
             // This is necessary because downloading uses execSync which needs file descriptors
             logger.debug(extension, 'Closing file descriptors before download');
-            extension.files.forEach(file => {
+            extension.files.forEach((file) => {
                 try {
                     file.close();
                 } catch (error) {
-                    logger.error(extension, error as any)
+                    logger.error(extension, error as any);
                     // Ignore errors when closing files
                 }
             });
@@ -226,11 +226,14 @@ export class ResourceDownloader extends MigrationModule {
                     extension,
                     `Failed to download resource: ${resource.url}: ${errorMessage}`,
                     {
-                        error: error instanceof Error ? {
-                            message: error.message,
-                            stack: error.stack,
-                            name: error.name
-                        } : String(error)
+                        error:
+                            error instanceof Error
+                                ? {
+                                      message: error.message,
+                                      stack: error.stack,
+                                      name: error.name,
+                                  }
+                                : String(error),
                     }
                 );
                 results.push({
@@ -295,11 +298,14 @@ export class ResourceDownloader extends MigrationModule {
                 extension,
                 `Failed to download resource: ${resource.url}: ${errorMessage}`,
                 {
-                    error: error instanceof Error ? {
-                        message: error.message,
-                        stack: error.stack,
-                        name: error.name
-                    } : String(error)
+                    error:
+                        error instanceof Error
+                            ? {
+                                  message: error.message,
+                                  stack: error.stack,
+                                  name: error.name,
+                              }
+                            : String(error),
                 }
             );
             return {
@@ -347,7 +353,9 @@ export class ResourceDownloader extends MigrationModule {
 
             // Check if temp file was created
             if (!fs.existsSync(tempFile)) {
-                throw new Error(`Curl completed but temp file was not created. Curl output: ${result}`);
+                throw new Error(
+                    `Curl completed but temp file was not created. Curl output: ${result}`
+                );
             }
 
             // Read the downloaded content
@@ -498,11 +506,14 @@ export class ResourceDownloader extends MigrationModule {
                                 extension,
                                 `Failed to write updated content to file: ${file.path}: ${updateError instanceof Error ? updateError.message : String(updateError)}`,
                                 {
-                                    error: updateError instanceof Error ? {
-                                        message: updateError.message,
-                                        stack: updateError.stack,
-                                        name: updateError.name
-                                    } : String(updateError)
+                                    error:
+                                        updateError instanceof Error
+                                            ? {
+                                                  message: updateError.message,
+                                                  stack: updateError.stack,
+                                                  name: updateError.name,
+                                              }
+                                            : String(updateError),
                                 }
                             );
                         }

@@ -50,7 +50,7 @@ export async function runCommand(
                 // Run in background
                 const proc = spawn(command, args, {
                     detached: true,
-                    stdio: 'ignore'
+                    stdio: 'ignore',
                 });
                 proc.unref();
                 resolve({ success: true, output: '' });
@@ -58,7 +58,7 @@ export async function runCommand(
             }
 
             const proc = spawn(command, args, {
-                stdio: showOutput ? 'inherit' : 'pipe'
+                stdio: showOutput ? 'inherit' : 'pipe',
             });
 
             let output = '';
@@ -78,7 +78,7 @@ export async function runCommand(
                 resolve({
                     success: code === 0,
                     output,
-                    error: error || undefined
+                    error: error || undefined,
                 });
             });
 
@@ -86,14 +86,14 @@ export async function runCommand(
                 resolve({
                     success: false,
                     output: '',
-                    error: err.message
+                    error: err.message,
                 });
             });
         } catch (err: any) {
             resolve({
                 success: false,
                 output: '',
-                error: err.message
+                error: err.message,
             });
         }
     });
@@ -117,7 +117,9 @@ export function collectExtensionFiles(mv2Path: string): { path: string; content:
 
         // 2. Collect background scripts
         if (manifest.background) {
-            const scripts = manifest.background.scripts || (manifest.background.service_worker ? [manifest.background.service_worker] : []);
+            const scripts =
+                manifest.background.scripts ||
+                (manifest.background.service_worker ? [manifest.background.service_worker] : []);
             for (const script of scripts) {
                 if (script) {
                     const scriptPath = path.join(mv2Path, script);
@@ -168,7 +170,10 @@ export function collectExtensionFiles(mv2Path: string): { path: string; content:
                     if (fs.existsSync(scriptPath)) {
                         const scriptContent = fs.readFileSync(scriptPath, 'utf8');
                         const relativePath = path.join(path.dirname(popupPath), scriptFile);
-                        codeFiles.push({ path: `extension/${relativePath}`, content: scriptContent });
+                        codeFiles.push({
+                            path: `extension/${relativePath}`,
+                            content: scriptContent,
+                        });
                     }
                 }
             }
@@ -197,10 +202,20 @@ export function collectExtensionFiles(mv2Path: string): { path: string; content:
 
         // 7. Look for common main files if we don't have much yet
         if (codeFiles.length < 5) {
-            const commonFiles = ['main.js', 'index.js', 'app.js', 'background.js', 'content.js', 'script.js'];
+            const commonFiles = [
+                'main.js',
+                'index.js',
+                'app.js',
+                'background.js',
+                'content.js',
+                'script.js',
+            ];
             for (const commonFile of commonFiles) {
                 const commonPath = path.join(mv2Path, commonFile);
-                if (fs.existsSync(commonPath) && !codeFiles.some(f => f.path.includes(commonFile))) {
+                if (
+                    fs.existsSync(commonPath) &&
+                    !codeFiles.some((f) => f.path.includes(commonFile))
+                ) {
                     const content = fs.readFileSync(commonPath, 'utf8');
                     codeFiles.push({ path: `extension/${commonFile}`, content });
                 }

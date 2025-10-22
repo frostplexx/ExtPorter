@@ -12,8 +12,14 @@ describe('Bridge Injection Puppeteer Tests', () => {
     let browser: Browser;
     let page: Page;
 
-    const originalExtensionPath = path.join(__dirname, '../fixtures/mock-extensions/bridge_test_extension');
-    const migratedExtensionPath = path.join(__dirname, '../fixtures/mock-extensions/bridge_test_extension_migrated');
+    const originalExtensionPath = path.join(
+        __dirname,
+        '../fixtures/mock-extensions/bridge_test_extension'
+    );
+    const migratedExtensionPath = path.join(
+        __dirname,
+        '../fixtures/mock-extensions/bridge_test_extension_migrated'
+    );
 
     // Helper to get Chrome path
     const getChromePath = () => {
@@ -43,7 +49,9 @@ describe('Bridge Injection Puppeteer Tests', () => {
         if (manifest.background?.service_worker) {
             const backgroundPath = path.join(extensionPath, manifest.background.service_worker);
             if (fs.existsSync(backgroundPath)) {
-                files.push(new LazyFile(manifest.background.service_worker, backgroundPath, ExtFileType.JS));
+                files.push(
+                    new LazyFile(manifest.background.service_worker, backgroundPath, ExtFileType.JS)
+                );
             }
         }
 
@@ -97,7 +105,7 @@ describe('Bridge Injection Puppeteer Tests', () => {
 
         // Create migrated extension using BridgeInjector
         const originalExtension = createExtensionFromDirectory(originalExtensionPath);
-        const migratedExtension = BridgeInjector.migrate(originalExtension);
+        const migratedExtension = await BridgeInjector.migrate(originalExtension);
 
         if (migratedExtension instanceof MigrationError) {
             throw new Error(`Migration failed: ${migratedExtension.error}`);
@@ -197,7 +205,7 @@ describe('Bridge Injection Puppeteer Tests', () => {
             await page.goto('https://example.com');
 
             // Wait for extension to load and initialize
-            await new Promise(resolve => setTimeout(resolve, 2000));
+            await new Promise((resolve) => setTimeout(resolve, 2000));
 
             // Filter out unrelated errors
             const extensionErrors = consoleErrors.filter(
@@ -235,12 +243,11 @@ describe('Bridge Injection Puppeteer Tests', () => {
             await page.waitForSelector('#bridge-test-indicator', { timeout: 10000 });
 
             // Wait for tests to complete (content script runs tests automatically)
-            await new Promise(resolve => setTimeout(resolve, 3000));
+            await new Promise((resolve) => setTimeout(resolve, 3000));
 
             // Check if content storage test passed
-            const contentStorageResult = await page.$eval(
-                '#bridge-test-indicator',
-                (el) => el.getAttribute('data-content-storage')
+            const contentStorageResult = await page.$eval('#bridge-test-indicator', (el) =>
+                el.getAttribute('data-content-storage')
             );
 
             expect(contentStorageResult).toBeTruthy();
@@ -261,28 +268,25 @@ describe('Bridge Injection Puppeteer Tests', () => {
             await page.waitForSelector('#bridge-test-indicator', { timeout: 10000 });
 
             // Wait for all tests to complete
-            await new Promise(resolve => setTimeout(resolve, 5000));
+            await new Promise((resolve) => setTimeout(resolve, 5000));
 
             // Check test status
-            const testStatus = await page.$eval(
-                '#bridge-test-indicator',
-                (el) => el.getAttribute('data-test-status')
+            const testStatus = await page.$eval('#bridge-test-indicator', (el) =>
+                el.getAttribute('data-test-status')
             );
 
             expect(testStatus).toBe('success');
 
             // Check if all tests passed
-            const allPassed = await page.$eval(
-                '#bridge-test-indicator',
-                (el) => el.getAttribute('data-all-passed')
+            const allPassed = await page.$eval('#bridge-test-indicator', (el) =>
+                el.getAttribute('data-all-passed')
             );
 
             expect(allPassed).toBe('true');
 
             // Check detailed test results
-            const testResultsStr = await page.$eval(
-                '#bridge-test-indicator',
-                (el) => el.getAttribute('data-test-results')
+            const testResultsStr = await page.$eval('#bridge-test-indicator', (el) =>
+                el.getAttribute('data-test-results')
             );
 
             expect(testResultsStr).toBeTruthy();
@@ -301,7 +305,7 @@ describe('Bridge Injection Puppeteer Tests', () => {
         test.skip('should verify callback-to-promise bridging works correctly', async () => {
             // Capture console logs from all contexts
             const consoleLogs: string[] = [];
-            page.on('console', msg => {
+            page.on('console', (msg) => {
                 consoleLogs.push(`[${msg.type()}] ${msg.text()}`);
             });
 
@@ -314,14 +318,15 @@ describe('Bridge Injection Puppeteer Tests', () => {
             await page.click('#bridge-test-indicator');
 
             // Wait for tests to complete
-            await new Promise(resolve => setTimeout(resolve, 3000));
+            await new Promise((resolve) => setTimeout(resolve, 3000));
 
             // Verify the final status shows success
             const finalText = await page.$eval('#bridge-test-indicator', (el) => el.textContent);
 
             // Debug: Check what attributes are set
-            const testStatus = await page.$eval('#bridge-test-indicator', (el) => el.getAttribute('data-test-status'));
-            const errorAttribute = await page.$eval('#bridge-test-indicator', (el) => el.getAttribute('data-error'));
+            const errorAttribute = await page.$eval('#bridge-test-indicator', (el) =>
+                el.getAttribute('data-error')
+            );
 
             expect(finalText).toMatch(/Bridge Test: (Passed|Active)/);
 
@@ -336,16 +341,15 @@ describe('Bridge Injection Puppeteer Tests', () => {
             // Trigger multiple rapid tests
             for (let i = 0; i < 3; i++) {
                 await page.click('#bridge-test-indicator');
-                await new Promise(resolve => setTimeout(resolve, 100));
+                await new Promise((resolve) => setTimeout(resolve, 100));
             }
 
             // Wait for all tests to settle
-            await new Promise(resolve => setTimeout(resolve, 3000));
+            await new Promise((resolve) => setTimeout(resolve, 3000));
 
             // Should still show success
-            const testStatus = await page.$eval(
-                '#bridge-test-indicator',
-                (el) => el.getAttribute('data-test-status')
+            const testStatus = await page.$eval('#bridge-test-indicator', (el) =>
+                el.getAttribute('data-test-status')
             );
 
             expect(testStatus).toBe('success');
@@ -360,7 +364,7 @@ describe('Bridge Injection Puppeteer Tests', () => {
 
             // Wait for extension to fully initialize
             await page.waitForSelector('#bridge-test-indicator', { timeout: 10000 });
-            await new Promise(resolve => setTimeout(resolve, 2000));
+            await new Promise((resolve) => setTimeout(resolve, 2000));
 
             const endTime = Date.now();
             const loadTime = endTime - startTime;
@@ -380,16 +384,16 @@ describe('Bridge Injection Puppeteer Tests', () => {
                     await page.waitForSelector('#bridge-test-indicator', { timeout: 5000 });
 
                     // Wait for tests to complete
-                    await new Promise(resolve => setTimeout(resolve, 2000));
+                    await new Promise((resolve) => setTimeout(resolve, 2000));
 
-                    const testStatus = await page.$eval(
-                        '#bridge-test-indicator',
-                        (el) => el.getAttribute('data-test-status')
+                    const testStatus = await page.$eval('#bridge-test-indicator', (el) =>
+                        el.getAttribute('data-test-status')
                     );
 
                     // Should work on all domains (though some might have restrictions)
                     expect(['success', 'error']).toContain(testStatus);
                 } catch (error) {
+                    console.log(error as any);
                     // Some domains might block extension injection or timeout, that's okay
                 }
             }
