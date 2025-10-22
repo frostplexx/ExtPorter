@@ -14,7 +14,8 @@ import { FileContentUpdater } from '../utils/file_content_updater';
  */
 export class BridgeInjector implements MigrationModule {
     private static readonly BRIDGE_FILENAME = 'ext_bridge.js';
-    private static readonly CALLBACK_PATTERN = /chrome(\.\w+){2,}\((?:.*?,\s*)?(?:function\s*\(|\([^)]*\)\s*=>|\w+\s*(?:\)|,))/;
+    private static readonly CALLBACK_PATTERN =
+        /chrome(\.\w+){2,}\((?:.*?,\s*)?(?:function\s*\(|\([^)]*\)\s*=>|\w+\s*(?:\)|,))/;
 
     /**
      * Checks if an extension likely uses callback-based Chrome APIs
@@ -31,14 +32,17 @@ export class BridgeInjector implements MigrationModule {
                     }
                 } catch (error) {
                     // If we can't read the file, skip it and continue
-                    logger.warn(extension, `Failed to read file ${file.path} for bridge detection`, error);
+                    logger.warn(
+                        extension,
+                        `Failed to read file ${file.path} for bridge detection`,
+                        error
+                    );
                     continue;
                 }
             }
         }
         return false;
     }
-
 
     /**
      * Loads the bridge file content from the templates directory.
@@ -83,9 +87,12 @@ export class BridgeInjector implements MigrationModule {
     /**
      * Injects importScripts call into a service worker file.
      */
-    private static injectBridgeIntoServiceWorker(extension: Extension, serviceWorkerPath: string): boolean {
+    private static injectBridgeIntoServiceWorker(
+        extension: Extension,
+        serviceWorkerPath: string
+    ): boolean {
         // Find the service worker file in the extension
-        const serviceWorkerFile = extension.files.find(file => file.path === serviceWorkerPath);
+        const serviceWorkerFile = extension.files.find((file) => file.path === serviceWorkerPath);
 
         if (!serviceWorkerFile) {
             logger.warn(extension, `Service worker file not found: ${serviceWorkerPath}`);
@@ -116,11 +123,14 @@ export class BridgeInjector implements MigrationModule {
                 extension,
                 `Error injecting bridge into service worker ${serviceWorkerPath}: ${error instanceof Error ? error.message : String(error)}`,
                 {
-                    error: error instanceof Error ? {
-                        message: error.message,
-                        stack: error.stack,
-                        name: error.name
-                    } : String(error)
+                    error:
+                        error instanceof Error
+                            ? {
+                                  message: error.message,
+                                  stack: error.stack,
+                                  name: error.name,
+                              }
+                            : String(error),
                 }
             );
             return false;
@@ -131,7 +141,7 @@ export class BridgeInjector implements MigrationModule {
      * Injects bridge script tag into an HTML file.
      */
     private static injectBridgeIntoHTML(extension: Extension, htmlPath: string): boolean {
-        const htmlFile = extension.files.find(file => file.path === htmlPath);
+        const htmlFile = extension.files.find((file) => file.path === htmlPath);
 
         if (!htmlFile) {
             logger.warn(extension, `HTML file not found: ${htmlPath}`);
@@ -144,9 +154,13 @@ export class BridgeInjector implements MigrationModule {
             // Calculate the correct relative path from the HTML file to the bridge file
             // The bridge file is always in the root, so we need to go up directories
             const htmlDir = path.dirname(htmlPath);
-            const relativePath = htmlDir && htmlDir !== '.'
-                ? path.posix.join(...htmlDir.split(path.sep).map(() => '..'), BridgeInjector.BRIDGE_FILENAME)
-                : BridgeInjector.BRIDGE_FILENAME;
+            const relativePath =
+                htmlDir && htmlDir !== '.'
+                    ? path.posix.join(
+                          ...htmlDir.split(path.sep).map(() => '..'),
+                          BridgeInjector.BRIDGE_FILENAME
+                      )
+                    : BridgeInjector.BRIDGE_FILENAME;
 
             const scriptTag = `<script src="${relativePath}"></script>`;
 
@@ -178,11 +192,14 @@ export class BridgeInjector implements MigrationModule {
                 extension,
                 `Error injecting bridge into ${htmlPath}: ${error instanceof Error ? error.message : String(error)}`,
                 {
-                    error: error instanceof Error ? {
-                        message: error.message,
-                        stack: error.stack,
-                        name: error.name
-                    } : String(error)
+                    error:
+                        error instanceof Error
+                            ? {
+                                  message: error.message,
+                                  stack: error.stack,
+                                  name: error.name,
+                              }
+                            : String(error),
                 }
             );
             return false;
@@ -193,7 +210,6 @@ export class BridgeInjector implements MigrationModule {
      * Injects the bridge file into the manifest's script arrays.
      */
     private static injectBridgeIntoManifest(manifest: any, extension?: Extension): any {
-
         const updatedManifest = JSON.parse(JSON.stringify(manifest));
 
         // Inject into background service worker
@@ -206,7 +222,10 @@ export class BridgeInjector implements MigrationModule {
                 if (success) {
                     logger.info(extension, 'Bridge successfully injected into service worker');
                 } else {
-                    logger.warn(extension, 'Failed to inject bridge into service worker, bridge may not work in background context');
+                    logger.warn(
+                        extension,
+                        'Failed to inject bridge into service worker, bridge may not work in background context'
+                    );
                 }
             } else {
                 logger.warn(
@@ -278,7 +297,10 @@ export class BridgeInjector implements MigrationModule {
             const popupKeys = ['action', 'browser_action', 'page_action'];
             for (const key of popupKeys) {
                 if (updatedManifest[key]?.default_popup) {
-                    BridgeInjector.injectBridgeIntoHTML(extension, updatedManifest[key].default_popup);
+                    BridgeInjector.injectBridgeIntoHTML(
+                        extension,
+                        updatedManifest[key].default_popup
+                    );
                 }
             }
 
@@ -289,7 +311,10 @@ export class BridgeInjector implements MigrationModule {
 
             // Inject into sidebar action (Firefox)
             if (updatedManifest.sidebar_action?.default_panel) {
-                BridgeInjector.injectBridgeIntoHTML(extension, updatedManifest.sidebar_action.default_panel);
+                BridgeInjector.injectBridgeIntoHTML(
+                    extension,
+                    updatedManifest.sidebar_action.default_panel
+                );
             }
         }
 
@@ -303,7 +328,6 @@ export class BridgeInjector implements MigrationModule {
         const startTime = Date.now();
 
         try {
-
             // Validate extension input
             if (!extension || !extension.id || !extension.files || !extension.manifest) {
                 return new MigrationError(extension, new Error('Invalid extension structure'));
@@ -330,7 +354,10 @@ export class BridgeInjector implements MigrationModule {
             const bridgeFile = BridgeInjector.createBridgeFile();
 
             // Update manifest to include bridge
-            const updatedManifest = BridgeInjector.injectBridgeIntoManifest(extension.manifest, extension);
+            const updatedManifest = BridgeInjector.injectBridgeIntoManifest(
+                extension.manifest,
+                extension
+            );
 
             // Add bridge file to extension files
             const updatedFiles = [...extension.files, bridgeFile];
@@ -402,7 +429,7 @@ export class BridgeInjector implements MigrationModule {
      * This checks the actual file content, not just the manifest.
      */
     public static hasBridgeInHTML(extension: Extension, htmlPath: string): boolean {
-        const htmlFile = extension.files.find(file => file.path === htmlPath);
+        const htmlFile = extension.files.find((file) => file.path === htmlPath);
 
         if (!htmlFile) {
             return false;
@@ -414,7 +441,7 @@ export class BridgeInjector implements MigrationModule {
             // (could be with or without relative path)
             return content.includes(BridgeInjector.BRIDGE_FILENAME);
         } catch (error) {
-            logger.error(extension, error as any)
+            logger.error(extension, error as any);
             return false;
         }
     }

@@ -23,7 +23,7 @@ describe('InterestingnessScorer', () => {
             getBuffer: jest.fn().mockReturnValue(Buffer.from('console.log("test");')),
             getPath: jest.fn().mockReturnValue('test.js'),
             getSize: jest.fn().mockReturnValue(100),
-            getType: jest.fn().mockReturnValue('js' as any)
+            getType: jest.fn().mockReturnValue('js' as any),
         } as any;
 
         mockExtension = {
@@ -33,9 +33,9 @@ describe('InterestingnessScorer', () => {
             manifest: {
                 permissions: ['tabs'],
                 content_scripts: [{ matches: ['*://*/*'] }],
-                background: { service_worker: 'background.js' }
+                background: { service_worker: 'background.js' },
             },
-            files: [mockFile as any]
+            files: [mockFile as any],
         } as Extension;
     });
 
@@ -50,7 +50,7 @@ describe('InterestingnessScorer', () => {
                 mockExtension,
                 expect.stringContaining('Calculated interestingness score:'),
                 expect.objectContaining({
-                    breakdown: expect.any(Object)
+                    breakdown: expect.any(Object),
                 })
             );
         });
@@ -62,7 +62,7 @@ describe('InterestingnessScorer', () => {
                 ...mockExtension,
                 get files(): any {
                     throw error;
-                }
+                },
             };
 
             const result = await await InterestingnessScorer.migrate(brokenExtension);
@@ -73,7 +73,7 @@ describe('InterestingnessScorer', () => {
                 brokenExtension,
                 'Failed to calculate interestingness score',
                 expect.objectContaining({
-                    error
+                    error,
                 })
             );
         });
@@ -82,8 +82,8 @@ describe('InterestingnessScorer', () => {
             const extensionWithDangerousPerms = {
                 ...mockExtension,
                 manifest: {
-                    permissions: ['tabs', 'cookies', 'history']
-                }
+                    permissions: ['tabs', 'cookies', 'history'],
+                },
             };
 
             const result = await InterestingnessScorer.migrate(extensionWithDangerousPerms);
@@ -91,7 +91,7 @@ describe('InterestingnessScorer', () => {
 
             const extensionWithoutPerms = {
                 ...mockExtension,
-                manifest: {}
+                manifest: {},
             };
 
             const result2 = await InterestingnessScorer.migrate(extensionWithoutPerms);
@@ -120,7 +120,9 @@ describe('InterestingnessScorer', () => {
 
         it('should calculate scores for HTML content', async () => {
             mockFile.filetype = ExtFileType.HTML;
-            mockFile.getContent.mockReturnValue('<html>\n<body>\n<div>Test</div>\n</body>\n</html>');
+            mockFile.getContent.mockReturnValue(
+                '<html>\n<body>\n<div>Test</div>\n</body>\n</html>'
+            );
 
             const result = await InterestingnessScorer.migrate(mockExtension);
             const breakdown = (result as any).interestingness_breakdown;
@@ -138,7 +140,9 @@ describe('InterestingnessScorer', () => {
         });
 
         it('should detect network request patterns', async () => {
-            mockFile.getContent.mockReturnValue('fetch("http://example.com"); new XMLHttpRequest();');
+            mockFile.getContent.mockReturnValue(
+                'fetch("http://example.com"); new XMLHttpRequest();'
+            );
 
             const result = await InterestingnessScorer.migrate(mockExtension);
             const breakdown = (result as any).interestingness_breakdown;
@@ -150,8 +154,8 @@ describe('InterestingnessScorer', () => {
             const extensionWithBackground = {
                 ...mockExtension,
                 manifest: {
-                    background: { service_worker: 'background.js' }
-                }
+                    background: { service_worker: 'background.js' },
+                },
             };
 
             const result = await InterestingnessScorer.migrate(extensionWithBackground);
@@ -164,8 +168,8 @@ describe('InterestingnessScorer', () => {
             const extensionWithContentScripts = {
                 ...mockExtension,
                 manifest: {
-                    content_scripts: [{ matches: ['*://*/*'] }]
-                }
+                    content_scripts: [{ matches: ['*://*/*'] }],
+                },
             };
 
             const result = await InterestingnessScorer.migrate(extensionWithContentScripts);

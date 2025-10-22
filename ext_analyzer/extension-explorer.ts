@@ -9,7 +9,7 @@ export class ExtensionExplorer {
     private lastSearchQuery: string = '';
     private lastSelectedIndex: number = 0;
 
-    constructor() { }
+    constructor() {}
 
     async getAllExtensions(options: SearchOptions = {}): Promise<ExtensionSearchResult[]> {
         if (!Database.shared.database) throw new Error('Database not initialized');
@@ -58,10 +58,12 @@ export class ExtensionExplorer {
         //     interestingness_score: ext.interestingness_score || 0,
         //     interestingness_breakdown: ext.interestingness_breakdown,
         // }));
-        return allExtensions as any as Extension[]
+        return allExtensions as any as Extension[];
     }
 
-    async searchExtensions(extensions: ExtensionSearchResult[]): Promise<ExtensionSearchResult | null> {
+    async searchExtensions(
+        extensions: ExtensionSearchResult[]
+    ): Promise<ExtensionSearchResult | null> {
         const sortedExtensions = extensions.sort(
             (a, b) => (b.interestingness_score || 0) - (a.interestingness_score || 0)
         );
@@ -71,7 +73,12 @@ export class ExtensionExplorer {
         let selectedIndex = Math.min(this.lastSelectedIndex, filteredExtensions.length - 1);
 
         while (true) {
-            displayExtensionList(searchQuery, filteredExtensions, sortedExtensions.length, selectedIndex);
+            displayExtensionList(
+                searchQuery,
+                filteredExtensions,
+                sortedExtensions.length,
+                selectedIndex
+            );
 
             const key = await getKeypress();
             if (!key) continue;

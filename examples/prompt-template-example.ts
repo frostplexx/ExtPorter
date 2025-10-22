@@ -15,7 +15,7 @@ import {
     buildPromptFromFile,
     buildPromptFromString,
     validateTemplate,
-    getTemplatePlaceholders
+    getTemplatePlaceholders,
 } from '../migrator/features/llm';
 
 console.log('=== Prompt Template System Examples ===\n');
@@ -26,19 +26,26 @@ const template = 'Hello {{name}}, you are {{age}} years old and work as a {{job}
 const prompt1 = buildPromptFromString(template, {
     name: 'Alice',
     age: 30,
-    job: 'Software Engineer'
+    job: 'Software Engineer',
 });
 console.log(`Template: ${template}`);
 console.log(`Result: ${prompt1}\n`);
 
 // Example 2: Build prompt from file
 console.log('2. Building prompt from file:');
-const templatePath = path.join(__dirname, '..', 'ext_analyzer', 'prompts', 'extension-description.txt');
+const templatePath = path.join(
+    __dirname,
+    '..',
+    'ext_analyzer',
+    'prompts',
+    'extension-description.txt'
+);
 try {
     const prompt2 = buildPromptFromFile(templatePath, {
         extension_name: 'Example Extension',
         manifest_summary: 'Manifest.json: {"name": "Example", "version": "1.0"}',
-        extension_files: 'background.js:\nconsole.log("Hello");\n\n---\n\ncontent.js:\nconsole.log("World");'
+        extension_files:
+            'background.js:\nconsole.log("Hello");\n\n---\n\ncontent.js:\nconsole.log("World");',
     });
     console.log(`Template file: ${templatePath}`);
     console.log(`Result length: ${prompt2.length} characters`);
@@ -60,7 +67,11 @@ try {
 // Example 4: Validate template
 console.log('4. Validating template:');
 try {
-    const isValid = validateTemplate(templatePath, ['extension_name', 'manifest_summary', 'extension_files']);
+    const isValid = validateTemplate(templatePath, [
+        'extension_name',
+        'manifest_summary',
+        'extension_files',
+    ]);
     console.log(`Template is valid: ${isValid}\n`);
 } catch (error: any) {
     console.log(`Validation error: ${error.message}\n`);
@@ -96,7 +107,7 @@ const prompt6 = buildPromptFromString(complexTemplate, {
     author: 'Alice',
     loc: 150,
     code: 'function hello() { return "world"; }',
-    focus_area: 'code quality and best practices'
+    focus_area: 'code quality and best practices',
 });
 
 console.log(prompt6);

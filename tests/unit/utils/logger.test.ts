@@ -32,7 +32,7 @@ describe('Logger', () => {
             name: 'Test Extension',
             manifest_v2_path: '/test/path',
             manifest: {},
-            files: []
+            files: [],
         } as Extension;
 
         // Mock console methods
@@ -40,7 +40,7 @@ describe('Logger', () => {
             info: jest.spyOn(console, 'info').mockImplementation(() => {}),
             warn: jest.spyOn(console, 'warn').mockImplementation(() => {}),
             error: jest.spyOn(console, 'error').mockImplementation(() => {}),
-            debug: jest.spyOn(console, 'debug').mockImplementation(() => {})
+            debug: jest.spyOn(console, 'debug').mockImplementation(() => {}),
         };
 
         // Mock fs-extra
@@ -68,10 +68,9 @@ describe('Logger', () => {
 
             logger.info(mockExtension, 'Test info message', { key: 'value' });
 
-            expect(consoleSpy.info).toHaveBeenCalledWith(
-                expect.stringContaining('[INFO]'),
-                { key: 'value' }
-            );
+            expect(consoleSpy.info).toHaveBeenCalledWith(expect.stringContaining('[INFO]'), {
+                key: 'value',
+            });
         });
 
         it('should not log info when log level is error', () => {
@@ -104,10 +103,7 @@ describe('Logger', () => {
 
             logger.info(mockExtension, 'Test message');
 
-            expect(consoleSpy.info).toHaveBeenCalledWith(
-                expect.stringContaining('[INFO]'),
-                ''
-            );
+            expect(consoleSpy.info).toHaveBeenCalledWith(expect.stringContaining('[INFO]'), '');
         });
     });
 
@@ -117,10 +113,9 @@ describe('Logger', () => {
 
             logger.warn(mockExtension, 'Test warning message', { warning: true });
 
-            expect(consoleSpy.warn).toHaveBeenCalledWith(
-                expect.stringContaining('[WARNING]'),
-                { warning: true }
-            );
+            expect(consoleSpy.warn).toHaveBeenCalledWith(expect.stringContaining('[WARNING]'), {
+                warning: true,
+            });
         });
 
         it('should not log warning when log level is error', () => {
@@ -147,10 +142,9 @@ describe('Logger', () => {
 
             logger.error(mockExtension, 'Test error message', { error: 'details' });
 
-            expect(consoleSpy.error).toHaveBeenCalledWith(
-                expect.stringContaining('[ERROR]'),
-                { error: 'details' }
-            );
+            expect(consoleSpy.error).toHaveBeenCalledWith(expect.stringContaining('[ERROR]'), {
+                error: 'details',
+            });
         });
 
         it('should always log errors regardless of log level', () => {
@@ -176,10 +170,9 @@ describe('Logger', () => {
 
             logger.debug(mockExtension, 'Test debug message', { debug: true });
 
-            expect(consoleSpy.debug).toHaveBeenCalledWith(
-                expect.stringContaining('[DEBUG]'),
-                { debug: true }
-            );
+            expect(consoleSpy.debug).toHaveBeenCalledWith(expect.stringContaining('[DEBUG]'), {
+                debug: true,
+            });
         });
 
         it('should not log debug when log level is info', () => {
@@ -204,7 +197,7 @@ describe('Logger', () => {
         it('should respect log level hierarchy for info', () => {
             // Test that info logs when level is info or higher
             const levels = ['debug', 'info'];
-            levels.forEach(level => {
+            levels.forEach((level) => {
                 process.env.LOG_LEVEL = level;
                 consoleSpy.info.mockClear();
 
@@ -216,7 +209,7 @@ describe('Logger', () => {
 
         it('should not log info when level is lower', () => {
             const levels = ['warning', 'error'];
-            levels.forEach(level => {
+            levels.forEach((level) => {
                 process.env.LOG_LEVEL = level;
                 consoleSpy.info.mockClear();
 
@@ -252,8 +245,8 @@ describe('Logger', () => {
 
             // Each should have different color codes
             expect(debugCall).toContain('\x1b[36m'); // Cyan for debug
-            expect(infoCall).toContain('\x1b[32m');  // Green for info
-            expect(warnCall).toContain('\x1b[33m');  // Yellow for warning
+            expect(infoCall).toContain('\x1b[32m'); // Green for info
+            expect(warnCall).toContain('\x1b[33m'); // Yellow for warning
             expect(errorCall).toContain('\x1b[31m'); // Red for error
         });
     });

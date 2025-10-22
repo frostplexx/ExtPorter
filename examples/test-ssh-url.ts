@@ -15,7 +15,7 @@ const testUrls = [
     'ssh://user:password@example.com:54321/11434',
     'ssh://ra24mif@aranuka.plai.ifi.lmu.de:54321/11434',
     'http://localhost:11434',
-    'http://remote.com:11434'
+    'http://remote.com:11434',
 ];
 
 console.log('Testing URL formats:\n');
