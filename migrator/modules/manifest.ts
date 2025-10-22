@@ -207,21 +207,6 @@ export class MigrateManifest implements MigrationModule {
                             };
                         }
 
-                        // // Take the first script as the service worker entry point
-                        // extension.manifest['background'] = {
-                        //     service_worker: scripts[0],
-                        // };
-                        //
-                        // // Log if there are multiple scripts that need manual handling
-                        // if (scripts.length > 1) {
-                        //     logger.warn(
-                        //         extension,
-                        //         `Extension has multiple background scripts. Only using first script '${scripts[0]}' as service worker. Additional scripts`,
-                        //         {
-                        //             scripts: scripts,
-                        //         }
-                        //     );
-                        // }
                     } else {
                         // Empty scripts array - remove background entirely
                         extension.manifest['background'] = {};
