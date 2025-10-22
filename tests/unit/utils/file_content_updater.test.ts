@@ -73,7 +73,9 @@ describe('FileContentUpdater', () => {
             fs.writeFileSync(testFile, originalContent);
 
             const lazyFile = new LazyFile('unicode.js', testFile, ExtFileType.JS);
-            expect(() => FileContentUpdater.updateFileContent(lazyFile, unicodeContent)).not.toThrow();
+            expect(() =>
+                FileContentUpdater.updateFileContent(lazyFile, unicodeContent)
+            ).not.toThrow();
 
             const diskContent = fs.readFileSync(testFile, 'utf8');
             expect(diskContent).toBe(unicodeContent);
@@ -91,7 +93,9 @@ describe('FileContentUpdater', () => {
                 close: () => {},
             } as any;
 
-            expect(() => FileContentUpdater.updateFileContent(mockLazyFile, 'new content')).toThrow('no absolute path found');
+            expect(() => FileContentUpdater.updateFileContent(mockLazyFile, 'new content')).toThrow(
+                'no absolute path found'
+            );
         });
 
         it('should throw error on file write errors', () => {
@@ -105,7 +109,9 @@ describe('FileContentUpdater', () => {
                 fs.chmodSync(testFile, 0o444); // Read-only
 
                 // Should throw error due to permission error
-                expect(() => FileContentUpdater.updateFileContent(lazyFile, 'new content')).toThrow();
+                expect(() =>
+                    FileContentUpdater.updateFileContent(lazyFile, 'new content')
+                ).toThrow();
 
                 // Restore permissions for cleanup
                 fs.chmodSync(testFile, 0o644);

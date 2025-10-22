@@ -74,10 +74,10 @@ async function main() {
         if (directExtensionId) {
             // Direct access to extension
             const extensions = await explorer.getAllExtensions();
-            let ext = extensions.find(e => e.id === directExtensionId);
+            let ext = extensions.find((e) => e.id === directExtensionId);
 
             if (!ext) {
-                ext = extensions.find(e => e.mv3_extension_id === directExtensionId);
+                ext = extensions.find((e) => e.mv3_extension_id === directExtensionId);
             }
 
             if (!ext) {

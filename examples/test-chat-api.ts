@@ -9,11 +9,18 @@ import { buildChatMessagesFromFile } from '../migrator/features/llm';
 
 console.log('=== Chat API Format Test ===\n');
 
-const templatePath = path.join(__dirname, '..', 'ext_analyzer', 'prompts', 'extension-description.txt');
+const templatePath = path.join(
+    __dirname,
+    '..',
+    'ext_analyzer',
+    'prompts',
+    'extension-description.txt'
+);
 
 const messages = buildChatMessagesFromFile(templatePath, {
     extension_name: 'Example Extension',
-    manifest_summary: 'Manifest.json: {"name": "Example", "version": "1.0", "permissions": ["tabs", "storage"]}',
+    manifest_summary:
+        'Manifest.json: {"name": "Example", "version": "1.0", "permissions": ["tabs", "storage"]}',
     extension_files: `background.js:
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
     if (changeInfo.status === 'complete') {
@@ -25,7 +32,7 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
 
 content.js:
 document.body.style.border = "5px solid red";
-console.log('Content script injected');`
+console.log('Content script injected');`,
 });
 
 console.log('The code now sends these SEPARATE messages to /api/chat:\n');

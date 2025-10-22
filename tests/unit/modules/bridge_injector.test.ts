@@ -91,7 +91,9 @@ describe('BridgeInjector', () => {
             expect(result).not.toBeInstanceOf(MigrationError);
             if (!(result instanceof MigrationError)) {
                 expect(result.files).toHaveLength(3); // Original 2 + bridge file
-                expect(result.files.some(f => f.path === BridgeInjector.testHelpers.BRIDGE_FILENAME)).toBe(true);
+                expect(
+                    result.files.some((f) => f.path === BridgeInjector.testHelpers.BRIDGE_FILENAME)
+                ).toBe(true);
             }
         });
 
@@ -282,9 +284,7 @@ describe('BridgeInjector', () => {
         });
 
         it('should ignore non-JS files', () => {
-            (mockJsFile.getContent as jest.Mock).mockReturnValue(
-                'const data = "no chrome APIs";'
-            );
+            (mockJsFile.getContent as jest.Mock).mockReturnValue('const data = "no chrome APIs";');
             (mockNonJsFile.getContent as jest.Mock).mockReturnValue(
                 'chrome.tabs.query({}, function(tabs) {});' // CSS content that looks like JS
             );
@@ -339,7 +339,10 @@ describe('BridgeInjector', () => {
                 ],
             };
 
-            const result = BridgeInjector.testHelpers.injectBridgeIntoManifest(manifest, baseExtension);
+            const result = BridgeInjector.testHelpers.injectBridgeIntoManifest(
+                manifest,
+                baseExtension
+            );
 
             expect(result.content_scripts[0].js).toEqual([
                 BridgeInjector.testHelpers.BRIDGE_FILENAME,
@@ -362,7 +365,10 @@ describe('BridgeInjector', () => {
                 ],
             };
 
-            const result = BridgeInjector.testHelpers.injectBridgeIntoManifest(manifest, baseExtension);
+            const result = BridgeInjector.testHelpers.injectBridgeIntoManifest(
+                manifest,
+                baseExtension
+            );
 
             expect(result.content_scripts[0].js).toEqual([
                 BridgeInjector.testHelpers.BRIDGE_FILENAME,
@@ -384,7 +390,10 @@ describe('BridgeInjector', () => {
                 ],
             };
 
-            const result = BridgeInjector.testHelpers.injectBridgeIntoManifest(manifest, baseExtension);
+            const result = BridgeInjector.testHelpers.injectBridgeIntoManifest(
+                manifest,
+                baseExtension
+            );
 
             expect(result.content_scripts[0].js).toEqual([
                 BridgeInjector.testHelpers.BRIDGE_FILENAME,
@@ -402,7 +411,10 @@ describe('BridgeInjector', () => {
                 ],
             };
 
-            const result = BridgeInjector.testHelpers.injectBridgeIntoManifest(manifest, baseExtension);
+            const result = BridgeInjector.testHelpers.injectBridgeIntoManifest(
+                manifest,
+                baseExtension
+            );
 
             expect(result.content_scripts[0]).toEqual({
                 matches: ['<all_urls>'],
@@ -421,7 +433,10 @@ describe('BridgeInjector', () => {
                 ],
             };
 
-            const result = BridgeInjector.testHelpers.injectBridgeIntoManifest(manifest, baseExtension);
+            const result = BridgeInjector.testHelpers.injectBridgeIntoManifest(
+                manifest,
+                baseExtension
+            );
 
             expect(result.web_accessible_resources).toContainEqual({
                 resources: [BridgeInjector.testHelpers.BRIDGE_FILENAME],
@@ -440,9 +455,14 @@ describe('BridgeInjector', () => {
                 ],
             };
 
-            const result = BridgeInjector.testHelpers.injectBridgeIntoManifest(manifest, baseExtension);
+            const result = BridgeInjector.testHelpers.injectBridgeIntoManifest(
+                manifest,
+                baseExtension
+            );
 
-            expect(result.web_accessible_resources).toContain(BridgeInjector.testHelpers.BRIDGE_FILENAME);
+            expect(result.web_accessible_resources).toContain(
+                BridgeInjector.testHelpers.BRIDGE_FILENAME
+            );
         });
 
         it('should not duplicate in existing MV3 web_accessible_resources', () => {
@@ -457,10 +477,15 @@ describe('BridgeInjector', () => {
                 ],
             };
 
-            const result = BridgeInjector.testHelpers.injectBridgeIntoManifest(manifest, baseExtension);
+            const result = BridgeInjector.testHelpers.injectBridgeIntoManifest(
+                manifest,
+                baseExtension
+            );
 
             expect(result.web_accessible_resources).toHaveLength(1);
-            expect(result.web_accessible_resources[0].resources).toContain(BridgeInjector.testHelpers.BRIDGE_FILENAME);
+            expect(result.web_accessible_resources[0].resources).toContain(
+                BridgeInjector.testHelpers.BRIDGE_FILENAME
+            );
         });
 
         it('should not duplicate in existing MV2 web_accessible_resources', () => {
@@ -470,7 +495,10 @@ describe('BridgeInjector', () => {
                 web_accessible_resources: [BridgeInjector.testHelpers.BRIDGE_FILENAME, 'other.js'],
             };
 
-            const result = BridgeInjector.testHelpers.injectBridgeIntoManifest(manifest, baseExtension);
+            const result = BridgeInjector.testHelpers.injectBridgeIntoManifest(
+                manifest,
+                baseExtension
+            );
 
             expect(result.web_accessible_resources).toEqual([
                 BridgeInjector.testHelpers.BRIDGE_FILENAME,
@@ -500,7 +528,10 @@ describe('BridgeInjector', () => {
                 },
             };
 
-            const result = BridgeInjector.testHelpers.injectBridgeIntoManifest(manifest, extensionWithServiceWorker);
+            const result = BridgeInjector.testHelpers.injectBridgeIntoManifest(
+                manifest,
+                extensionWithServiceWorker
+            );
 
             expect(result).toEqual(manifest); // Manifest shouldn't change
             expect(mockFileContentUpdater.updateFileContent).toHaveBeenCalledWith(
@@ -548,7 +579,10 @@ describe('BridgeInjector', () => {
                 },
             };
 
-            const result = BridgeInjector.testHelpers.injectBridgeIntoManifest(manifest, extensionWithServiceWorker);
+            const result = BridgeInjector.testHelpers.injectBridgeIntoManifest(
+                manifest,
+                extensionWithServiceWorker
+            );
 
             expect(result).toEqual(manifest); // Should still return manifest even if injection fails
         });
@@ -559,7 +593,10 @@ describe('BridgeInjector', () => {
                 version: '1.0',
             };
 
-            const result = BridgeInjector.testHelpers.injectBridgeIntoManifest(manifest, baseExtension);
+            const result = BridgeInjector.testHelpers.injectBridgeIntoManifest(
+                manifest,
+                baseExtension
+            );
 
             expect(result).toEqual(manifest);
         });
@@ -574,7 +611,10 @@ describe('BridgeInjector', () => {
                 ],
             };
 
-            const result = BridgeInjector.testHelpers.injectBridgeIntoManifest(manifest, baseExtension);
+            const result = BridgeInjector.testHelpers.injectBridgeIntoManifest(
+                manifest,
+                baseExtension
+            );
 
             expect(result).not.toBe(manifest);
             expect(result.content_scripts).not.toBe(manifest.content_scripts);
@@ -602,7 +642,10 @@ describe('BridgeInjector', () => {
         it('should provide getSize method', () => {
             const bridgeFile = BridgeInjector.testHelpers.createBridgeFile();
 
-            const expectedSize = Buffer.byteLength('// Bridge content\nconst bridge = "test";', 'utf8');
+            const expectedSize = Buffer.byteLength(
+                '// Bridge content\nconst bridge = "test";',
+                'utf8'
+            );
             expect(bridgeFile.getSize()).toBe(expectedSize);
         });
 
@@ -621,7 +664,9 @@ describe('BridgeInjector', () => {
         it('should store bridge content internally', () => {
             const bridgeFile = BridgeInjector.testHelpers.createBridgeFile();
 
-            expect((bridgeFile as any)._bridgeContent).toBe('// Bridge content\nconst bridge = "test";');
+            expect((bridgeFile as any)._bridgeContent).toBe(
+                '// Bridge content\nconst bridge = "test";'
+            );
         });
     });
 
@@ -972,7 +1017,10 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
             };
 
             expect(() =>
-                BridgeInjector.testHelpers.injectBridgeIntoManifest(malformedManifest, baseExtension)
+                BridgeInjector.testHelpers.injectBridgeIntoManifest(
+                    malformedManifest,
+                    baseExtension
+                )
             ).not.toThrow();
         });
 
@@ -994,15 +1042,20 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
         it('should handle very large extensions', () => {
             const largeExtension = {
                 ...baseExtension,
-                files: Array(1000).fill(0).map((_, i) => ({
-                    path: `file${i}.js`,
-                    filetype: ExtFileType.JS,
-                    getContent: () => 'const x = 1;',
-                    getAST: jest.fn(),
-                    getSize: () => 100,
-                    getBuffer: jest.fn(),
-                    close: jest.fn(),
-                } as unknown as LazyFile)),
+                files: Array(1000)
+                    .fill(0)
+                    .map(
+                        (_, i) =>
+                            ({
+                                path: `file${i}.js`,
+                                filetype: ExtFileType.JS,
+                                getContent: () => 'const x = 1;',
+                                getAST: jest.fn(),
+                                getSize: () => 100,
+                                getBuffer: jest.fn(),
+                                close: jest.fn(),
+                            }) as unknown as LazyFile
+                    ),
             };
 
             const result = BridgeInjector.migrate(largeExtension);
@@ -1082,7 +1135,9 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
             if (!(result instanceof MigrationError)) {
                 // Should add bridge file
                 expect(result.files).toHaveLength(3);
-                expect(result.files.some(f => f.path === BridgeInjector.testHelpers.BRIDGE_FILENAME)).toBe(true);
+                expect(
+                    result.files.some((f) => f.path === BridgeInjector.testHelpers.BRIDGE_FILENAME)
+                ).toBe(true);
 
                 // Should inject bridge into all content scripts
                 expect(result.manifest.content_scripts[0].js).toEqual([
@@ -1182,11 +1237,13 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
             const mockServiceWorkerFile = {
                 path: 'background.js',
                 filetype: ExtFileType.JS,
-                getContent: jest.fn().mockReturnValue(`
+                getContent: jest.fn().mockReturnValue(
+                    `
 chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
   // Handle messages
 });
-                `.trim()),
+                `.trim()
+                ),
                 getAST: jest.fn(),
                 getSize: jest.fn().mockReturnValue(500),
                 getBuffer: jest.fn(),
@@ -1222,7 +1279,9 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
                 // Should inject bridge into service worker
                 expect(mockFileContentUpdater.updateFileContent).toHaveBeenCalledWith(
                     mockServiceWorkerFile,
-                    expect.stringContaining(`importScripts('${BridgeInjector.testHelpers.BRIDGE_FILENAME}');`)
+                    expect.stringContaining(
+                        `importScripts('${BridgeInjector.testHelpers.BRIDGE_FILENAME}');`
+                    )
                 );
 
                 // Should inject bridge into content scripts

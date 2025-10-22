@@ -211,7 +211,7 @@ describe('Migration Pipeline Integration Tests', () => {
                 try {
                     file.close();
                 } catch (error) {
-                    console.log(error as any)
+                    console.log(error as any);
                     // Expected for missing files
                 }
             });
@@ -228,10 +228,10 @@ describe('Migration Pipeline Integration Tests', () => {
 
             // Run pipeline on both extensions
             const result1 = ResourceDownloader.migrate(
-                await MigrateManifest.migrate(extension1) as Extension
+                (await MigrateManifest.migrate(extension1)) as Extension
             );
             const result2 = ResourceDownloader.migrate(
-                await MigrateManifest.migrate(extension2) as Extension
+                (await MigrateManifest.migrate(extension2)) as Extension
             );
 
             expect(result1).not.toBeInstanceOf(MigrationError);

@@ -22,7 +22,10 @@ console.log();
 if (config.ssh) {
     console.log('✓ SSH Configuration Found');
     console.log('  - Will tunnel:', `${config.ssh.host}:${config.ssh.port}`);
-    console.log('  - Port forwarding:', `localhost:${config.ssh.localPort} -> remote localhost:${config.ssh.remotePort}`);
+    console.log(
+        '  - Port forwarding:',
+        `localhost:${config.ssh.localPort} -> remote localhost:${config.ssh.remotePort}`
+    );
 } else {
     console.log('ℹ No SSH Configuration (using direct connection)');
 }

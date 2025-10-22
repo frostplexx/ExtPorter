@@ -86,13 +86,19 @@ export class WebRequestMigrator implements MigrationModule {
             }
 
             const duration = Date.now() - startTime;
-            logger.info(extension, 'Blocking webRequest to declarativeNetRequest migration completed', {
-                staticRules: staticRules.length,
-                duration,
-            });
+            logger.info(
+                extension,
+                'Blocking webRequest to declarativeNetRequest migration completed',
+                {
+                    staticRules: staticRules.length,
+                    duration,
+                }
+            );
 
             // Update interestingness_breakdown.webRequest_to_dnr_migrations if static rules were generated
-            const updatedBreakdown = extension.interestingness_breakdown ? { ...extension.interestingness_breakdown } : undefined;
+            const updatedBreakdown = extension.interestingness_breakdown
+                ? { ...extension.interestingness_breakdown }
+                : undefined;
             if (staticRules.length > 0 && updatedBreakdown) {
                 if (typeof updatedBreakdown.webRequest_to_dnr_migrations === 'number') {
                     updatedBreakdown.webRequest_to_dnr_migrations += 1;
@@ -258,7 +264,10 @@ export class WebRequestMigrator implements MigrationModule {
 
         // Extract callback body
         let callbackBody: any;
-        if (callbackNode.type === 'FunctionExpression' || callbackNode.type === 'ArrowFunctionExpression') {
+        if (
+            callbackNode.type === 'FunctionExpression' ||
+            callbackNode.type === 'ArrowFunctionExpression'
+        ) {
             callbackBody = callbackNode.body;
         } else if (callbackNode.type === 'Identifier') {
             // Callback is a named function - we need to find it
@@ -307,7 +316,11 @@ export class WebRequestMigrator implements MigrationModule {
             }
 
             // Loops
-            if (node.type === 'ForStatement' || node.type === 'WhileStatement' || node.type === 'DoWhileStatement') {
+            if (
+                node.type === 'ForStatement' ||
+                node.type === 'WhileStatement' ||
+                node.type === 'DoWhileStatement'
+            ) {
                 patterns.push('loops');
             }
 
@@ -326,9 +339,12 @@ export class WebRequestMigrator implements MigrationModule {
                     const objectName = callee.object && callee.object.name;
                     const propertyName = callee.property && callee.property.name;
                     if (
-                        (objectName === 'axios' && (propertyName === 'get' || propertyName === 'post')) ||
-                        (objectName === 'http' && (propertyName === 'get' || propertyName === 'post')) ||
-                        (objectName === 'https' && (propertyName === 'get' || propertyName === 'post'))
+                        (objectName === 'axios' &&
+                            (propertyName === 'get' || propertyName === 'post')) ||
+                        (objectName === 'http' &&
+                            (propertyName === 'get' || propertyName === 'post')) ||
+                        (objectName === 'https' &&
+                            (propertyName === 'get' || propertyName === 'post'))
                     ) {
                         patterns.push('external API/database calls');
                     }
@@ -346,13 +362,21 @@ export class WebRequestMigrator implements MigrationModule {
                 const isNonLiteral = node.init.type !== 'Literal';
                 // Check if initializer references callback parameter (e.g., 'details')
                 let referencesCallbackParam = false;
-                if (isNonLiteral && node.init.type === 'Identifier' && node.init.name === 'details') {
+                if (
+                    isNonLiteral &&
+                    node.init.type === 'Identifier' &&
+                    node.init.name === 'details'
+                ) {
                     referencesCallbackParam = true;
                 }
                 // Also check for MemberExpression like details.url, details.method, etc.
-                if (isNonLiteral && node.init.type === 'MemberExpression' &&
-                    node.init.object && node.init.object.type === 'Identifier' &&
-                    node.init.object.name === 'details') {
+                if (
+                    isNonLiteral &&
+                    node.init.type === 'MemberExpression' &&
+                    node.init.object &&
+                    node.init.object.type === 'Identifier' &&
+                    node.init.object.name === 'details'
+                ) {
                     referencesCallbackParam = true;
                 }
                 if (isNonLiteral || referencesCallbackParam) {
@@ -387,12 +411,14 @@ export class WebRequestMigrator implements MigrationModule {
                 condition.resourceTypes = resourceTypes;
             }
 
-            return [{
-                id: ruleId,
-                priority: 1,
-                condition,
-                action,
-            }];
+            return [
+                {
+                    id: ruleId,
+                    priority: 1,
+                    condition,
+                    action,
+                },
+            ];
         }
 
         // Create one rule per URL pattern
@@ -422,7 +448,10 @@ export class WebRequestMigrator implements MigrationModule {
      * Extract filter information from webRequest filter
      * Returns all URL patterns and resource types
      */
-    private static extractFilterInfo(usage: WebRequestUsage): { urlPatterns: string[]; resourceTypes: ResourceType[] } {
+    private static extractFilterInfo(usage: WebRequestUsage): {
+        urlPatterns: string[];
+        resourceTypes: ResourceType[];
+    } {
         const filter = usage.filter;
         const urlPatterns: string[] = [];
         const resourceTypes: ResourceType[] = [];
@@ -475,7 +504,10 @@ export class WebRequestMigrator implements MigrationModule {
         let returnAction: string | null = null;
         let redirectUrl: string | null = null;
 
-        if (callback && (callback.type === 'FunctionExpression' || callback.type === 'ArrowFunctionExpression')) {
+        if (
+            callback &&
+            (callback.type === 'FunctionExpression' || callback.type === 'ArrowFunctionExpression')
+        ) {
             const body = callback.body;
 
             // Handle ArrowFunctionExpression with concise body (not a BlockStatement)
@@ -498,7 +530,10 @@ export class WebRequestMigrator implements MigrationModule {
                         if (prop.key?.name === 'redirectUrl' || prop.key?.value === 'redirectUrl') {
                             returnAction = 'redirect';
                             // Extract the literal URL value
-                            if (prop.value.type === 'Literal' && typeof prop.value.value === 'string') {
+                            if (
+                                prop.value.type === 'Literal' &&
+                                typeof prop.value.value === 'string'
+                            ) {
                                 redirectUrl = prop.value.value;
                             }
                         }
@@ -513,15 +548,24 @@ export class WebRequestMigrator implements MigrationModule {
                             // Check for cancel: true (blocking)
                             for (const prop of arg.properties) {
                                 if (prop.key?.name === 'cancel' || prop.key?.value === 'cancel') {
-                                    if (prop.value.type === 'Literal' && prop.value.value === true) {
+                                    if (
+                                        prop.value.type === 'Literal' &&
+                                        prop.value.value === true
+                                    ) {
                                         returnAction = 'block';
                                     }
                                 }
                                 // Check for redirectUrl (redirect)
-                                if (prop.key?.name === 'redirectUrl' || prop.key?.value === 'redirectUrl') {
+                                if (
+                                    prop.key?.name === 'redirectUrl' ||
+                                    prop.key?.value === 'redirectUrl'
+                                ) {
                                     returnAction = 'redirect';
                                     // Extract the literal URL value
-                                    if (prop.value.type === 'Literal' && typeof prop.value.value === 'string') {
+                                    if (
+                                        prop.value.type === 'Literal' &&
+                                        typeof prop.value.value === 'string'
+                                    ) {
                                         redirectUrl = prop.value.value;
                                     }
                                 }
@@ -538,7 +582,10 @@ export class WebRequestMigrator implements MigrationModule {
         } else if (returnAction === 'redirect') {
             // Use the extracted redirect URL if available, otherwise log a warning and skip rule creation
             if (!redirectUrl) {
-                logger.warn(extension, 'Skipping redirect rule: redirectUrl is not a literal and cannot be migrated safely.');
+                logger.warn(
+                    extension,
+                    'Skipping redirect rule: redirectUrl is not a literal and cannot be migrated safely.'
+                );
                 return null;
             }
             return { type: RuleActionType.REDIRECT, redirect: { url: redirectUrl } };

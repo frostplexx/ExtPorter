@@ -16,7 +16,7 @@ export class Database {
     private isShuttingDown: boolean = false;
     public static shared = new Database();
 
-    private constructor() { }
+    private constructor() {}
 
     async init() {
         if (!process.env.MONGODB_URI) {
@@ -186,7 +186,6 @@ export class Database {
 
     async close() {
         if (this.client) {
-
             // Flush all pending logs before shutting down
             await logger.flush();
 
@@ -236,10 +235,7 @@ export class Database {
             // Use $addToSet to add the tag only if it doesn't already exist
             const result = await this.database
                 .collection(Collections.EXTENSIONS)
-                .updateOne(
-                    { id: extension.id },
-                    { $addToSet: { tags: tag } }
-                );
+                .updateOne({ id: extension.id }, { $addToSet: { tags: tag } });
 
             if (result.matchedCount === 0) {
                 logger.error(
@@ -275,10 +271,7 @@ export class Database {
             // Use $pull to remove the tag from the array
             const result = await this.database
                 .collection(Collections.EXTENSIONS)
-                .updateOne(
-                    { id: extension.id },
-                    { $pull: { tags: tag } } as any
-                );
+                .updateOne({ id: extension.id }, { $pull: { tags: tag } } as any);
 
             if (result.matchedCount === 0) {
                 logger.error(
@@ -291,7 +284,10 @@ export class Database {
             if (result.modifiedCount > 0) {
                 logger.debug(extension, `Removed tag ${tag} from extension ${extension.name}`);
             } else {
-                logger.debug(extension, `Tag ${tag} was not present on extension ${extension.name}`);
+                logger.debug(
+                    extension,
+                    `Tag ${tag} was not present on extension ${extension.name}`
+                );
             }
 
             return result;

@@ -28,15 +28,13 @@ function testBackgroundCommunication(indicator) {
         indicator.textContent = 'Bridge Test: Sending...';
         indicator.setAttribute('data-test-status', 'sending');
 
-        chrome.runtime.sendMessage(
-            { type: 'RUN_TESTS' },
-            function(response) {
-                if (chrome.runtime.lastError) {
-                    indicator.textContent = 'Bridge Test: Error';
-                    indicator.style.background = '#d32f2f';
-                    indicator.setAttribute('data-test-status', 'error');
-                    indicator.setAttribute('data-error', chrome.runtime.lastError.message);
-                } else if (response && response.success) {
+        chrome.runtime.sendMessage({ type: 'RUN_TESTS' }, function (response) {
+            if (chrome.runtime.lastError) {
+                indicator.textContent = 'Bridge Test: Error';
+                indicator.style.background = '#d32f2f';
+                indicator.setAttribute('data-test-status', 'error');
+                indicator.setAttribute('data-error', chrome.runtime.lastError.message);
+            } else if (response && response.success) {
                 indicator.textContent = 'Bridge Test: Active';
                 indicator.style.background = '#388e3c';
                 indicator.setAttribute('data-test-status', 'success');
@@ -45,7 +43,7 @@ function testBackgroundCommunication(indicator) {
                 setTimeout(() => {
                     chrome.runtime.sendMessage(
                         { type: 'GET_TEST_RESULTS' },
-                        function(finalResponse) {
+                        function (finalResponse) {
                             if (finalResponse && finalResponse.results) {
                                 const results = finalResponse.results;
                                 const allPassed =
@@ -54,8 +52,14 @@ function testBackgroundCommunication(indicator) {
                                     results.storageGet?.matches &&
                                     results.tabsQuery?.success;
 
-                                indicator.setAttribute('data-test-results', JSON.stringify(results));
-                                indicator.setAttribute('data-all-passed', allPassed ? 'true' : 'false');
+                                indicator.setAttribute(
+                                    'data-test-results',
+                                    JSON.stringify(results)
+                                );
+                                indicator.setAttribute(
+                                    'data-all-passed',
+                                    allPassed ? 'true' : 'false'
+                                );
 
                                 if (allPassed) {
                                     indicator.textContent = 'Bridge Test: Passed';
@@ -73,8 +77,7 @@ function testBackgroundCommunication(indicator) {
                 indicator.style.background = '#f57c00';
                 indicator.setAttribute('data-test-status', 'no-response');
             }
-            }
-        );
+        });
     } catch (error) {
         indicator.textContent = 'Bridge Test: Exception';
         indicator.style.background = '#d32f2f';
@@ -85,18 +88,18 @@ function testBackgroundCommunication(indicator) {
 
 // Storage test in content script
 function testContentStorage(callback) {
-    chrome.storage.local.set({ contentTest: 'contentValue' }, function() {
+    chrome.storage.local.set({ contentTest: 'contentValue' }, function () {
         if (chrome.runtime.lastError) {
             callback({ success: false, error: chrome.runtime.lastError.message });
         } else {
-            chrome.storage.local.get(['contentTest'], function(result) {
+            chrome.storage.local.get(['contentTest'], function (result) {
                 if (chrome.runtime.lastError) {
                     callback({ success: false, error: chrome.runtime.lastError.message });
                 } else {
                     callback({
                         success: true,
                         value: result.contentTest,
-                        matches: result.contentTest === 'contentValue'
+                        matches: result.contentTest === 'contentValue',
                     });
                 }
             });
@@ -109,7 +112,7 @@ function initialize() {
     const indicator = createTestIndicator();
 
     // Test content script storage first
-    testContentStorage(function(contentResult) {
+    testContentStorage(function (contentResult) {
         indicator.setAttribute('data-content-storage', JSON.stringify(contentResult));
 
         // Then test background communication
@@ -117,7 +120,7 @@ function initialize() {
     });
 
     // Add click handler for manual testing
-    indicator.addEventListener('click', function() {
+    indicator.addEventListener('click', function () {
         testBackgroundCommunication(indicator);
     });
 }

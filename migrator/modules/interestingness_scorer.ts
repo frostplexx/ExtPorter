@@ -319,7 +319,10 @@ export class InterestingnessScorer implements MigrationModule {
     /**
      * Adds feature/characteristic tags based on the interestingness breakdown
      */
-    private static async addFeatureTags(extension: Extension, breakdown: InterestingnessBreakdown): Promise<void> {
+    private static async addFeatureTags(
+        extension: Extension,
+        breakdown: InterestingnessBreakdown
+    ): Promise<void> {
         const manifest = extension.manifest;
 
         // Initialize tags array if it doesn't exist
@@ -328,7 +331,7 @@ export class InterestingnessScorer implements MigrationModule {
         }
 
         const addTag = (tag: Tags) => {
-            const tagName = Tags[tag];  // Convert enum value to string name
+            const tagName = Tags[tag]; // Convert enum value to string name
             if (!extension.tags!.includes(tagName)) {
                 extension.tags!.push(tagName);
             }
@@ -386,9 +389,13 @@ export class InterestingnessScorer implements MigrationModule {
                     const content = file.getContent();
 
                     // Check for webpack
-                    if (content.includes('__webpack_require__') ||
+                    if (
+                        content.includes('__webpack_require__') ||
                         content.includes('webpackChunk') ||
-                        /\(\d+,\s*function\s*\(\s*\w+,\s*\w+,\s*\w+\s*\)/.test(content.substring(0, 10000))) {
+                        /\(\d+,\s*function\s*\(\s*\w+,\s*\w+,\s*\w+\s*\)/.test(
+                            content.substring(0, 10000)
+                        )
+                    ) {
                         hasWebpack = true;
                     }
 

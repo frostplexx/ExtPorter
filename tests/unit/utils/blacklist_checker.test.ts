@@ -23,10 +23,10 @@ describe('BlacklistChecker', () => {
                 'chunk.12345.js',
                 'vendor.chunk.js',
                 'app.a1b2c3d4.js',
-                'main.f7e8d9c2.js'
+                'main.f7e8d9c2.js',
             ];
 
-            testCases.forEach(filename => {
+            testCases.forEach((filename) => {
                 const result = blacklistChecker.isFileBlacklisted(filename);
                 expect(result.isBlacklisted).toBe(true);
                 expect(result.reason).toMatch(/bundle|webpack|chunk|hashed/i);
@@ -38,10 +38,10 @@ describe('BlacklistChecker', () => {
                 'jquery.min.js',
                 'lodash.js',
                 'react.development.js',
-                'vue.runtime.js'
+                'vue.runtime.js',
             ];
 
-            libraryFiles.forEach(filename => {
+            libraryFiles.forEach((filename) => {
                 const result = blacklistChecker.isFileBlacklisted(filename);
                 expect(result.isBlacklisted).toBe(true);
             });
@@ -53,10 +53,10 @@ describe('BlacklistChecker', () => {
                 'content.js',
                 'popup.js',
                 'options.js',
-                'utils.js'
+                'utils.js',
             ];
 
-            regularFiles.forEach(filename => {
+            regularFiles.forEach((filename) => {
                 const result = blacklistChecker.isFileBlacklisted(filename);
                 expect(result.isBlacklisted).toBe(false);
             });
@@ -151,7 +151,10 @@ describe('BlacklistChecker', () => {
                 };
             `;
 
-            const result = blacklistChecker.isFileBlacklisted('bundle.js', multipleSignaturesContent);
+            const result = blacklistChecker.isFileBlacklisted(
+                'bundle.js',
+                multipleSignaturesContent
+            );
             expect(result.isBlacklisted).toBe(true);
             expect(result.reason).toContain('webpack bundle signatures');
         });
@@ -161,7 +164,9 @@ describe('BlacklistChecker', () => {
         it('should only check first 10KB of content for webpack signatures', () => {
             // Create content where webpack signatures appear after 10KB
             const padding = 'a'.repeat(BlacklistChecker.MAX_FILE_SIZE + 500); // More than 10KB
-            const webpackContent = padding + `
+            const webpackContent =
+                padding +
+                `
                 __webpack_require__("module");
                 webpackChunk.push([123]);
             `;
@@ -172,7 +177,8 @@ describe('BlacklistChecker', () => {
         });
 
         it('should detect webpack signatures within first 10KB', () => {
-            const webpackContent = `
+            const webpackContent =
+                `
                 __webpack_require__("module");
                 webpackChunk.push([123]);
             ` + 'a'.repeat(10000); // Add padding after signatures
@@ -232,7 +238,10 @@ describe('BlacklistChecker', () => {
                 /******/        modules[moduleId].call(module.exports, module, module.exports, __webpack_require__);
             `;
 
-            const result = blacklistChecker.isFileBlacklisted('static/js/main.chunk.js', craWebpackContent);
+            const result = blacklistChecker.isFileBlacklisted(
+                'static/js/main.chunk.js',
+                craWebpackContent
+            );
             expect(result.isBlacklisted).toBe(true);
         });
 
@@ -264,7 +273,10 @@ describe('BlacklistChecker', () => {
                 });
             `;
 
-            const result = blacklistChecker.isFileBlacklisted('background-compiled.js', extensionWebpackContent);
+            const result = blacklistChecker.isFileBlacklisted(
+                'background-compiled.js',
+                extensionWebpackContent
+            );
             expect(result.isBlacklisted).toBe(true);
             expect(result.reason).toContain('webpack bundle signatures');
         });

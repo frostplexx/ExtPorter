@@ -19,26 +19,29 @@ export class ChromeTester {
     //     timestamp: ""
     // }
 
-    constructor() { }
+    constructor() {}
 
     // fetches the path of the chrome binary
     private getChromePath(latest: boolean): string {
-
         if (process.env.IN_NIX_SHELL) {
             if (latest) {
                 if (!process.env.CHROME_LATESTS) {
-                    throw new Error("CHROME_LATESTS environment variable is not set. Please ensure your flake.nix exports CHROME_LATESTS.")
+                    throw new Error(
+                        'CHROME_LATESTS environment variable is not set. Please ensure your flake.nix exports CHROME_LATESTS.'
+                    );
                 }
-                return `${process.env.CHROME_LATESTS}/Applications/Google Chrome.app/Contents/MacOS/Google Chrome`
+                return `${process.env.CHROME_LATESTS}/Applications/Google Chrome.app/Contents/MacOS/Google Chrome`;
             } else {
                 if (!process.env.CHROME_138) {
-                    throw new Error("CHROME_138 environment variable is not set. Please ensure your flake.nix exports CHROME_138.")
+                    throw new Error(
+                        'CHROME_138 environment variable is not set. Please ensure your flake.nix exports CHROME_138.'
+                    );
                 }
-                return `${process.env.CHROME_138}/Applications/Google Chrome.app/Contents/MacOS/Google Chrome`
+                return `${process.env.CHROME_138}/Applications/Google Chrome.app/Contents/MacOS/Google Chrome`;
             }
         } else {
             // TODO
-            throw new Error("Not a nix shell! Not implemented")
+            throw new Error('Not a nix shell! Not implemented');
         }
     }
 
@@ -105,7 +108,12 @@ export class ChromeTester {
      * @param{External} extension that should be loaded
      * @param{number} maxRetries maximum number of retry attempts
      */
-    async initBrowser(extension: Extension, maxRetries: number = 3, is_mv_2: boolean = false, override_headless?: boolean) {
+    async initBrowser(
+        extension: Extension,
+        maxRetries: number = 3,
+        is_mv_2: boolean = false,
+        override_headless?: boolean
+    ) {
         // Close any existing browser first to prevent conflicts
         if (this.browser) {
             logger.debug(extension, 'Closing existing browser before launching new one');
@@ -141,8 +149,8 @@ export class ChromeTester {
                     headless: override_headless
                         ? false
                         : ENV_LOG_LEVEL.toLowerCase() == 'debug'
-                            ? false
-                            : (process.env.PUPPETEER_HEADLESS as boolean | undefined) || true,
+                          ? false
+                          : (process.env.PUPPETEER_HEADLESS as boolean | undefined) || true,
                     pipe: true, // Use WebSocket instead of IPC pipes for better performance
                     devtools: ENV_LOG_LEVEL.toLowerCase() == 'debug', // Only open devtools in debug mode
                     executablePath: this.getChromePath(!is_mv_2),
@@ -265,7 +273,7 @@ export class ChromeTester {
             try {
                 // Close all pages first to clean up gracefully
                 const pages = await this.browser.pages();
-                await Promise.all(pages.map((page) => page.close().catch(() => { })));
+                await Promise.all(pages.map((page) => page.close().catch(() => {})));
 
                 await this.browser.close();
             } catch (error) {

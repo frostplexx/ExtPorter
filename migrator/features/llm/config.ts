@@ -13,7 +13,8 @@ dotenv.config();
 function parseSSHUrl(url: string): SSHConfig | null {
     try {
         // Match ssh://[user[:password]@]host[:port][/remotePath]
-        const sshUrlPattern = /^ssh:\/\/(?:([^:@]+)(?::([^@]+))?@)?([^:/]+)(?::(\d+))?(?:\/(\d+))?$/;
+        const sshUrlPattern =
+            /^ssh:\/\/(?:([^:@]+)(?::([^@]+))?@)?([^:/]+)(?::(\d+))?(?:\/(\d+))?$/;
         const match = url.match(sshUrlPattern);
 
         if (!match) {
@@ -23,7 +24,9 @@ function parseSSHUrl(url: string): SSHConfig | null {
         const [, username, password, host, sshPort, remotePort] = match;
 
         if (!username || !host) {
-            console.warn('Warning: SSH URL must include username and host (ssh://user@host:port/remotePort)');
+            console.warn(
+                'Warning: SSH URL must include username and host (ssh://user@host:port/remotePort)'
+            );
             return null;
         }
 
@@ -32,7 +35,9 @@ function parseSSHUrl(url: string): SSHConfig | null {
         const envPassword = process.env.SSH_PASSWORD;
 
         if (!password && !privateKeyPath && !envPassword) {
-            console.warn('Warning: SSH requires password in URL, SSH_PASSWORD, or SSH_PRIVATE_KEY_PATH environment variable');
+            console.warn(
+                'Warning: SSH requires password in URL, SSH_PASSWORD, or SSH_PRIVATE_KEY_PATH environment variable'
+            );
             return null;
         }
 
@@ -51,7 +56,7 @@ function parseSSHUrl(url: string): SSHConfig | null {
             password: password || process.env.SSH_PASSWORD,
             privateKeyPath,
             remotePort: parseInt(remotePort || '11434', 10),
-            localPort
+            localPort,
         };
     } catch (error) {
         console.warn('Warning: Failed to parse SSH URL:', error);
@@ -69,7 +74,7 @@ export function loadLLMConfig(): RemoteLLMConfig {
 
     const config: RemoteLLMConfig = {
         endpoint,
-        model
+        model,
     };
 
     // Check if endpoint is an SSH URL
@@ -110,7 +115,9 @@ export function loadSSHConfig(): SSHConfig | null {
 
     // Require either password or private key
     if (!password && !privateKeyPath) {
-        console.warn('Warning: SSH configuration requires either SSH_PASSWORD or SSH_PRIVATE_KEY_PATH');
+        console.warn(
+            'Warning: SSH configuration requires either SSH_PASSWORD or SSH_PRIVATE_KEY_PATH'
+        );
         return null;
     }
 
@@ -130,7 +137,7 @@ export function loadSSHConfig(): SSHConfig | null {
         password,
         privateKeyPath,
         remotePort,
-        localPort
+        localPort,
     };
 }
 
@@ -157,7 +164,9 @@ export function getConfigSummary(): string {
         lines.push(`    Host: ${config.ssh.host}:${config.ssh.port}`);
         lines.push(`    Username: ${config.ssh.username}`);
         lines.push(`    Auth: ${config.ssh.privateKeyPath ? 'Private Key' : 'Password'}`);
-        lines.push(`    Tunnel: localhost:${config.ssh.localPort} -> remote localhost:${config.ssh.remotePort}`);
+        lines.push(
+            `    Tunnel: localhost:${config.ssh.localPort} -> remote localhost:${config.ssh.remotePort}`
+        );
     } else {
         lines.push('  SSH Tunnel: Disabled');
     }
