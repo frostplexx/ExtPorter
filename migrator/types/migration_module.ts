@@ -25,7 +25,7 @@ export abstract class MigrationModule {
     public static migrate(
         extension: Extension
     ): Promise<Extension | MigrationError> | Extension | MigrationError {
-        throw new Error(`Method must be implemented by a subclass of MigrationModule`);
+        throw new Error(`Method must be implemented by subclass - ${extension}`);
     }
 }
 
