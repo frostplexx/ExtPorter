@@ -186,21 +186,43 @@ export class MigrateManifest implements MigrationModule {
                     // Convert background.scripts to background.service_worker
                     const scripts = background['scripts'] as string[];
                     if (scripts.length > 0) {
-                        // Take the first script as the service worker entry point
-                        extension.manifest['background'] = {
-                            service_worker: scripts[0],
-                        };
 
-                        // Log if there are multiple scripts that need manual handling
                         if (scripts.length > 1) {
+
+                            const script = bgScriptChooser(scripts);
                             logger.warn(
                                 extension,
-                                `Extension has multiple background scripts. Only using first script '${scripts[0]}' as service worker. Additional scripts`,
+                                `Extension has multiple background scripts. Picking '${script}' as service worker`,
                                 {
+                                    picked_script: script,
                                     scripts: scripts,
                                 }
                             );
+                            extension.manifest['background'] = {
+                                service_worker: script
+                            };
+                        } else {
+                            extension.manifest['background'] = {
+                                service_worker: scripts[0],
+                            };
                         }
+
+
+                        // // Take the first script as the service worker entry point
+                        // extension.manifest['background'] = {
+                        //     service_worker: scripts[0],
+                        // };
+                        //
+                        // // Log if there are multiple scripts that need manual handling
+                        // if (scripts.length > 1) {
+                        //     logger.warn(
+                        //         extension,
+                        //         `Extension has multiple background scripts. Only using first script '${scripts[0]}' as service worker. Additional scripts`,
+                        //         {
+                        //             scripts: scripts,
+                        //         }
+                        //     );
+                        // }
                     } else {
                         // Empty scripts array - remove background entirely
                         extension.manifest['background'] = {};
@@ -265,4 +287,91 @@ export class MigrateManifest implements MigrationModule {
             .substring(0, 32)
             .replace(/./g, (c: any) => String.fromCharCode(97 + (parseInt(c, 16) % 26)));
     }
+}
+
+/**
+ * Pick the correct background script based on some heuristics
+ * @param scripts Array of scripts
+ * @returns The name of the chosen background script
+ */
+function bgScriptChooser(scripts: string[]): string {
+    if (scripts.length === 0) {
+        throw new Error('No scripts provided');
+    }
+
+    if (scripts.length === 1) {
+        return scripts[0];
+    }
+
+    // Define scoring rules as a map with regex patterns
+    const scoreMap = new Map<RegExp, number>([
+        // High priority - likely background scripts
+        [/\bbackground([sS]cript)?\b/i, 15],
+        [/\bbg\b/i, 10],
+        [/\bworker\b/i, 12],
+        [/\bservice[-_]?worker\b/i, 13],
+        [/\bmain\b/i, 8],
+        [/\bindex\b/i, 6],
+        [/\binit\b/i, 7],
+        [/\bcore\b/i, 5],
+
+        // Medium priority - supporting files
+        [/\bsrc\b/i, 4],
+        [/\bscript\b/i, 3],
+        [/\bapp\b/i, 3],
+        [/\brun\b/i, 3],
+
+        // Low priority - less likely to be background
+        [/\butil(s|ity|ities)?\b/i, -3],
+        [/\bhelper(s)?\b/i, -3],
+        [/\bcommon\b/i, -2],
+        [/\bshared\b/i, -2],
+        [/\bconfig\b/i, -4],
+
+        // Very low priority - definitely not background
+        [/\bjquery\b/i, -10],
+        [/\blib(rary|s)?\b/i, -10],
+        [/\bvendor\b/i, -8],
+        [/\bthird[-_]?party\b/i, -8],
+        [/\bdeps?\b/i, -6],
+        [/\bdependenc(y|ies)\b/i, -6],
+        [/\bnode_modules\b/i, -12],
+        [/\btest(s)?\b/i, -15],
+        [/\bspec\b/i, -15],
+        [/\bmock(s)?\b/i, -12],
+        [/\bdemo\b/i, -10],
+        [/\bexample(s)?\b/i, -10]
+    ]);
+
+    let bestScript = scripts[0];
+    let bestScore = calculateScore(scripts[0], scoreMap);
+
+    // Calculate max possible score for early return optimization
+    const maxScore = Array.from(scoreMap.values()).filter(v => v > 0).reduce((a, b) => a + b, 0);
+    if (bestScore >= maxScore) return bestScript;
+
+    for (let i = 1; i < scripts.length; i++) {
+        const score = calculateScore(scripts[i], scoreMap);
+
+        if (score > bestScore) {
+            bestScore = score;
+            bestScript = scripts[i];
+
+            if (score >= maxScore) return bestScript;
+        }
+    }
+
+    return bestScript;
+}
+
+function calculateScore(script: string, scoreMap: Map<RegExp, number>): number {
+    let score = 0;
+
+    for (const [pattern, points] of scoreMap) {
+        if (pattern.test(script)) {
+            score += points;
+        }
+    }
+
+    return score;
 }
