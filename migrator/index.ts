@@ -92,7 +92,7 @@ async function main() {
         WebRequestMigrator.migrate,
         MigrateManifest.migrate,
         MigrateCSP.migrate,
-        ResourceDownloader.migrate,
+        // ResourceDownloader.migrate,
         RenameAPIS.migrate,
         BridgeInjector.migrate,
         InterestingnessScorer.migrate,

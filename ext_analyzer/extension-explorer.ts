@@ -4,6 +4,7 @@ import { displayExtensionList, filterExtensions } from './display-utils';
 import { getKeypress, showActionsMenu } from './input-handler';
 import * as actions from './extension-actions';
 import { Extension } from '../migrator/types/extension';
+import { showInfo } from './info';
 
 export class ExtensionExplorer {
     private lastSearchQuery: string = '';
@@ -120,7 +121,7 @@ export class ExtensionExplorer {
                     await actions.runExtension(ext);
                     break;
                 case 'i':
-                    await actions.showInfo(ext);
+                    await showInfo(ext);
                     break;
                 case 'l':
                     await actions.showLogs(ext);
@@ -143,7 +144,7 @@ export class ExtensionExplorer {
                     return false; // Signal to quit
                 default:
                     console.log('❌ Invalid action');
-                    await actions.showInfo(ext);
+                    await showInfo(ext);
             }
         }
     }
