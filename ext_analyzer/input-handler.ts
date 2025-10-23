@@ -2,6 +2,9 @@ import * as readline from 'readline';
 import inquirer from 'inquirer';
 import chalk from 'chalk';
 import { ExtensionSearchResult, MenuItem } from './types';
+import * as terminalKit from 'terminal-kit';
+
+const term = terminalKit.terminal;
 
 export async function getKeypress(): Promise<any> {
     return new Promise((resolve) => {
@@ -41,6 +44,8 @@ export async function waitForKeypress(message: string): Promise<void> {
 
 export async function showActionsMenu(ext: ExtensionSearchResult): Promise<string> {
     console.clear();
+    // Clear all Kitty graphics images
+    term('\x1b_Ga=d\x1b\\');
     console.log('');
     console.log(chalk.bold.cyan(`  ${ext.name || 'Unknown Extension'}`));
     console.log(

@@ -11,6 +11,9 @@ import { getMv2Path, getMv3Path, execCommand, collectExtensionFiles } from './fi
 import { llmManager } from './llm-manager';
 import { waitForKeypress } from './input-handler';
 import { buildChatMessagesFromFile } from '../migrator/features/llm';
+import * as terminalKit from 'terminal-kit';
+
+const term = terminalKit.terminal;
 
 export async function viewSource(ext: ExtensionSearchResult): Promise<void> {
     const mv2Path = getMv2Path(ext);
@@ -218,50 +221,6 @@ export async function runExtension(ext: ExtensionSearchResult): Promise<void> {
     }
 }
 
-export async function showInfo(ext: ExtensionSearchResult): Promise<void> {
-    console.clear();
-    console.log(chalk.bold('Name: ') + chalk.cyan(ext.name || ext.manifest?.name || 'Unknown'));
-    console.log(chalk.bold('Version: ') + chalk.yellow(ext.manifest?.version || 'Unknown'));
-    if (ext.interestingness_score !== undefined) {
-        console.log(
-            chalk.bold(`Interestingness Score: ${chalk.dim(ext.interestingness_score.toString())}`)
-        );
-    }
-    console.log(chalk.bold('MV2 ID: ') + chalk.gray(ext.id));
-    if (ext.mv3_extension_id) {
-        console.log(chalk.bold('MV3 ID: ') + chalk.green(ext.mv3_extension_id));
-    } else {
-        console.log(chalk.bold('MV3 ID: ') + chalk.red('Not migrated'));
-    }
-
-    console.log('');
-    console.log(chalk.blue(' Description: '));
-    console.log(ext.manifest?.description || 'No description');
-
-    // Display tags
-    if (ext.tags && ext.tags.length > 0) {
-        console.log('');
-        console.log(chalk.blue(' Tags:'));
-        console.log(
-            ext.tags
-                .map((t) => {
-                    return t.toLowerCase();
-                })
-                .join(chalk.dim(', '))
-        );
-    }
-
-    const mv2Path = getMv2Path(ext);
-    const mv3Path = getMv3Path(ext);
-
-    console.log('');
-    console.log(chalk.blue(' File Paths:'));
-    if (mv2Path) console.log(chalk.dim('  MV2: ') + chalk.blue(mv2Path));
-    if (mv3Path) console.log(chalk.dim('  MV3: ') + chalk.green(mv3Path));
-
-    console.log('');
-    await waitForKeypress(chalk.dim('Press Enter to continue...'));
-}
 
 export async function showLogs(ext: ExtensionSearchResult): Promise<void> {
     console.log('Fetching logs from database...');
@@ -566,6 +525,8 @@ export async function openDirectory(ext: ExtensionSearchResult): Promise<void> {
 
 export async function generateDescription(ext: ExtensionSearchResult): Promise<void> {
     console.clear();
+    // Clear all Kitty graphics images
+    term('\x1b_Ga=d\x1b\\');
 
     // Get LLM configuration from environment
     const llmEndpoint = process.env.LLM_ENDPOINT || 'http://localhost:11434';
