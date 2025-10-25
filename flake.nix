@@ -51,7 +51,7 @@
           ] ++ [
             # Pinned packages from specific commit
             pkgs-pinned.google-chrome # pinned google chrome to 138.0.7204.183
-            pkgs-new-pinned.google-chrome # pinned google chrome to 141.0.7390.122
+            pkgs-new-pinned.google-chrome # pinned google chrome to 141.0.7390.123
             pkgs-pinned.chromedriver
           ];
 
