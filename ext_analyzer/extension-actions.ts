@@ -11,6 +11,7 @@ import { getMv2Path, getMv3Path, execCommand, collectExtensionFiles } from './fi
 import { llmManager } from './llm-manager';
 import { waitForKeypress } from './input-handler';
 import { buildChatMessagesFromFile } from '../migrator/features/llm';
+import { parseCWSData } from './info';
 import * as terminalKit from 'terminal-kit';
 
 const term = terminalKit.terminal;
@@ -557,12 +558,20 @@ export async function generateDescription(ext: ExtensionSearchResult): Promise<v
 
         const manifestSummary = `Manifest.json: ${JSON.stringify(manifest)}`;
 
+        // Get CWS description if available
+        const cws_path = `${ext.manifest_v2_path.replace("extensions","cws")}.html`;
+        const cwsData = parseCWSData(cws_path);
+        const cwsDescription = cwsData?.description || 'No CWS description available';
+
+        console.log(chalk.dim(`CWS description: ${cwsDescription.substring(0, 100)}...`));
+
         // Build chat messages from template file (uses chat API for better instruction following)
         const templatePath = path.join(__dirname, 'prompts', 'extension-description.txt');
         const messages = buildChatMessagesFromFile(templatePath, {
             extension_name: ext.name || 'Unknown',
             manifest_summary: manifestSummary,
             extension_files: extensionFiles,
+            cws_description: cwsDescription,
         });
 
         // Get persistent LLM service (reuses SSH tunnel if already open)
