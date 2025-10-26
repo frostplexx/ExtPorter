@@ -352,7 +352,7 @@ describe('MigrateManifest', () => {
 
                     // Verify all other scripts were imported in the correct order
                     expect(updateFileContentSpy).toHaveBeenCalledTimes(1);
-                    const calledContent = (updateFileContentSpy.mock.calls[0] as [import("../../../migrator/types/ext_file_types").ExtFile, string])[1];
+                    const calledContent = (updateFileContentSpy.mock.calls[0] as any[])[1];
 
                     // Check that imports are in the correct order
                     expect(calledContent).toContain("importScripts('utils.js');");
