@@ -1,7 +1,10 @@
-import { describe, it, expect, beforeEach } from '@jest/globals';
+import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import { MigrateManifest } from '../../../migrator/modules/manifest';
 import { Extension } from '../../../migrator/types/extension';
 import { MigrationError } from '../../../migrator/types/migration_module';
+import { FileContentUpdater } from '../../../migrator/utils/file_content_updater';
+import { createMockFile } from '../../fixtures/test_helpers';
+import { ExtFileType } from '../../../migrator/types/ext_file_types';
 
 describe('MigrateManifest', () => {
     let baseExtension: Extension;
@@ -228,10 +231,28 @@ describe('MigrateManifest', () => {
 
         describe('background migration', () => {
             it('should convert background scripts to service worker', async () => {
+                // Create mock files for the background scripts
+                const backgroundFile = createMockFile({
+                    path: 'background.js',
+                    content: 'console.log("background");',
+                    filetype: ExtFileType.JS,
+                });
+                const helperFile = createMockFile({
+                    path: 'helper.js',
+                    content: 'console.log("helper");',
+                    filetype: ExtFileType.JS,
+                });
+
                 baseExtension.manifest.background = {
                     scripts: ['background.js', 'helper.js'],
                     persistent: false,
                 };
+                baseExtension.files = [backgroundFile, helperFile];
+
+                // Mock FileContentUpdater to verify import injection
+                const updateFileContentSpy = jest
+                    .spyOn(FileContentUpdater, 'updateFileContent')
+                    .mockImplementation(() => {});
 
                 const result = await MigrateManifest.migrate(baseExtension);
 
@@ -240,7 +261,20 @@ describe('MigrateManifest', () => {
                     expect(result.manifest.background).toEqual({
                         service_worker: 'background.js',
                     });
+
+                    // Verify that importScripts was injected into the chosen service worker
+                    expect(updateFileContentSpy).toHaveBeenCalledTimes(1);
+                    expect(updateFileContentSpy).toHaveBeenCalledWith(
+                        backgroundFile,
+                        expect.stringContaining("importScripts('helper.js');")
+                    );
+                    expect(updateFileContentSpy).toHaveBeenCalledWith(
+                        backgroundFile,
+                        expect.stringContaining('console.log("background");')
+                    );
                 }
+
+                updateFileContentSpy.mockRestore();
             });
 
             it('should convert background page to service worker', async () => {
@@ -272,6 +306,72 @@ describe('MigrateManifest', () => {
                         service_worker: 'single-script.js',
                     });
                 }
+            });
+
+            it('should inject all other scripts in order when multiple background scripts exist', async () => {
+                // Create mock files for multiple background scripts
+                const backgroundFile = createMockFile({
+                    path: 'background.js',
+                    content: 'console.log("background");',
+                    filetype: ExtFileType.JS,
+                });
+                const utilsFile = createMockFile({
+                    path: 'utils.js',
+                    content: 'console.log("utils");',
+                    filetype: ExtFileType.JS,
+                });
+                const helperFile = createMockFile({
+                    path: 'helper.js',
+                    content: 'console.log("helper");',
+                    filetype: ExtFileType.JS,
+                });
+                const libFile = createMockFile({
+                    path: 'lib.js',
+                    content: 'console.log("lib");',
+                    filetype: ExtFileType.JS,
+                });
+
+                baseExtension.manifest.background = {
+                    scripts: ['background.js', 'utils.js', 'helper.js', 'lib.js'],
+                };
+                baseExtension.files = [backgroundFile, utilsFile, helperFile, libFile];
+
+                // Mock FileContentUpdater
+                const updateFileContentSpy = jest
+                    .spyOn(FileContentUpdater, 'updateFileContent')
+                    .mockImplementation(() => {});
+
+                const result = await MigrateManifest.migrate(baseExtension);
+
+                expect(result).not.toBeInstanceOf(MigrationError);
+                if (!(result instanceof MigrationError)) {
+                    // Verify the service worker was set correctly
+                    expect(result.manifest.background).toEqual({
+                        service_worker: 'background.js',
+                    });
+
+                    // Verify all other scripts were imported in the correct order
+                    expect(updateFileContentSpy).toHaveBeenCalledTimes(1);
+                    const calledContent = (updateFileContentSpy.mock.calls[0] as any)[1];
+
+                    // Check that imports are in the correct order
+                    expect(calledContent).toContain("importScripts('utils.js');");
+                    expect(calledContent).toContain("importScripts('helper.js');");
+                    expect(calledContent).toContain("importScripts('lib.js');");
+
+                    // Verify order: utils before helper, helper before lib
+                    const utilsIndex = calledContent.indexOf("importScripts('utils.js');");
+                    const helperIndex = calledContent.indexOf("importScripts('helper.js');");
+                    const libIndex = calledContent.indexOf("importScripts('lib.js');");
+
+                    expect(utilsIndex).toBeLessThan(helperIndex);
+                    expect(helperIndex).toBeLessThan(libIndex);
+
+                    // Verify original content is preserved
+                    expect(calledContent).toContain('console.log("background");');
+                }
+
+                updateFileContentSpy.mockRestore();
             });
 
             it('should handle empty background scripts', async () => {
