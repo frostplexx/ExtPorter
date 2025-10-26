@@ -447,5 +447,119 @@ describe('WebRequestMigrator', () => {
                 }
             }
         });
+
+        it('should comment out migrated webRequest code in JavaScript files', async () => {
+            const originalCode = `chrome.webRequest.onBeforeRequest.addListener(
+  function(details) { return {cancel: true}; },
+  {
+    urls: [
+      "*://login.di.se/check-paywall*",
+      "*://login.di.se/assets/adblk*"
+    ],
+    types: ["script"]
+  },
+  ["blocking"]
+);`;
+            const file = createMockJSFile('blockstop.js', originalCode);
+            const extension = createMockExtension([file]);
+
+            const result = await WebRequestMigrator.migrate(extension);
+
+            expect(result).not.toBeInstanceOf(MigrationError);
+            if (!(result instanceof MigrationError)) {
+                // Find the transformed JavaScript file
+                const transformedFile = result.files.find((f) => f.path === 'blockstop.js');
+                expect(transformedFile).toBeDefined();
+
+                if (transformedFile) {
+                    const transformedContent = transformedFile.getContent();
+
+                    // Verify original code is commented out
+                    expect(transformedContent).toContain('/* MIGRATED TO DECLARATIVE_NET_REQUEST');
+                    expect(transformedContent).toContain(
+                        'This blocking webRequest has been converted to declarativeNetRequest rules'
+                    );
+                    expect(transformedContent).toContain('See rules.json');
+
+                    // Verify original code is preserved in comments
+                    expect(transformedContent).toContain('chrome.webRequest.onBeforeRequest');
+
+                    // Verify the code is NOT executable (should be commented)
+                    expect(transformedContent).not.toMatch(
+                        /^chrome\.webRequest\.onBeforeRequest/m
+                    );
+                }
+            }
+        });
+
+        it('should comment out multiple webRequest calls in the same file', async () => {
+            const originalCode = `chrome.webRequest.onBeforeRequest.addListener(
+  function(details) { return {cancel: true}; },
+  {urls: ["*://*.ads.com/*"]},
+  ["blocking"]
+);
+
+chrome.webRequest.onBeforeRequest.addListener(
+  function(details) { return {cancel: true}; },
+  {urls: ["*://*.tracker.com/*"]},
+  ["blocking"]
+);`;
+            const file = createMockJSFile('background.js', originalCode);
+            const extension = createMockExtension([file]);
+
+            const result = await WebRequestMigrator.migrate(extension);
+
+            expect(result).not.toBeInstanceOf(MigrationError);
+            if (!(result instanceof MigrationError)) {
+                const transformedFile = result.files.find((f) => f.path === 'background.js');
+                expect(transformedFile).toBeDefined();
+
+                if (transformedFile) {
+                    const transformedContent = transformedFile.getContent();
+
+                    // Count the number of migration comments
+                    const migrationComments = transformedContent.match(
+                        /MIGRATED TO DECLARATIVE_NET_REQUEST/g
+                    );
+                    expect(migrationComments).toHaveLength(2);
+
+                    // Verify no executable webRequest code remains
+                    const executableWebRequests = transformedContent.match(
+                        /^chrome\.webRequest\.onBeforeRequest/gm
+                    );
+                    expect(executableWebRequests).toBeNull();
+                }
+            }
+        });
+
+        it('should not modify files without webRequest usage', async () => {
+            const file1 = createMockJSFile('content.js', 'console.log("content script");');
+            const file2Code = `chrome.webRequest.onBeforeRequest.addListener(
+  function(details) { return {cancel: true}; },
+  {urls: ["*://*.ads.com/*"]},
+  ["blocking"]
+);`;
+            const file2 = createMockJSFile('background.js', file2Code);
+            const extension = createMockExtension([file1, file2]);
+
+            const result = await WebRequestMigrator.migrate(extension);
+
+            expect(result).not.toBeInstanceOf(MigrationError);
+            if (!(result instanceof MigrationError)) {
+                // content.js should remain unchanged
+                const contentFile = result.files.find((f) => f.path === 'content.js');
+                expect(contentFile).toBeDefined();
+                if (contentFile) {
+                    expect(contentFile.getContent()).toBe('console.log("content script");');
+                }
+
+                // background.js should be commented
+                const backgroundFile = result.files.find((f) => f.path === 'background.js');
+                expect(backgroundFile).toBeDefined();
+                if (backgroundFile) {
+                    expect(backgroundFile.getContent()).toContain('MIGRATED TO DECLARATIVE_NET_REQUEST');
+                }
+            }
+        });
     });
 });
