@@ -1,29 +1,3 @@
-/**
- * CWS Data Display Module
- *
- * This module provides functionality to parse Chrome Web Store HTML pages and display
- * extension information including descriptions and images using the Kitty graphics protocol.
- *
- * Features:
- * - Extract full description from CWS HTML
- * - Extract logo, screenshots, and video URLs
- * - Display images in terminal using Kitty graphics protocol
- * - Download images from URLs automatically
- *
- * Usage:
- *   import { displayCWSData, parseCWSData } from './info';
- *
- *   // Display with images
- *   await displayCWSData('/path/to/cws.html', {
- *     showLogo: true,
- *     showScreenshots: true,
- *     maxScreenshots: 3
- *   });
- *
- *   // Get data only
- *   const data = parseCWSData('/path/to/cws.html');
- */
-
 import chalk from 'chalk';
 import { ExtensionSearchResult } from './types';
 import { getMv3Path, getMv2Path } from './file-operations';
@@ -42,7 +16,7 @@ export async function showInfo(ext: ExtensionSearchResult): Promise<void> {
     // Clear all Kitty graphics images from previous displays
     term('\x1b_Ga=d\x1b\\');
 
-    const cws_path = `${ext.manifest_v2_path.replace("extensions","cws")}.html`
+    const cws_path = `${ext.manifest_v2_path.replace("extensions", "cws")}.html`
 
     // Parse CWS data to get logo
     const cwsData = parseCWSData(cws_path);
@@ -70,7 +44,9 @@ export async function showInfo(ext: ExtensionSearchResult): Promise<void> {
 
             // Display small logo (5 rows)
             await displayImage(logoPath, { height: 5 });
-            try { fs.unlinkSync(logoPath); } catch (e) {}
+            try { fs.unlinkSync(logoPath); } catch (e) {
+                console.log(e as any)
+            }
 
             // Move cursor back to left for next line
             term.moveTo(1, cursorPos.y);
@@ -93,8 +69,7 @@ export async function showInfo(ext: ExtensionSearchResult): Promise<void> {
     }
 
     console.log('');
-    console.log(chalk.blue(' Description: '));
-    console.log(`Manifest: ${chalk.dim(ext.manifest?.description || 'No description')}`);
+    console.log(chalk.blue(` Description: ${chalk.dim(ext.manifest?.description || "")}`));
     // Display CWS data with images using kitty graphics protocol (no logo, already displayed)
     await displayCWSData(cws_path, {
         showLogo: false,
@@ -153,11 +128,19 @@ function getHighResImageUrl(url: string, size: number = 0): string {
 }
 
 /**
- * Download an image from a URL to a temporary file
+ * Download an image from a URL to a temporary file with retry logic
  * @param url - The image URL
+ * @param maxRetries - Maximum number of retry attempts (default: 3)
+ * @param timeout - Timeout in milliseconds (default: 15000)
+ * @param attempt - Current attempt number (for internal use)
  * @returns Path to the downloaded file or null if failed
  */
-async function downloadImage(url: string): Promise<string | null> {
+async function downloadImage(
+    url: string,
+    maxRetries: number = 3,
+    timeout: number = 15000,
+    attempt: number = 1
+): Promise<string | null> {
     return new Promise((resolve) => {
         try {
             // Convert to high resolution URL
@@ -166,40 +149,87 @@ async function downloadImage(url: string): Promise<string | null> {
             const protocol = highResUrl.startsWith('https') ? https : http;
             const tempDir = os.tmpdir();
             const ext = '.png'; // Use PNG to support more formats
-            const tempFile = path.join(tempDir, `cws-image-${Date.now()}${ext}`);
+            const tempFile = path.join(tempDir, `cws-image-${Date.now()}-${Math.random().toString(36).substr(2, 9)}${ext}`);
 
             const file = fs.createWriteStream(tempFile);
+            let requestAborted = false;
+            let timedOut = false;
 
             const options = {
                 headers: {
                     'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
-                }
+                    'Accept': 'image/webp,image/apng,image/*,*/*;q=0.8',
+                },
+                timeout: timeout,
             };
 
-            protocol.get(highResUrl, options, (response) => {
+            const request = protocol.get(highResUrl, options, (response) => {
                 // Follow redirects
                 if (response.statusCode === 301 || response.statusCode === 302) {
                     if (response.headers.location) {
+                        request.destroy();
                         file.close();
-                        fs.unlinkSync(tempFile);
-                        resolve(downloadImage(response.headers.location));
+                        try { fs.unlinkSync(tempFile); } catch (e) {
+                            console.log(e as any)
+                        }
+                        resolve(downloadImage(response.headers.location, maxRetries, timeout, attempt));
                         return;
                     }
                 }
 
                 if (response.statusCode !== 200) {
+                    request.destroy();
                     file.close();
-                    try {
-                        fs.unlinkSync(tempFile);
-                    } catch (e) {}
+                    try { fs.unlinkSync(tempFile); } catch (e) {
+                        console.log(e as any)
+                    }
+
+                    // Retry on server errors or rate limiting
+                    if (attempt < maxRetries && (response.statusCode === 429 || response.statusCode! >= 500)) {
+                        const delay = Math.min(1000 * Math.pow(2, attempt - 1), 5000); // Exponential backoff
+                        setTimeout(() => {
+                            resolve(downloadImage(url, maxRetries, timeout, attempt + 1));
+                        }, delay);
+                        return;
+                    }
+
                     resolve(null);
                     return;
                 }
 
+                // Set timeout for download completion
+                const downloadTimeout = setTimeout(() => {
+                    if (!timedOut && !requestAborted) {
+                        timedOut = true;
+                        request.destroy();
+                        file.close();
+                        try { fs.unlinkSync(tempFile); } catch (e) {
+                            console.log(e as any)
+                        }
+
+                        // Retry on timeout
+                        if (attempt < maxRetries) {
+                            resolve(downloadImage(url, maxRetries, timeout, attempt + 1));
+                        } else {
+                            resolve(null);
+                        }
+                    }
+                }, timeout);
+
                 response.pipe(file);
 
                 file.on('finish', () => {
+                    clearTimeout(downloadTimeout);
                     file.close();
+
+                    if (requestAborted || timedOut) {
+                        try { fs.unlinkSync(tempFile); } catch (e) {
+                            console.log(e as any)
+                        }
+                        resolve(null);
+                        return;
+                    }
+
                     // Verify file has content
                     try {
                         const stats = fs.statSync(tempFile);
@@ -207,27 +237,88 @@ async function downloadImage(url: string): Promise<string | null> {
                             resolve(tempFile);
                         } else {
                             fs.unlinkSync(tempFile);
-                            resolve(null);
+
+                            // Retry on empty file
+                            if (attempt < maxRetries) {
+                                resolve(downloadImage(url, maxRetries, timeout, attempt + 1));
+                            } else {
+                                resolve(null);
+                            }
                         }
                     } catch (e) {
+                        console.log(e as any)
                         resolve(null);
                     }
                 });
 
                 file.on('error', (err) => {
-                    try {
-                        fs.unlinkSync(tempFile);
-                    } catch (e) {}
-                    resolve(null);
+
+                    console.log(err as any)
+                    clearTimeout(downloadTimeout);
+                    requestAborted = true;
+                    request.destroy();
+                    try { fs.unlinkSync(tempFile); } catch (e) {
+                        console.log(e as any)
+                    }
+
+                    // Retry on file write errors
+                    if (attempt < maxRetries) {
+                        resolve(downloadImage(url, maxRetries, timeout, attempt + 1));
+                    } else {
+                        resolve(null);
+                    }
                 });
-            }).on('error', (err) => {
-                try {
-                    fs.unlinkSync(tempFile);
-                } catch (e) {}
-                resolve(null);
+            });
+
+            request.on('error', (err) => {
+
+                console.log(err as any)
+                requestAborted = true;
+                file.close();
+                try { fs.unlinkSync(tempFile); } catch (e) {
+                    console.log(e as any)
+                }
+
+                // Retry on network errors
+                if (attempt < maxRetries) {
+                    const delay = Math.min(1000 * Math.pow(2, attempt - 1), 5000);
+                    setTimeout(() => {
+                        resolve(downloadImage(url, maxRetries, timeout, attempt + 1));
+                    }, delay);
+                } else {
+                    resolve(null);
+                }
+            });
+
+            request.on('timeout', () => {
+                if (!timedOut && !requestAborted) {
+                    timedOut = true;
+                    request.destroy();
+                    file.close();
+                    try { fs.unlinkSync(tempFile); } catch (e) {
+                        console.log(e as any)
+                    }
+
+                    // Retry on timeout
+                    if (attempt < maxRetries) {
+                        resolve(downloadImage(url, maxRetries, timeout, attempt + 1));
+                    } else {
+                        resolve(null);
+                    }
+                }
             });
         } catch (error) {
-            resolve(null);
+
+            console.log(error as any)
+            // Retry on unexpected errors
+            if (attempt < maxRetries) {
+                const delay = Math.min(1000 * Math.pow(2, attempt - 1), 5000);
+                setTimeout(() => {
+                    resolve(downloadImage(url, maxRetries, timeout, attempt + 1));
+                }, delay);
+            } else {
+                resolve(null);
+            }
         }
     });
 }
@@ -293,7 +384,6 @@ async function displayImage(imagePath: string, options?: { width?: number; heigh
  */
 async function displayImageFromUrl(url: string, options?: { width?: number; height?: number; silent?: boolean }): Promise<void> {
     try {
-        const highResUrl = getHighResImageUrl(url, 1280);
         if (!options?.silent) {
             console.log(chalk.dim(`Downloading image (1280px): ${url.slice(0, 80)}...`));
         }
@@ -312,7 +402,7 @@ async function displayImageFromUrl(url: string, options?: { width?: number; heig
         try {
             fs.unlinkSync(tempFile);
         } catch (e) {
-            // Ignore cleanup errors
+            console.log(e as any)
         }
     } catch (error) {
         if (!options?.silent) {
@@ -322,12 +412,38 @@ async function displayImageFromUrl(url: string, options?: { width?: number; heig
 }
 
 /**
- * Download multiple images in parallel
+ * Download multiple images with controlled concurrency
  * @param urls - Array of image URLs
+ * @param concurrency - Maximum number of simultaneous downloads (default: 3)
  * @returns Array of downloaded file paths (null for failed downloads)
  */
-async function downloadImagesInParallel(urls: string[]): Promise<(string | null)[]> {
-    return Promise.all(urls.map(url => downloadImage(url)));
+async function downloadImagesInParallel(urls: string[], concurrency: number = 3): Promise<(string | null)[]> {
+    const results: (string | null)[] = new Array(urls.length).fill(null);
+
+    // Download in batches to avoid overwhelming the connection pool
+    for (let i = 0; i < urls.length; i += concurrency) {
+        const batch = urls.slice(i, i + concurrency);
+        const batchResults = await Promise.allSettled(
+            batch.map(url => downloadImage(url))
+        );
+
+        // Map results back to their original positions
+        batchResults.forEach((result, batchIndex) => {
+            const resultIndex = i + batchIndex;
+            if (result.status === 'fulfilled') {
+                results[resultIndex] = result.value;
+            } else {
+                results[resultIndex] = null;
+            }
+        });
+
+        // Small delay between batches to avoid rate limiting
+        if (i + concurrency < urls.length) {
+            await new Promise(resolve => setTimeout(resolve, 100));
+        }
+    }
+
+    return results;
 }
 
 /**
@@ -471,8 +587,8 @@ function parseCWSData(path_to_html: string): CWSData | null {
 
         // Get logo from og:image meta tag or item logo
         const logo = $('meta[property="og:image"]').attr('content') ||
-                    $('.rBxtY').attr('src') ||
-                    undefined;
+            $('.rBxtY').attr('src') ||
+            undefined;
 
         // Get screenshots from media carousel
         // Screenshots are in elements with data-media-url attribute and data-is-video="false"
@@ -517,39 +633,6 @@ function parseCWSData(path_to_html: string): CWSData | null {
 }
 
 /**
- * Parse Chrome Web Store HTML file and format for display (without images)
- * @param path_to_html - Path to the HTML file
- * @returns Formatted string with extracted information
- */
-function parseCWS(path_to_html: string): string {
-    const data = parseCWSData(path_to_html);
-
-    if (!data) {
-        return chalk.dim('CWS: No HTML file found');
-    }
-
-    const { description, images } = data;
-
-    // Format output
-    let output = '';
-
-    if (description) {
-        const cleanDescription = description.trim();
-        output += `CWS: ${chalk.dim(cleanDescription)}`;
-    } else {
-        output += chalk.dim('CWS: No description found');
-    }
-
-    // Add image count info
-    const imageCount = images.screenshots.length + images.videoThumbnails.length;
-    if (imageCount > 0) {
-        output += chalk.dim(`\n     ${imageCount} media item(s) available`);
-    }
-
-    return output;
-}
-
-/**
  * Display CWS data with images using kitty graphics protocol
  * @param path_to_html - Path to the HTML file
  * @param options - Display options
@@ -575,14 +658,12 @@ async function displayCWSData(
         showLogo = true,
         showScreenshots = true,
         maxScreenshots = 4,
-        imageWidth = 40,
         imageHeight = 15,
     } = options || {};
 
     const { description, images } = data;
 
     // Display description
-    console.log('\n' + chalk.blue.bold('CWS Description:'));
     console.log(chalk.dim('─'.repeat(term.width || 80)));
     if (description) {
         console.log(description);
@@ -597,7 +678,11 @@ async function displayCWSData(
         const logoPath = await downloadImage(images.logo);
         if (logoPath) {
             await displayImage(logoPath, { height: 10 });
-            try { fs.unlinkSync(logoPath); } catch (e) {}
+            try { fs.unlinkSync(logoPath); } catch (e) {
+                console.log(e as any)
+            }
+        } else {
+            console.log(chalk.yellow('⚠ Failed to download logo'));
         }
         console.log('');
     }
@@ -607,35 +692,53 @@ async function displayCWSData(
         console.log(chalk.blue.bold(`Screenshots (${images.screenshots.length} total):`));
         const screenshotsToShow = images.screenshots.slice(0, maxScreenshots);
 
-        // Download all screenshots in parallel
+        // Download all screenshots
         const downloadedPaths = await downloadImagesInParallel(screenshotsToShow);
 
-        // Check terminal width to decide layout
-        const terminalWidth = term.width || process.stdout.columns || 80;
-        const minWidthForSideBySide = 140; // Minimum width needed for 2 images side by side
+        // Count successful downloads and only show message on failure
+        const successCount = downloadedPaths.filter(p => p !== null).length;
+        const failCount = downloadedPaths.length - successCount;
 
-        if (terminalWidth >= minWidthForSideBySide) {
-            // Display in rows of 2 if terminal is wide enough
-            const imagesPerRow = 2;
-
-            for (let i = 0; i < downloadedPaths.length; i += imagesPerRow) {
-                const rowPaths = downloadedPaths.slice(i, i + imagesPerRow);
-                await displayImagesInRow(rowPaths, { height: imageHeight });
-            }
-        } else {
-            // Fall back to single column if terminal is too narrow
-            for (const imgPath of downloadedPaths) {
-                if (imgPath) {
-                    await displayImage(imgPath, { height: imageHeight });
-                }
-            }
+        if (failCount > 0) {
+            console.log(chalk.yellow(`⚠ Downloaded ${successCount}/${downloadedPaths.length} screenshots (${failCount} failed)`));
         }
 
-        // Clean up downloaded files
-        for (const path of downloadedPaths) {
-            if (path) {
-                try { fs.unlinkSync(path); } catch (e) {}
+        // Only proceed if we have at least one successful download
+        if (successCount > 0) {
+            // Check terminal width to decide layout
+            const terminalWidth = term.width || process.stdout.columns || 80;
+            const minWidthForSideBySide = 140; // Minimum width needed for 2 images side by side
+
+            if (terminalWidth >= minWidthForSideBySide) {
+                // Display in rows of 2 if terminal is wide enough
+                const imagesPerRow = 2;
+
+                for (let i = 0; i < downloadedPaths.length; i += imagesPerRow) {
+                    const rowPaths = downloadedPaths.slice(i, i + imagesPerRow);
+                    // Filter out nulls before displaying
+                    if (rowPaths.some(p => p !== null)) {
+                        await displayImagesInRow(rowPaths, { height: imageHeight });
+                    }
+                }
+            } else {
+                // Fall back to single column if terminal is too narrow
+                for (const imgPath of downloadedPaths) {
+                    if (imgPath) {
+                        await displayImage(imgPath, { height: imageHeight });
+                    }
+                }
             }
+
+            // Clean up downloaded files
+            for (const path of downloadedPaths) {
+                if (path) {
+                    try { fs.unlinkSync(path); } catch (e) {
+                        console.log(e as any)
+                    }
+                }
+            }
+        } else {
+            console.log(chalk.red('✗ Failed to download any screenshots'));
         }
 
         if (images.screenshots.length > maxScreenshots) {
