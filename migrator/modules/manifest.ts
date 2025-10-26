@@ -3,6 +3,7 @@ import { MigrationError, MigrationModule } from '../types/migration_module';
 import { logger } from '../utils/logger';
 import { Tags } from '../types/tags';
 import crypto from 'crypto';
+import { FileContentUpdater } from '../utils/file_content_updater';
 
 export class MigrateManifest implements MigrationModule {
     // taken from https://developer.chrome.com/docs/extensions/reference/permissions-list
@@ -201,6 +202,12 @@ export class MigrateManifest implements MigrationModule {
                             extension.manifest['background'] = {
                                 service_worker: script,
                             };
+
+                            // Get all other scripts in their original order (excluding the chosen one)
+                            const scriptsToImport = scripts.filter((s) => s !== script);
+
+                            // Inject importScripts() calls into the chosen service worker
+                            MigrateManifest.injectScriptImports(extension, script, scriptsToImport);
                         } else {
                             extension.manifest['background'] = {
                                 service_worker: scripts[0],
@@ -270,6 +277,72 @@ export class MigrateManifest implements MigrationModule {
             .digest('hex')
             .substring(0, 32)
             .replace(/./g, (c: any) => String.fromCharCode(97 + (parseInt(c, 16) % 26)));
+    }
+
+    /**
+     * Injects importScripts() calls into the chosen service worker for all other background scripts
+     * @param extension The extension being migrated
+     * @param serviceWorkerPath The path to the chosen service worker
+     * @param scriptsToImport Array of script paths to import (excluding the service worker itself)
+     */
+    private static injectScriptImports(
+        extension: Extension,
+        serviceWorkerPath: string,
+        scriptsToImport: string[]
+    ): void {
+        if (scriptsToImport.length === 0) {
+            return;
+        }
+
+        // Find the service worker file in the extension
+        const serviceWorkerFile = extension.files.find((file) => file.path === serviceWorkerPath);
+
+        if (!serviceWorkerFile) {
+            logger.warn(
+                extension,
+                `Service worker file not found: ${serviceWorkerPath}. Cannot inject imports.`
+            );
+            return;
+        }
+
+        try {
+            // Get the current content
+            const currentContent = serviceWorkerFile.getContent();
+
+            // Build the import statements for all other scripts in their original order
+            const importStatements = scriptsToImport
+                .map((script) => `importScripts('${script}');`)
+                .join('\n');
+
+            // Prepend import statements to the beginning of the file
+            const newContent = `${importStatements}\n${currentContent}`;
+
+            // Update the file content
+            FileContentUpdater.updateFileContent(serviceWorkerFile, newContent);
+
+            logger.info(
+                extension,
+                `Injected importScripts() into service worker: ${serviceWorkerPath}`,
+                {
+                    imported_scripts: scriptsToImport,
+                }
+            );
+        } catch (error) {
+            logger.error(
+                extension,
+                `Failed to inject imports into service worker ${serviceWorkerPath}: ${error instanceof Error ? error.message : String(error)}`,
+                {
+                    error:
+                        error instanceof Error
+                            ? {
+                                message: error.message,
+                                stack: error.stack,
+                                name: error.name,
+                            }
+                            : String(error),
+                }
+            );
+        }
     }
 }
 
