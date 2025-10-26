@@ -386,11 +386,6 @@ const BG_SCRIPT_SCORE_MAP = new Map<RegExp, number>([
     [/\bexample(s)?\b/i, -10]
 ]);
 
-// Pre-calculate max possible score for early return optimization
-const BG_SCRIPT_MAX_SCORE = Array.from(BG_SCRIPT_SCORE_MAP.values())
-    .filter(v => v > 0)
-    .reduce((a, b) => a + b, 0);
-
 /**
  * Pick the correct background script based on some heuristics
  * @param scripts Array of scripts
@@ -408,16 +403,12 @@ function bgScriptChooser(scripts: string[]): string {
     let bestScript = scripts[0];
     let bestScore = calculateScore(scripts[0], BG_SCRIPT_SCORE_MAP);
 
-    if (bestScore >= BG_SCRIPT_MAX_SCORE) return bestScript;
-
     for (let i = 1; i < scripts.length; i++) {
         const score = calculateScore(scripts[i], BG_SCRIPT_SCORE_MAP);
 
         if (score > bestScore) {
             bestScore = score;
             bestScript = scripts[i];
-
-            if (score >= BG_SCRIPT_MAX_SCORE) return bestScript;
         }
     }
 
