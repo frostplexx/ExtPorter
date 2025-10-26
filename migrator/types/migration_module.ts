@@ -25,8 +25,7 @@ export abstract class MigrationModule {
     public static migrate(
         extension: Extension
     ): Promise<Extension | MigrationError> | Extension | MigrationError {
-        //eslint-disable-line
-        throw new Error('Method must be implemented by subclass');
+        throw new Error(`Method must be implemented by subclass - ${extension}`);
     }
 }
 
