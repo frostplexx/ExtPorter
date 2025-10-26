@@ -3,7 +3,7 @@ import { MigrationError, MigrationModule } from '../types/migration_module';
 import { logger } from '../utils/logger';
 import { Tags } from '../types/tags';
 import crypto from 'crypto';
-import { FileContentUpdater } from '../utils/file_content_updater';
+import { LazyFile } from '../types/abstract_file';
 
 export class MigrateManifest implements MigrationModule {
     // taken from https://developer.chrome.com/docs/extensions/reference/permissions-list
@@ -207,7 +207,18 @@ export class MigrateManifest implements MigrationModule {
                             const scriptsToImport = scripts.filter((s) => s !== script);
 
                             // Inject importScripts() calls into the chosen service worker
-                            MigrateManifest.injectScriptImports(extension, script, scriptsToImport);
+                            const transformedFile = MigrateManifest.injectScriptImports(
+                                extension,
+                                script,
+                                scriptsToImport
+                            );
+
+                            // Replace the original file with the transformed one in the files array
+                            if (transformedFile) {
+                                extension.files = extension.files.map((file) =>
+                                    file.path === script ? transformedFile : file
+                                );
+                            }
                         } else {
                             extension.manifest['background'] = {
                                 service_worker: scripts[0],
@@ -289,9 +300,9 @@ export class MigrateManifest implements MigrationModule {
         extension: Extension,
         serviceWorkerPath: string,
         scriptsToImport: string[]
-    ): void {
+    ): LazyFile | null {
         if (scriptsToImport.length === 0) {
-            return;
+            return null;
         }
 
         // Find the service worker file in the extension
@@ -302,7 +313,7 @@ export class MigrateManifest implements MigrationModule {
                 extension,
                 `Service worker file not found: ${serviceWorkerPath}. Cannot inject imports.`
             );
-            return;
+            return null;
         }
 
         try {
@@ -317,9 +328,6 @@ export class MigrateManifest implements MigrationModule {
             // Prepend import statements to the beginning of the file
             const newContent = `${importStatements}\n${currentContent}`;
 
-            // Update the file content
-            FileContentUpdater.updateFileContent(serviceWorkerFile, newContent);
-
             logger.info(
                 extension,
                 `Injected importScripts() into service worker: ${serviceWorkerPath}`,
@@ -327,6 +335,9 @@ export class MigrateManifest implements MigrationModule {
                     imported_scripts: scriptsToImport,
                 }
             );
+
+            // Create and return transformed file (in memory only, doesn't modify source)
+            return createTransformedFile(serviceWorkerFile, newContent);
         } catch (error) {
             logger.error(
                 extension,
@@ -342,6 +353,7 @@ export class MigrateManifest implements MigrationModule {
                             : String(error),
                 }
             );
+            return null;
         }
     }
 }
@@ -363,6 +375,7 @@ const BG_SCRIPT_SCORE_MAP = new Map<RegExp, number>([
     [/\bscript\b/i, 3],
     [/\bapp\b/i, 3],
     [/\brun\b/i, 3],
+    [/\blistener\b/i, 5],
 
     // Low priority - less likely to be background
     [/\butil(s|ity|ities)?\b/i, -3],
@@ -425,4 +438,37 @@ function calculateScore(script: string, scoreMap: Map<RegExp, number>): number {
     }
 
     return score;
+}
+
+/**
+ * Creates a transformed file with modified content stored in memory.
+ * This avoids modifying the original MV2 source files.
+ * @param originalFile The original file to transform
+ * @param newContent The new content for the transformed file
+ * @returns A new LazyFile object with the modified content
+ */
+function createTransformedFile(originalFile: LazyFile, newContent: string): LazyFile {
+    // Create new instance inheriting from LazyFile prototype
+    const transformedFile = Object.create(LazyFile.prototype);
+
+    // Copy basic properties
+    transformedFile.path = originalFile.path;
+    transformedFile.filetype = originalFile.filetype;
+    transformedFile._transformedContent = newContent;
+    // Copy absolute path for reference (but won't write to it)
+    transformedFile._absolutePath = (originalFile as any)._absolutePath;
+
+    // Override methods to work with transformed content
+    transformedFile.getContent = () => newContent;
+    transformedFile.getSize = () => Buffer.byteLength(newContent, 'utf8');
+    transformedFile.close = () => {
+        /* No-op for in-memory content */
+    };
+    transformedFile.getAST = () => {
+        // Script imports don't need AST parsing, return undefined
+        return undefined;
+    };
+    transformedFile.getBuffer = () => Buffer.from(newContent, 'utf8');
+
+    return transformedFile;
 }
