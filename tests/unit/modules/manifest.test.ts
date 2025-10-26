@@ -1,8 +1,7 @@
-import { describe, it, expect, beforeEach, jest } from '@jest/globals';
+import { describe, it, expect, beforeEach } from '@jest/globals';
 import { MigrateManifest } from '../../../migrator/modules/manifest';
 import { Extension } from '../../../migrator/types/extension';
 import { MigrationError } from '../../../migrator/types/migration_module';
-import { FileContentUpdater } from '../../../migrator/utils/file_content_updater';
 import { createMockFile } from '../../fixtures/test_helpers';
 import { ExtFileType } from '../../../migrator/types/ext_file_types';
 
@@ -249,11 +248,6 @@ describe('MigrateManifest', () => {
                 };
                 baseExtension.files = [backgroundFile, helperFile];
 
-                // Mock FileContentUpdater to verify import injection
-                const updateFileContentSpy = jest
-                    .spyOn(FileContentUpdater, 'updateFileContent')
-                    .mockImplementation(() => {});
-
                 const result = await MigrateManifest.migrate(baseExtension);
 
                 expect(result).not.toBeInstanceOf(MigrationError);
@@ -262,19 +256,24 @@ describe('MigrateManifest', () => {
                         service_worker: 'background.js',
                     });
 
-                    // Verify that importScripts was injected into the chosen service worker
-                    expect(updateFileContentSpy).toHaveBeenCalledTimes(1);
-                    expect(updateFileContentSpy).toHaveBeenCalledWith(
-                        backgroundFile,
-                        expect.stringContaining("importScripts('helper.js');")
+                    // Verify that the background file was transformed in memory
+                    const transformedBackgroundFile = result.files.find(
+                        (f) => f.path === 'background.js'
                     );
-                    expect(updateFileContentSpy).toHaveBeenCalledWith(
-                        backgroundFile,
-                        expect.stringContaining('console.log("background");')
-                    );
-                }
+                    expect(transformedBackgroundFile).toBeDefined();
 
-                updateFileContentSpy.mockRestore();
+                    if (transformedBackgroundFile) {
+                        const content = transformedBackgroundFile.getContent();
+                        // Verify importScripts was injected
+                        expect(content).toContain("importScripts('helper.js');");
+                        // Verify original content is preserved
+                        expect(content).toContain('console.log("background");');
+                        // Verify import comes before original content
+                        expect(content.indexOf("importScripts('helper.js');")).toBeLessThan(
+                            content.indexOf('console.log("background");')
+                        );
+                    }
+                }
             });
 
             it('should convert background page to service worker', async () => {
@@ -336,11 +335,6 @@ describe('MigrateManifest', () => {
                 };
                 baseExtension.files = [backgroundFile, utilsFile, helperFile, libFile];
 
-                // Mock FileContentUpdater
-                const updateFileContentSpy = jest
-                    .spyOn(FileContentUpdater, 'updateFileContent')
-                    .mockImplementation(() => {});
-
                 const result = await MigrateManifest.migrate(baseExtension);
 
                 expect(result).not.toBeInstanceOf(MigrationError);
@@ -350,28 +344,32 @@ describe('MigrateManifest', () => {
                         service_worker: 'background.js',
                     });
 
-                    // Verify all other scripts were imported in the correct order
-                    expect(updateFileContentSpy).toHaveBeenCalledTimes(1);
-                    const calledContent = (updateFileContentSpy.mock.calls[0] as any[])[1];
+                    // Verify that the background file was transformed in memory
+                    const transformedBackgroundFile = result.files.find(
+                        (f) => f.path === 'background.js'
+                    );
+                    expect(transformedBackgroundFile).toBeDefined();
 
-                    // Check that imports are in the correct order
-                    expect(calledContent).toContain("importScripts('utils.js');");
-                    expect(calledContent).toContain("importScripts('helper.js');");
-                    expect(calledContent).toContain("importScripts('lib.js');");
+                    if (transformedBackgroundFile) {
+                        const content = transformedBackgroundFile.getContent();
 
-                    // Verify order: utils before helper, helper before lib
-                    const utilsIndex = calledContent.indexOf("importScripts('utils.js');");
-                    const helperIndex = calledContent.indexOf("importScripts('helper.js');");
-                    const libIndex = calledContent.indexOf("importScripts('lib.js');");
+                        // Check that imports are in the correct order
+                        expect(content).toContain("importScripts('utils.js');");
+                        expect(content).toContain("importScripts('helper.js');");
+                        expect(content).toContain("importScripts('lib.js');");
 
-                    expect(utilsIndex).toBeLessThan(helperIndex);
-                    expect(helperIndex).toBeLessThan(libIndex);
+                        // Verify order: utils before helper, helper before lib
+                        const utilsIndex = content.indexOf("importScripts('utils.js');");
+                        const helperIndex = content.indexOf("importScripts('helper.js');");
+                        const libIndex = content.indexOf("importScripts('lib.js');");
 
-                    // Verify original content is preserved
-                    expect(calledContent).toContain('console.log("background");');
+                        expect(utilsIndex).toBeLessThan(helperIndex);
+                        expect(helperIndex).toBeLessThan(libIndex);
+
+                        // Verify original content is preserved
+                        expect(content).toContain('console.log("background");');
+                    }
                 }
-
-                updateFileContentSpy.mockRestore();
             });
 
             it('should handle empty background scripts', async () => {

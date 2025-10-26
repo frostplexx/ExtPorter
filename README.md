@@ -155,6 +155,22 @@ SSH_PASSWORD=<password>
 SSH_LOCAL_PORT=11434
 ```
 
+### Scripts
+
+```
+Default (uses INPUT_DIR from .env):
+npx ts-node scripts/find_blocking_webrequest.ts
+
+With custom path:
+npx ts-node scripts/find_blocking_webrequest.ts /path/to/extensions
+
+Save results to JSON file:
+npx ts-node scripts/find_blocking_webrequest.ts --output=/tmp/results.json
+
+JSON output to console:
+npx ts-node scripts/find_blocking_webrequest.ts --json
+```
+
 ## Development
 
 File structure:
