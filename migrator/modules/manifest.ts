@@ -346,6 +346,51 @@ export class MigrateManifest implements MigrationModule {
     }
 }
 
+// Define scoring rules as a map with regex patterns for background script selection
+const BG_SCRIPT_SCORE_MAP = new Map<RegExp, number>([
+    // High priority - likely background scripts
+    [/\bbackground(script)?\b/i, 15],
+    [/\bbg\b/i, 10],
+    [/\bworker\b/i, 12],
+    [/\bservice[-_]?worker\b/i, 13],
+    [/\bmain\b/i, 8],
+    [/\bindex\b/i, 6],
+    [/\binit\b/i, 7],
+    [/\bcore\b/i, 5],
+
+    // Medium priority - supporting files
+    [/\bsrc\b/i, 4],
+    [/\bscript\b/i, 3],
+    [/\bapp\b/i, 3],
+    [/\brun\b/i, 3],
+
+    // Low priority - less likely to be background
+    [/\butil(s|ity|ities)?\b/i, -3],
+    [/\bhelper(s)?\b/i, -3],
+    [/\bcommon\b/i, -2],
+    [/\bshared\b/i, -2],
+    [/\bconfig\b/i, -4],
+
+    // Very low priority - definitely not background
+    [/\bjquery\b/i, -10],
+    [/\blib(rary|s)?\b/i, -10],
+    [/\bvendor\b/i, -8],
+    [/\bthird[-_]?party\b/i, -8],
+    [/\bdeps?\b/i, -6],
+    [/\bdependenc(y|ies)\b/i, -6],
+    [/\bnode_modules\b/i, -12],
+    [/\btest(s)?\b/i, -15],
+    [/\bspec\b/i, -15],
+    [/\bmock(s)?\b/i, -12],
+    [/\bdemo\b/i, -10],
+    [/\bexample(s)?\b/i, -10]
+]);
+
+// Pre-calculate max possible score for early return optimization
+const BG_SCRIPT_MAX_SCORE = Array.from(BG_SCRIPT_SCORE_MAP.values())
+    .filter(v => v > 0)
+    .reduce((a, b) => a + b, 0);
+
 /**
  * Pick the correct background script based on some heuristics
  * @param scripts Array of scripts
@@ -360,61 +405,19 @@ function bgScriptChooser(scripts: string[]): string {
         return scripts[0];
     }
 
-    // Define scoring rules as a map with regex patterns
-    const scoreMap = new Map<RegExp, number>([
-        // High priority - likely background scripts
-        [/\bbackground([sS]cript)?\b/i, 15],
-        [/\bbg\b/i, 10],
-        [/\bworker\b/i, 12],
-        [/\bservice[-_]?worker\b/i, 13],
-        [/\bmain\b/i, 8],
-        [/\bindex\b/i, 6],
-        [/\binit\b/i, 7],
-        [/\bcore\b/i, 5],
-
-        // Medium priority - supporting files
-        [/\bsrc\b/i, 4],
-        [/\bscript\b/i, 3],
-        [/\bapp\b/i, 3],
-        [/\brun\b/i, 3],
-
-        // Low priority - less likely to be background
-        [/\butil(s|ity|ities)?\b/i, -3],
-        [/\bhelper(s)?\b/i, -3],
-        [/\bcommon\b/i, -2],
-        [/\bshared\b/i, -2],
-        [/\bconfig\b/i, -4],
-
-        // Very low priority - definitely not background
-        [/\bjquery\b/i, -10],
-        [/\blib(rary|s)?\b/i, -10],
-        [/\bvendor\b/i, -8],
-        [/\bthird[-_]?party\b/i, -8],
-        [/\bdeps?\b/i, -6],
-        [/\bdependenc(y|ies)\b/i, -6],
-        [/\bnode_modules\b/i, -12],
-        [/\btest(s)?\b/i, -15],
-        [/\bspec\b/i, -15],
-        [/\bmock(s)?\b/i, -12],
-        [/\bdemo\b/i, -10],
-        [/\bexample(s)?\b/i, -10]
-    ]);
-
     let bestScript = scripts[0];
-    let bestScore = calculateScore(scripts[0], scoreMap);
+    let bestScore = calculateScore(scripts[0], BG_SCRIPT_SCORE_MAP);
 
-    // Calculate max possible score for early return optimization
-    const maxScore = Array.from(scoreMap.values()).filter(v => v > 0).reduce((a, b) => a + b, 0);
-    if (bestScore >= maxScore) return bestScript;
+    if (bestScore >= BG_SCRIPT_MAX_SCORE) return bestScript;
 
     for (let i = 1; i < scripts.length; i++) {
-        const score = calculateScore(scripts[i], scoreMap);
+        const score = calculateScore(scripts[i], BG_SCRIPT_SCORE_MAP);
 
         if (score > bestScore) {
             bestScore = score;
             bestScript = scripts[i];
 
-            if (score >= maxScore) return bestScript;
+            if (score >= BG_SCRIPT_MAX_SCORE) return bestScript;
         }
     }
 
