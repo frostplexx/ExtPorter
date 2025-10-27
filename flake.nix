@@ -9,7 +9,7 @@
 
     nixpkgs-new-pinned.url = "github:NixOS/nixpkgs/8703905b226eedc7d5c8bb360cd4e24283b5ea8f";
   };
-  outputs = { nixpkgs, flake-utils, nixpkgs-pinned,nixpkgs-new-pinned, ... }:
+  outputs = { nixpkgs, flake-utils, nixpkgs-pinned, nixpkgs-new-pinned, ... }:
     flake-utils.lib.eachDefaultSystem (system:
       let
         pkgs = import nixpkgs {
