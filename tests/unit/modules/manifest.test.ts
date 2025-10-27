@@ -2,6 +2,8 @@ import { describe, it, expect, beforeEach } from '@jest/globals';
 import { MigrateManifest } from '../../../migrator/modules/manifest';
 import { Extension } from '../../../migrator/types/extension';
 import { MigrationError } from '../../../migrator/types/migration_module';
+import { createMockFile } from '../../fixtures/test_helpers';
+import { ExtFileType } from '../../../migrator/types/ext_file_types';
 
 describe('MigrateManifest', () => {
     let baseExtension: Extension;
@@ -228,10 +230,23 @@ describe('MigrateManifest', () => {
 
         describe('background migration', () => {
             it('should convert background scripts to service worker', async () => {
+                // Create mock files for the background scripts
+                const backgroundFile = createMockFile({
+                    path: 'background.js',
+                    content: 'console.log("background");',
+                    filetype: ExtFileType.JS,
+                });
+                const helperFile = createMockFile({
+                    path: 'helper.js',
+                    content: 'console.log("helper");',
+                    filetype: ExtFileType.JS,
+                });
+
                 baseExtension.manifest.background = {
                     scripts: ['background.js', 'helper.js'],
                     persistent: false,
                 };
+                baseExtension.files = [backgroundFile, helperFile];
 
                 const result = await MigrateManifest.migrate(baseExtension);
 
@@ -240,6 +255,24 @@ describe('MigrateManifest', () => {
                     expect(result.manifest.background).toEqual({
                         service_worker: 'background.js',
                     });
+
+                    // Verify that the background file was transformed in memory
+                    const transformedBackgroundFile = result.files.find(
+                        (f) => f.path === 'background.js'
+                    );
+                    expect(transformedBackgroundFile).toBeDefined();
+
+                    if (transformedBackgroundFile) {
+                        const content = transformedBackgroundFile.getContent();
+                        // Verify importScripts was injected
+                        expect(content).toContain("importScripts('helper.js');");
+                        // Verify original content is preserved
+                        expect(content).toContain('console.log("background");');
+                        // Verify import comes before original content
+                        expect(content.indexOf("importScripts('helper.js');")).toBeLessThan(
+                            content.indexOf('console.log("background");')
+                        );
+                    }
                 }
             });
 
@@ -271,6 +304,71 @@ describe('MigrateManifest', () => {
                     expect(result.manifest.background).toEqual({
                         service_worker: 'single-script.js',
                     });
+                }
+            });
+
+            it('should inject all other scripts in order when multiple background scripts exist', async () => {
+                // Create mock files for multiple background scripts
+                const backgroundFile = createMockFile({
+                    path: 'background.js',
+                    content: 'console.log("background");',
+                    filetype: ExtFileType.JS,
+                });
+                const utilsFile = createMockFile({
+                    path: 'utils.js',
+                    content: 'console.log("utils");',
+                    filetype: ExtFileType.JS,
+                });
+                const helperFile = createMockFile({
+                    path: 'helper.js',
+                    content: 'console.log("helper");',
+                    filetype: ExtFileType.JS,
+                });
+                const libFile = createMockFile({
+                    path: 'lib.js',
+                    content: 'console.log("lib");',
+                    filetype: ExtFileType.JS,
+                });
+
+                baseExtension.manifest.background = {
+                    scripts: ['background.js', 'utils.js', 'helper.js', 'lib.js'],
+                };
+                baseExtension.files = [backgroundFile, utilsFile, helperFile, libFile];
+
+                const result = await MigrateManifest.migrate(baseExtension);
+
+                expect(result).not.toBeInstanceOf(MigrationError);
+                if (!(result instanceof MigrationError)) {
+                    // Verify the service worker was set correctly
+                    expect(result.manifest.background).toEqual({
+                        service_worker: 'background.js',
+                    });
+
+                    // Verify that the background file was transformed in memory
+                    const transformedBackgroundFile = result.files.find(
+                        (f) => f.path === 'background.js'
+                    );
+                    expect(transformedBackgroundFile).toBeDefined();
+
+                    if (transformedBackgroundFile) {
+                        const content = transformedBackgroundFile.getContent();
+
+                        // Check that imports are in the correct order
+                        expect(content).toContain("importScripts('utils.js');");
+                        expect(content).toContain("importScripts('helper.js');");
+                        expect(content).toContain("importScripts('lib.js');");
+
+                        // Verify order: utils before helper, helper before lib
+                        const utilsIndex = content.indexOf("importScripts('utils.js');");
+                        const helperIndex = content.indexOf("importScripts('helper.js');");
+                        const libIndex = content.indexOf("importScripts('lib.js');");
+
+                        expect(utilsIndex).toBeLessThan(helperIndex);
+                        expect(helperIndex).toBeLessThan(libIndex);
+
+                        // Verify original content is preserved
+                        expect(content).toContain('console.log("background");');
+                    }
                 }
             });
 

@@ -534,10 +534,18 @@ describe('BridgeInjector', () => {
             );
 
             expect(result).toEqual(manifest); // Manifest shouldn't change
-            expect(mockFileContentUpdater.updateFileContent).toHaveBeenCalledWith(
-                mockServiceWorkerFile,
-                `importScripts('${BridgeInjector.testHelpers.BRIDGE_FILENAME}');\nconsole.log("Service worker");`
+            // Verify the file was transformed in memory (not written to disk)
+            const transformedFile = extensionWithServiceWorker.files.find(
+                (f) => f.path === 'background.js'
             );
+            expect(transformedFile).toBeDefined();
+            if (transformedFile) {
+                const content = transformedFile.getContent();
+                expect(content).toContain(
+                    `importScripts('${BridgeInjector.testHelpers.BRIDGE_FILENAME}');`
+                );
+                expect(content).toContain('console.log("Service worker");');
+            }
         });
 
         it('should warn about service worker when no extension is provided', () => {
@@ -556,7 +564,9 @@ describe('BridgeInjector', () => {
             const mockServiceWorkerFile = {
                 path: 'background.js',
                 filetype: ExtFileType.JS,
-                getContent: jest.fn().mockReturnValue('console.log("Service worker");'),
+                getContent: jest.fn().mockImplementation(() => {
+                    throw new Error('Failed to read file');
+                }),
                 getAST: jest.fn(),
                 getSize: jest.fn().mockReturnValue(800),
                 getBuffer: jest.fn(),
@@ -567,11 +577,6 @@ describe('BridgeInjector', () => {
                 ...baseExtension,
                 files: [mockServiceWorkerFile],
             };
-
-            // Mock update failure
-            mockFileContentUpdater.updateFileContent.mockImplementation(() => {
-                throw new Error('Failed to write file');
-            });
 
             const manifest = {
                 background: {
@@ -873,11 +878,13 @@ describe('BridgeInjector', () => {
                 'background.js'
             );
 
-            expect(result).toBe(true);
-            expect(mockFileContentUpdater.updateFileContent).toHaveBeenCalledWith(
-                mockServiceWorkerFile,
-                `importScripts('${BridgeInjector.testHelpers.BRIDGE_FILENAME}');\nconsole.log("Service worker started");`
+            expect(result).not.toBeNull();
+            expect(result?.path).toBe('background.js');
+            const content = result?.getContent();
+            expect(content).toContain(
+                `importScripts('${BridgeInjector.testHelpers.BRIDGE_FILENAME}');`
             );
+            expect(content).toContain('console.log("Service worker started");');
         });
 
         it('should not duplicate importScripts if already present', () => {
@@ -894,11 +901,10 @@ describe('BridgeInjector', () => {
                 'background.js'
             );
 
-            expect(result).toBe(true);
-            expect(mockFileContentUpdater.updateFileContent).not.toHaveBeenCalled();
+            expect(result).toBeNull(); // No transformation needed
         });
 
-        it('should return false when service worker file not found', () => {
+        it('should return null when service worker file not found', () => {
             const testExtension = {
                 ...baseExtension,
                 files: [mockJsFile], // Different file
@@ -909,16 +915,13 @@ describe('BridgeInjector', () => {
                 'missing-background.js'
             );
 
-            expect(result).toBe(false);
-            expect(mockFileContentUpdater.updateFileContent).not.toHaveBeenCalled();
+            expect(result).toBeNull();
         });
 
-        it('should handle file content update failure', () => {
-            (mockServiceWorkerFile.getContent as jest.Mock).mockReturnValue(
-                'console.log("Service worker");'
-            );
-            mockFileContentUpdater.updateFileContent.mockImplementation(() => {
-                throw new Error('Failed to write file');
+        it('should handle file transformation errors gracefully', () => {
+            // Simulate an error during transformation (e.g., invalid file path processing)
+            (mockServiceWorkerFile.getContent as jest.Mock).mockImplementation(() => {
+                throw new Error('File read error');
             });
 
             const testExtension = {
@@ -931,7 +934,7 @@ describe('BridgeInjector', () => {
                 'background.js'
             );
 
-            expect(result).toBe(false);
+            expect(result).toBeNull();
         });
 
         it('should handle getContent throwing errors', () => {
@@ -949,8 +952,7 @@ describe('BridgeInjector', () => {
                 'background.js'
             );
 
-            expect(result).toBe(false);
-            expect(mockFileContentUpdater.updateFileContent).not.toHaveBeenCalled();
+            expect(result).toBeNull();
         });
 
         it('should handle complex service worker content', () => {
@@ -977,11 +979,12 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
                 'background.js'
             );
 
-            expect(result).toBe(true);
-            expect(mockFileContentUpdater.updateFileContent).toHaveBeenCalledWith(
-                mockServiceWorkerFile,
-                `importScripts('${BridgeInjector.testHelpers.BRIDGE_FILENAME}');\n${complexContent}`
+            expect(result).not.toBeNull();
+            const content = result?.getContent();
+            expect(content).toContain(
+                `importScripts('${BridgeInjector.testHelpers.BRIDGE_FILENAME}');`
             );
+            expect(content).toContain(complexContent);
         });
     });
 
@@ -1276,13 +1279,15 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
 
             expect(result).not.toBeInstanceOf(MigrationError);
             if (!(result instanceof MigrationError)) {
-                // Should inject bridge into service worker
-                expect(mockFileContentUpdater.updateFileContent).toHaveBeenCalledWith(
-                    mockServiceWorkerFile,
-                    expect.stringContaining(
+                // Should transform service worker file in memory
+                const serviceWorkerFile = result.files.find((f) => f.path === 'background.js');
+                expect(serviceWorkerFile).toBeDefined();
+                if (serviceWorkerFile) {
+                    const content = serviceWorkerFile.getContent();
+                    expect(content).toContain(
                         `importScripts('${BridgeInjector.testHelpers.BRIDGE_FILENAME}');`
-                    )
-                );
+                    );
+                }
 
                 // Should inject bridge into content scripts
                 expect(result.manifest.content_scripts[0].js).toEqual([

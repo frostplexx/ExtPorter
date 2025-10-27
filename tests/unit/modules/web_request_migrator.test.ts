@@ -140,8 +140,9 @@ describe('WebRequestMigrator', () => {
 
                 if (rulesFile) {
                     const rulesContent = JSON.parse(rulesFile.getContent());
-                    expect(rulesContent.rules.length).toBe(1);
-                    expect(rulesContent.rules[0].action.type).toBe('block');
+                    expect(Array.isArray(rulesContent)).toBe(true);
+                    expect(rulesContent.length).toBe(1);
+                    expect(rulesContent[0].action.type).toBe('block');
                 }
             }
         });
@@ -171,11 +172,11 @@ describe('WebRequestMigrator', () => {
 
                 if (rulesFile) {
                     const rulesContent = JSON.parse(rulesFile.getContent());
-                    expect(rulesContent.rules).toBeDefined();
-                    expect(rulesContent.rules.length).toBeGreaterThan(0);
+                    expect(Array.isArray(rulesContent)).toBe(true);
+                    expect(rulesContent.length).toBeGreaterThan(0);
 
                     // Check rule structure
-                    const rule = rulesContent.rules[0];
+                    const rule = rulesContent[0];
                     expect(rule.id).toBeDefined();
                     expect(rule.action.type).toBe('block');
                     expect(rule.condition).toBeDefined();
@@ -312,7 +313,8 @@ describe('WebRequestMigrator', () => {
 
                 if (rulesFile) {
                     const rulesContent = JSON.parse(rulesFile.getContent());
-                    expect(rulesContent.rules.length).toBe(2);
+                    expect(Array.isArray(rulesContent)).toBe(true);
+                    expect(rulesContent.length).toBe(2);
                 }
             }
         });
@@ -341,7 +343,8 @@ describe('WebRequestMigrator', () => {
 
                 if (rulesFile) {
                     const rulesContent = JSON.parse(rulesFile.getContent());
-                    const rule = rulesContent.rules[0];
+                    expect(Array.isArray(rulesContent)).toBe(true);
+                    const rule = rulesContent[0];
                     expect(rule.action.type).toBe('redirect');
                     expect(rule.action.redirect).toBeDefined();
                 }
@@ -398,7 +401,8 @@ describe('WebRequestMigrator', () => {
 
                 if (rulesFile) {
                     const rulesContent = JSON.parse(rulesFile.getContent());
-                    const rule = rulesContent.rules[0];
+                    expect(Array.isArray(rulesContent)).toBe(true);
+                    const rule = rulesContent[0];
                     expect(rule.condition.resourceTypes).toEqual(['script', 'image']);
                 }
             }
@@ -431,19 +435,134 @@ describe('WebRequestMigrator', () => {
 
                 if (rulesFile) {
                     const rulesContent = JSON.parse(rulesFile.getContent());
+                    expect(Array.isArray(rulesContent)).toBe(true);
                     // Should create 3 rules - one per URL pattern
-                    expect(rulesContent.rules.length).toBe(3);
+                    expect(rulesContent.length).toBe(3);
 
                     // Verify each rule has the correct URL pattern
-                    expect(rulesContent.rules[0].condition.urlFilter).toBe('*://*.ads.com/*');
-                    expect(rulesContent.rules[1].condition.urlFilter).toBe('*://*.tracker.com/*');
-                    expect(rulesContent.rules[2].condition.urlFilter).toBe('*://*.analytics.com/*');
+                    expect(rulesContent[0].condition.urlFilter).toBe('*://*.ads.com/*');
+                    expect(rulesContent[1].condition.urlFilter).toBe('*://*.tracker.com/*');
+                    expect(rulesContent[2].condition.urlFilter).toBe('*://*.analytics.com/*');
 
                     // Verify all rules have the same action and resource types
-                    rulesContent.rules.forEach((rule: any) => {
+                    rulesContent.forEach((rule: any) => {
                         expect(rule.action.type).toBe('block');
                         expect(rule.condition.resourceTypes).toEqual(['script']);
                     });
+                }
+            }
+        });
+
+        it('should comment out migrated webRequest code in JavaScript files', async () => {
+            const originalCode = `chrome.webRequest.onBeforeRequest.addListener(
+  function(details) { return {cancel: true}; },
+  {
+    urls: [
+      "*://login.di.se/check-paywall*",
+      "*://login.di.se/assets/adblk*"
+    ],
+    types: ["script"]
+  },
+  ["blocking"]
+);`;
+            const file = createMockJSFile('blockstop.js', originalCode);
+            const extension = createMockExtension([file]);
+
+            const result = await WebRequestMigrator.migrate(extension);
+
+            expect(result).not.toBeInstanceOf(MigrationError);
+            if (!(result instanceof MigrationError)) {
+                // Find the transformed JavaScript file
+                const transformedFile = result.files.find((f) => f.path === 'blockstop.js');
+                expect(transformedFile).toBeDefined();
+
+                if (transformedFile) {
+                    const transformedContent = transformedFile.getContent();
+
+                    // Verify original code is commented out
+                    expect(transformedContent).toContain('/* MIGRATED TO DECLARATIVE_NET_REQUEST');
+                    expect(transformedContent).toContain(
+                        'This blocking webRequest has been converted to declarativeNetRequest rules'
+                    );
+                    expect(transformedContent).toContain('See rules.json');
+
+                    // Verify original code is preserved in comments
+                    expect(transformedContent).toContain('chrome.webRequest.onBeforeRequest');
+
+                    // Verify the code is NOT executable (should be commented)
+                    expect(transformedContent).not.toMatch(
+                        /^chrome\.webRequest\.onBeforeRequest/m
+                    );
+                }
+            }
+        });
+
+        it('should comment out multiple webRequest calls in the same file', async () => {
+            const originalCode = `chrome.webRequest.onBeforeRequest.addListener(
+  function(details) { return {cancel: true}; },
+  {urls: ["*://*.ads.com/*"]},
+  ["blocking"]
+);
+
+chrome.webRequest.onBeforeRequest.addListener(
+  function(details) { return {cancel: true}; },
+  {urls: ["*://*.tracker.com/*"]},
+  ["blocking"]
+);`;
+            const file = createMockJSFile('background.js', originalCode);
+            const extension = createMockExtension([file]);
+
+            const result = await WebRequestMigrator.migrate(extension);
+
+            expect(result).not.toBeInstanceOf(MigrationError);
+            if (!(result instanceof MigrationError)) {
+                const transformedFile = result.files.find((f) => f.path === 'background.js');
+                expect(transformedFile).toBeDefined();
+
+                if (transformedFile) {
+                    const transformedContent = transformedFile.getContent();
+
+                    // Count the number of migration comments
+                    const migrationComments = transformedContent.match(
+                        /MIGRATED TO DECLARATIVE_NET_REQUEST/g
+                    );
+                    expect(migrationComments).toHaveLength(2);
+
+                    // Verify no executable webRequest code remains
+                    const executableWebRequests = transformedContent.match(
+                        /^chrome\.webRequest\.onBeforeRequest/gm
+                    );
+                    expect(executableWebRequests).toBeNull();
+                }
+            }
+        });
+
+        it('should not modify files without webRequest usage', async () => {
+            const file1 = createMockJSFile('content.js', 'console.log("content script");');
+            const file2Code = `chrome.webRequest.onBeforeRequest.addListener(
+  function(details) { return {cancel: true}; },
+  {urls: ["*://*.ads.com/*"]},
+  ["blocking"]
+);`;
+            const file2 = createMockJSFile('background.js', file2Code);
+            const extension = createMockExtension([file1, file2]);
+
+            const result = await WebRequestMigrator.migrate(extension);
+
+            expect(result).not.toBeInstanceOf(MigrationError);
+            if (!(result instanceof MigrationError)) {
+                // content.js should remain unchanged
+                const contentFile = result.files.find((f) => f.path === 'content.js');
+                expect(contentFile).toBeDefined();
+                if (contentFile) {
+                    expect(contentFile.getContent()).toBe('console.log("content script");');
+                }
+
+                // background.js should be commented
+                const backgroundFile = result.files.find((f) => f.path === 'background.js');
+                expect(backgroundFile).toBeDefined();
+                if (backgroundFile) {
+                    expect(backgroundFile.getContent()).toContain('MIGRATED TO DECLARATIVE_NET_REQUEST');
                 }
             }
         });

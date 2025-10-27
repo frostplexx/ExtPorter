@@ -113,13 +113,11 @@ async function main() {
                 const selected = await explorer.searchExtensions(extensions);
 
                 if (!selected) {
-                    console.log(chalk.cyan('\n👋 Goodbye!'));
                     break;
                 }
 
                 const shouldContinue = await explorer.runActionLoop(selected);
                 if (!shouldContinue) {
-                    console.log(chalk.cyan('\n👋 Goodbye!'));
                     break;
                 }
             }
