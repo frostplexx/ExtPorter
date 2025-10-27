@@ -4,12 +4,12 @@ import { LazyFile } from '../types/abstract_file';
 import { ExtFileType } from '../types/ext_file_types';
 import { logger } from '../utils/logger';
 import { Tags } from '../types/tags';
+import * as espree from 'espree';
 import {
     Rule,
     RuleActionType,
     ResourceType,
     RuleCondition,
-    Ruleset,
 } from '../types/dnr_rule_types';
 
 /**
@@ -714,7 +714,6 @@ export class WebRequestMigrator implements MigrationModule {
             };
             transformedFile.getAST = () => {
                 try {
-                    const espree = require('espree');
                     return espree.parse(modifiedContent, {
                         ecmaVersion: 'latest',
                         sourceType: 'script',

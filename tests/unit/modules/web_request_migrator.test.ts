@@ -140,8 +140,9 @@ describe('WebRequestMigrator', () => {
 
                 if (rulesFile) {
                     const rulesContent = JSON.parse(rulesFile.getContent());
-                    expect(rulesContent.rules.length).toBe(1);
-                    expect(rulesContent.rules[0].action.type).toBe('block');
+                    expect(Array.isArray(rulesContent)).toBe(true);
+                    expect(rulesContent.length).toBe(1);
+                    expect(rulesContent[0].action.type).toBe('block');
                 }
             }
         });
@@ -171,11 +172,11 @@ describe('WebRequestMigrator', () => {
 
                 if (rulesFile) {
                     const rulesContent = JSON.parse(rulesFile.getContent());
-                    expect(rulesContent.rules).toBeDefined();
-                    expect(rulesContent.rules.length).toBeGreaterThan(0);
+                    expect(Array.isArray(rulesContent)).toBe(true);
+                    expect(rulesContent.length).toBeGreaterThan(0);
 
                     // Check rule structure
-                    const rule = rulesContent.rules[0];
+                    const rule = rulesContent[0];
                     expect(rule.id).toBeDefined();
                     expect(rule.action.type).toBe('block');
                     expect(rule.condition).toBeDefined();
@@ -312,7 +313,8 @@ describe('WebRequestMigrator', () => {
 
                 if (rulesFile) {
                     const rulesContent = JSON.parse(rulesFile.getContent());
-                    expect(rulesContent.rules.length).toBe(2);
+                    expect(Array.isArray(rulesContent)).toBe(true);
+                    expect(rulesContent.length).toBe(2);
                 }
             }
         });
@@ -341,7 +343,8 @@ describe('WebRequestMigrator', () => {
 
                 if (rulesFile) {
                     const rulesContent = JSON.parse(rulesFile.getContent());
-                    const rule = rulesContent.rules[0];
+                    expect(Array.isArray(rulesContent)).toBe(true);
+                    const rule = rulesContent[0];
                     expect(rule.action.type).toBe('redirect');
                     expect(rule.action.redirect).toBeDefined();
                 }
@@ -398,7 +401,8 @@ describe('WebRequestMigrator', () => {
 
                 if (rulesFile) {
                     const rulesContent = JSON.parse(rulesFile.getContent());
-                    const rule = rulesContent.rules[0];
+                    expect(Array.isArray(rulesContent)).toBe(true);
+                    const rule = rulesContent[0];
                     expect(rule.condition.resourceTypes).toEqual(['script', 'image']);
                 }
             }
@@ -431,16 +435,17 @@ describe('WebRequestMigrator', () => {
 
                 if (rulesFile) {
                     const rulesContent = JSON.parse(rulesFile.getContent());
+                    expect(Array.isArray(rulesContent)).toBe(true);
                     // Should create 3 rules - one per URL pattern
-                    expect(rulesContent.rules.length).toBe(3);
+                    expect(rulesContent.length).toBe(3);
 
                     // Verify each rule has the correct URL pattern
-                    expect(rulesContent.rules[0].condition.urlFilter).toBe('*://*.ads.com/*');
-                    expect(rulesContent.rules[1].condition.urlFilter).toBe('*://*.tracker.com/*');
-                    expect(rulesContent.rules[2].condition.urlFilter).toBe('*://*.analytics.com/*');
+                    expect(rulesContent[0].condition.urlFilter).toBe('*://*.ads.com/*');
+                    expect(rulesContent[1].condition.urlFilter).toBe('*://*.tracker.com/*');
+                    expect(rulesContent[2].condition.urlFilter).toBe('*://*.analytics.com/*');
 
                     // Verify all rules have the same action and resource types
-                    rulesContent.rules.forEach((rule: any) => {
+                    rulesContent.forEach((rule: any) => {
                         expect(rule.action.type).toBe('block');
                         expect(rule.condition.resourceTypes).toEqual(['script']);
                     });

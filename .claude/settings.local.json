@@ -37,7 +37,8 @@
       "Bash(yarn test:full:*)",
       "Bash(NODE_OPTIONS=\"--max-old-space-size=4096 --expose-gc\" npx ts-node:*)",
       "Bash(tee:*)",
-      "Read(//private/tmp/**)"
+      "Read(//private/tmp/**)",
+      "Bash(DEBUG_COMMENTS=true npx jest:*)"
     ],
     "deny": [],
     "ask": []
