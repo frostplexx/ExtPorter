@@ -386,10 +386,13 @@ export class FormatPreservingGenerator {
         }
 
         // 2. Process generated code lines and inject inline/standalone comments
+        let standaloneIndex = 0;
+        let inlineIndex = 0;
+
         for (let i = 0; i < generatedLines.length; i++) {
             const line = generatedLines[i];
 
-            // Add any standalone comments that should appear before this line
+            // Try to place standalone comments using context matching first
             const standaloneBefore = this.findCommentsForLine(
                 commentsByCategory.standalone.filter((c) => !usedComments.has(c)),
                 line,
@@ -405,10 +408,20 @@ export class FormatPreservingGenerator {
                 }
             }
 
+            // If no context match found and we have unused standalone comments, place them periodically
+            if (standaloneBefore.length === 0 && standaloneIndex < commentsByCategory.standalone.length) {
+                const comment = commentsByCategory.standalone[standaloneIndex];
+                if (!usedComments.has(comment) && (i % 5 === 0 || i === 0)) {
+                    result.push(...this.formatComment(comment, comment.indentation));
+                    usedComments.add(comment);
+                    standaloneIndex++;
+                }
+            }
+
             // Add the actual code line
             result.push(line);
 
-            // Add any inline comments that should appear after this line
+            // Try to place inline comments using context matching
             const inlineAfter = this.findCommentsForLine(
                 commentsByCategory.inline.filter((c) => !usedComments.has(c)),
                 line,
@@ -428,6 +441,35 @@ export class FormatPreservingGenerator {
                     }
                     usedComments.add(comment);
                 }
+            }
+
+            // If no inline match and we have unused inline comments, try to place them
+            if (inlineAfter.length === 0 && inlineIndex < commentsByCategory.inline.length && line.trim() !== '') {
+                const comment = commentsByCategory.inline[inlineIndex];
+                if (!usedComments.has(comment)) {
+                    const lastLineIndex = result.length - 1;
+                    if (comment.type === 'line') {
+                        result[lastLineIndex] = result[lastLineIndex] + ' ' + comment.originalText;
+                    } else {
+                        result.push(...this.formatComment(comment, comment.indentation));
+                    }
+                    usedComments.add(comment);
+                    inlineIndex++;
+                }
+            }
+        }
+
+        // 2.5. Add any remaining standalone/inline comments that weren't placed
+        const remainingComments = [
+            ...commentsByCategory.standalone.filter((c) => !usedComments.has(c)),
+            ...commentsByCategory.inline.filter((c) => !usedComments.has(c)),
+        ];
+
+        if (remainingComments.length > 0) {
+            result.push('');
+            for (const comment of remainingComments) {
+                result.push(...this.formatComment(comment, comment.indentation));
+                usedComments.add(comment);
             }
         }
 
