@@ -1,6 +1,9 @@
 import chalk from 'chalk';
 import stringWidth from 'string-width';
 import { ExtensionSearchResult } from './types';
+import * as terminalKit from 'terminal-kit';
+
+const term = terminalKit.terminal;
 
 export function truncateAndPad(str: string, maxLength: number): string {
     const cleanStr = str.replace(/\x1b\[[0-9;]*m/g, '');
@@ -48,6 +51,8 @@ export function displayExtensionList(
     selectedIndex: number
 ): void {
     console.clear();
+    // Clear all Kitty graphics images
+    term('\x1b_Ga=d\x1b\\');
     console.log(chalk.cyan('Search Extensions'));
     console.log(
         chalk.dim(
@@ -80,7 +85,7 @@ export function filterExtensions(
     return extensions.filter((ext) => {
         const name = (ext.name || ext.manifest?.name || '').toLowerCase();
         const desc = (ext.manifest?.description || '').toLowerCase();
-        const id = ext.id.toLowerCase();
+        const id = (ext.id || '').toLowerCase();
         return name.includes(lowerQuery) || desc.includes(lowerQuery) || id.includes(lowerQuery);
     });
 }
