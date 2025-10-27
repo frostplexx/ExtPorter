@@ -210,7 +210,7 @@ async function downloadImage(
                     }
 
                     // Retry on server errors or rate limiting
-                    if (attempt < maxRetries && (response.statusCode === 429 || response.statusCode! >= 500)) {
+                    if (attempt < maxRetries && (response.statusCode === 429 || (typeof response.statusCode === 'number' && response.statusCode >= 500))) {
                         const delay = Math.min(1000 * Math.pow(2, attempt - 1), 5000); // Exponential backoff
                         setTimeout(() => {
                             resolve(downloadImage(url, maxRetries, timeout, attempt + 1));
