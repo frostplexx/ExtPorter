@@ -600,8 +600,8 @@ export class WebRequestMigrator implements MigrationModule {
      * Create a rules.json file
      */
     private static createRulesFile(rules: Rule[]): LazyFile {
-        const ruleset: Ruleset = { rules };
-        const content = JSON.stringify(ruleset, null, 2);
+        // Chrome expects rules.json to be a direct array, not an object with a "rules" property
+        const content = JSON.stringify(rules, null, 2);
 
         // Create a LazyFile-like object for the rules.json
         const rulesFile = Object.create(LazyFile.prototype);
