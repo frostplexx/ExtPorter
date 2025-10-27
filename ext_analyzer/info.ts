@@ -174,7 +174,7 @@ async function downloadImage(
             const protocol = highResUrl.startsWith('https') ? https : http;
             const tempDir = os.tmpdir();
             const ext = '.png'; // Use PNG to support more formats
-            const tempFile = path.join(tempDir, `cws-image-${Date.now()}-${Math.random().toString(36).substr(2, 9)}${ext}`);
+            const tempFile = path.join(tempDir, `cws-image-${Date.now()}-${Math.random().toString(36).substring(2, 11)}${ext}`);
 
             const file = fs.createWriteStream(tempFile);
             let requestAborted = false;
