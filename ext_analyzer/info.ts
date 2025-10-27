@@ -55,7 +55,21 @@ export async function showInfo(ext: ExtensionSearchResult): Promise<void> {
         // No logo, just display name normally
         console.log(chalk.bold('Name: ') + chalk.cyan(ext.name || ext.manifest?.name || 'Unknown'));
     }
-    console.log(chalk.bold('Version: ') + chalk.yellow(ext.manifest?.version || 'Unknown'));
+    console.log(chalk.bold('Version: ') + chalk.yellow(ext.manifest?.version || cwsData?.details.version || 'Unknown'));
+
+    // Display last updated if available from CWS
+    if (cwsData?.details.updated) {
+        console.log(chalk.bold('Last Updated: ') + chalk.cyan(cwsData.details.updated));
+    }
+
+    // Display rating if available from CWS
+    if (cwsData?.details.rating) {
+        const ratingText = cwsData.details.ratingCount
+            ? `${cwsData.details.rating}/5 (${cwsData.details.ratingCount} ratings)`
+            : `${cwsData.details.rating}/5`;
+        console.log(chalk.bold('Rating: ') + chalk.yellow('⭐ ' + ratingText));
+    }
+
     if (ext.interestingness_score !== undefined) {
         console.log(
             chalk.bold(`Interestingness Score: ${chalk.dim(ext.interestingness_score.toString())}`)
@@ -99,6 +113,17 @@ export async function showInfo(ext: ExtensionSearchResult): Promise<void> {
     console.log(chalk.blue(' File Paths:'));
     if (mv2Path) console.log(chalk.dim('  MV2: ') + chalk.blue(mv2Path));
     if (mv3Path) console.log(chalk.dim('  MV3: ') + chalk.green(mv3Path));
+
+    // Display size if available from CWS
+    if (cwsData?.details.size) {
+        console.log('');
+        console.log(chalk.bold('Size: ') + chalk.magenta(cwsData.details.size));
+    }
+
+    // Display languages if available from CWS
+    if (cwsData?.details.languages && cwsData.details.languages.length > 0) {
+        console.log(chalk.bold('Languages: ') + chalk.dim(cwsData.details.languages.join(', ')));
+    }
 
     console.log('');
     await waitForKeypress(chalk.dim('Press Enter to continue...'));
@@ -535,6 +560,17 @@ interface CWSData {
         videoThumbnails: string[];
         videoEmbeds: string[];
     };
+    details: {
+        version?: string;
+        updated?: string;
+        size?: string;
+        languages?: string[];
+        userCount?: string;
+        rating?: string;
+        ratingCount?: string;
+        website?: string;
+        developer?: string;
+    };
 }
 
 /**
@@ -618,12 +654,86 @@ function parseCWSData(path_to_html: string): CWSData | null {
             }
         });
 
+        // Extract details section information
+        const details: CWSData['details'] = {};
+
+        // Version
+        $('.ZbWJPd.ecmXy .N3EXSc').each((i, el) => {
+            details.version = $(el).text().trim();
+        });
+
+        // Updated date - look for the "Updated" label and get the next div
+        $('.ZbWJPd.uBIrad').each((i, el) => {
+            const label = $(el).find('.nws2nb').text().trim();
+            if (label === 'Updated') {
+                // Get the sibling div that's not .nws2nb
+                const dateDiv = $(el).find('div').not('.nws2nb').first();
+                details.updated = dateDiv.text().trim();
+            }
+        });
+
+        // Size
+        $('.ZbWJPd.ZSMSLb').each((i, el) => {
+            const label = $(el).find('.nws2nb').text().trim();
+            if (label === 'Size') {
+                const sizeDiv = $(el).find('div').not('.nws2nb').first();
+                details.size = sizeDiv.text().trim();
+            }
+        });
+
+        // Languages
+        $('.ZbWJPd.FFG5Td').each((i, el) => {
+            const label = $(el).find('.nws2nb').text().trim();
+            if (label === 'Languages') {
+                const languages: string[] = [];
+                $(el).find('div').not('.nws2nb').find('div').each((j, langEl) => {
+                    const lang = $(langEl).text().trim();
+                    if (lang) languages.push(lang);
+                });
+                details.languages = languages;
+            }
+        });
+
+        // Rating
+        const ratingEl = $('.Vq0ZA');
+        if (ratingEl.length > 0) {
+            details.rating = ratingEl.text().trim();
+        }
+
+        // Rating count - extract from the text like "15 ratings"
+        const ratingCountEl = $('.xJEoWe');
+        if (ratingCountEl.length > 0) {
+            const ratingText = ratingCountEl.text().trim();
+            const match = ratingText.match(/(\d+)\s+rating/);
+            if (match) {
+                details.ratingCount = match[1];
+            }
+        }
+
+        // Website
+        const websiteEl = $('.cJI8ee .tkwLZc');
+        if (websiteEl.length > 0) {
+            details.website = websiteEl.text().trim();
+        }
+
+        // Developer - look for the Developer section
+        $('.ZbWJPd.odyJv').each((i, el) => {
+            const label = $(el).find('.nws2nb').text().trim();
+            if (label === 'Developer') {
+                const devLink = $(el).find('.Gztlsc');
+                if (devLink.length > 0) {
+                    details.developer = devLink.attr('href') || devLink.text().trim();
+                }
+            }
+        });
+
         return {
             description,
             images: {
                 logo,
                 ...images,
             },
+            details,
         };
 
     } catch (error) {

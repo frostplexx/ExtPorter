@@ -85,7 +85,7 @@ export function filterExtensions(
     return extensions.filter((ext) => {
         const name = (ext.name || ext.manifest?.name || '').toLowerCase();
         const desc = (ext.manifest?.description || '').toLowerCase();
-        const id = ext.id.toLowerCase();
+        const id = (ext.id || '').toLowerCase();
         return name.includes(lowerQuery) || desc.includes(lowerQuery) || id.includes(lowerQuery);
     });
 }
