@@ -385,7 +385,7 @@ const BG_SCRIPT_SCORE_MAP = new Map<RegExp, number>([
     [/\bconfig\b/i, -4],
 
     // Very low priority - definitely not background
-    [/\bjquery\b/i, -10],
+    [/\bjquery\b/i, -100],
     [/\blib(rary|s)?\b/i, -10],
     [/\bvendor\b/i, -8],
     [/\bthird[-_]?party\b/i, -8],
