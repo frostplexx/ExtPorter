@@ -5,6 +5,7 @@ export enum Tags {
     CSP_VALUE_MODIFIED,
     API_RENAMES_APPLIED,
     BRIDGE_INJECTED,
+    OFFSCREEN_DOCUMENT_ADDED,
 
     // Extension Features
     HAS_BROWSER_POPUP,
