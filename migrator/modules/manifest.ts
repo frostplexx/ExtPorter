@@ -465,8 +465,31 @@ function createTransformedFile(originalFile: LazyFile, newContent: string): Lazy
         /* No-op for in-memory content */
     };
     transformedFile.getAST = () => {
-        // Script imports don't need AST parsing, return undefined
-        return undefined;
+        // Parse the transformed content to generate AST for subsequent modules
+        try {
+            const espree = require('espree');
+            // Try as script first (most common)
+            return espree.parse(newContent, {
+                ecmaVersion: 'latest',
+                sourceType: 'script',
+                loc: true,
+                range: true,
+            });
+        } catch {
+            try {
+                const espree = require('espree');
+                // Fallback to module parsing
+                return espree.parse(newContent, {
+                    ecmaVersion: 'latest',
+                    sourceType: 'module',
+                    loc: true,
+                    range: true,
+                });
+            } catch (error) {
+                // If parsing fails, return undefined
+                return undefined;
+            }
+        }
     };
     transformedFile.getBuffer = () => Buffer.from(newContent, 'utf8');
 
