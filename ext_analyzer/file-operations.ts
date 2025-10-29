@@ -15,7 +15,7 @@ export function getMv2Path(ext: ExtensionSearchResult): string | null {
 
 export function getMv3Path(ext: ExtensionSearchResult): string | null {
     if (ext.manifest_v3_path) {
-        const mv3Path = path.dirname(ext.manifest_v3_path);
+        const mv3Path = path.resolve(path.dirname(ext.manifest_v3_path));
         if (fs.existsSync(mv3Path)) return mv3Path;
     }
 
