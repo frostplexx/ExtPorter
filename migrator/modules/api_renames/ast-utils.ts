@@ -1,10 +1,12 @@
+import * as ESTree from 'estree';
+
 /**
  * Uses a visitor pattern to traverse the AST once
  *
  * @param node Current AST node
  * @param visitor Function to call for each node
  */
-export function traverseAST(node: any, visitor: (node: any) => void): void {
+export function traverseAST(node: ESTree.Node | any, visitor: (node: ESTree.Node) => void): void {
     // Early return for null/undefined/primitive values
     if (!node || typeof node !== 'object') {
         return;
@@ -39,7 +41,7 @@ export function traverseAST(node: any, visitor: (node: any) => void): void {
  * @param memberExpr Member expression AST node
  * @returns String representation of the API path
  */
-export function buildMemberExpressionPath(memberExpr: any): string {
+export function buildMemberExpressionPath(memberExpr: ESTree.MemberExpression | any): string {
     if (memberExpr.type !== 'MemberExpression') {
         return '';
     }

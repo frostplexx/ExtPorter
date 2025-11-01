@@ -1,23 +1,24 @@
+import * as ESTree from 'estree';
 import { buildMemberExpressionPath } from '../ast-utils';
 import { logger } from '../../../utils/logger';
 import { SpecialTransform } from '../../../types/special_transform';
 
-
 export class ContextMenuTranform implements SpecialTransform {
-
     static contextMenuCalls: any[] = [];
 
-    // Special handling for window.open() in service workers
-    public static try_transform(node: any): boolean {
+    // Special handling for context menu onclick transformations
+    public static try_transform(node: ESTree.Node): boolean {
         if (this.isContextMenusCreateCall(node)) {
-            const onclickProperty = this.extractOnclickFromContextMenu(node);
+            const onclickProperty = this.extractOnclickFromContextMenu(
+                node as ESTree.CallExpression
+            );
             if (onclickProperty) {
                 this.contextMenuCalls.push({ node, onclickProperty });
 
-                return true
+                return true;
             }
         }
-        return false
+        return false;
     }
 
     /**
@@ -26,7 +27,7 @@ export class ContextMenuTranform implements SpecialTransform {
      * @param node AST node to check
      * @returns True if node is a contextMenus.create() call
      */
-    static isContextMenusCreateCall(node: any): boolean {
+    static isContextMenusCreateCall(node: ESTree.Node): node is ESTree.CallExpression {
         if (node.type !== 'CallExpression' || !node.callee?.type) return false;
 
         const apiPath = buildMemberExpressionPath(node.callee);
@@ -41,7 +42,9 @@ export class ContextMenuTranform implements SpecialTransform {
      * @param node CallExpression AST node for contextMenus.create()
      * @returns Object with onclick function and menu ID, or null if no onclick found
      */
-    static extractOnclickFromContextMenu(node: any): { onclick: any; menuId: any } | null {
+    static extractOnclickFromContextMenu(
+        node: ESTree.CallExpression
+    ): { onclick: any; menuId: any } | null {
         if (!node.arguments || node.arguments.length === 0) return null;
 
         const firstArg = node.arguments[0];
@@ -54,7 +57,13 @@ export class ContextMenuTranform implements SpecialTransform {
         const remainingProperties: any[] = [];
 
         for (const prop of firstArg.properties) {
-            const keyName = prop.key?.name || prop.key?.value;
+            // Skip spread elements
+            if (prop.type === 'SpreadElement') {
+                remainingProperties.push(prop);
+                continue;
+            }
+
+            const keyName = (prop.key as any)?.name || (prop.key as any)?.value;
 
             if (keyName === 'onclick') {
                 onclickProperty = prop.value;
@@ -73,8 +82,10 @@ export class ContextMenuTranform implements SpecialTransform {
         if (!idProperty) {
             // Generate a unique ID based on title or index
             const titleProp = remainingProperties.find(
-                (p) => (p.key?.name || p.key?.value) === 'title'
-            );
+                (p) =>
+                    p.type === 'Property' &&
+                    ((p.key as any)?.name || (p.key as any)?.value) === 'title'
+            ) as any;
 
             if (titleProp && titleProp.value.type === 'Literal') {
                 // Use title as base for ID
@@ -108,7 +119,7 @@ export class ContextMenuTranform implements SpecialTransform {
         }
 
         // Remove onclick from the object and keep remaining properties (including id)
-        firstArg.properties = remainingProperties;
+        (firstArg as any).properties = remainingProperties;
 
         return {
             onclick: onclickProperty,
@@ -120,11 +131,12 @@ export class ContextMenuTranform implements SpecialTransform {
      * Adds chrome.contextMenus.onClicked.addListener() at the end of the program
      * to handle all context menu clicks that were previously using onclick.
      *
-     * @param ast The transformed AST
+     * @param ast The transformed AST (Program node)
      * @param contextMenuCalls Array of context menu calls with their onclick handlers
      */
-    static addContextMenusOnClickedListener(ast: any, contextMenuCalls: any[]): void {
-        if (!ast.body || !Array.isArray(ast.body)) return;
+    static addContextMenusOnClickedListener(ast: ESTree.Node, contextMenuCalls: any[]): void {
+        const astBody = (ast as any).body;
+        if (!astBody || !Array.isArray(astBody)) return;
 
         // Build the listener function
         const listenerFunction: any = {
@@ -211,7 +223,10 @@ export class ContextMenuTranform implements SpecialTransform {
 
             // Create the function call statement
             let consequent: any;
-            if (onclick.type === 'FunctionExpression' || onclick.type === 'ArrowFunctionExpression') {
+            if (
+                onclick.type === 'FunctionExpression' ||
+                onclick.type === 'ArrowFunctionExpression'
+            ) {
                 // Inline function - call it
                 consequent = {
                     type: 'BlockStatement',
@@ -282,11 +297,10 @@ export class ContextMenuTranform implements SpecialTransform {
         }
 
         // Add the listener to the end of the program
-        ast.body.push(listenerFunction);
+        astBody.push(listenerFunction);
 
         logger.debug(null, 'Added contextMenus.onClicked listener', {
             menuItemsHandled: contextMenuCalls.length,
         });
     }
-
 }
