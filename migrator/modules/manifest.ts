@@ -4,6 +4,7 @@ import { logger } from '../utils/logger';
 import { Tags } from '../types/tags';
 import crypto from 'crypto';
 import { LazyFile } from '../types/abstract_file';
+import * as espree from 'espree';
 
 export class MigrateManifest implements MigrationModule {
     // taken from https://developer.chrome.com/docs/extensions/reference/permissions-list
@@ -187,9 +188,7 @@ export class MigrateManifest implements MigrationModule {
                     // Convert background.scripts to background.service_worker
                     const scripts = background['scripts'] as string[];
                     if (scripts.length > 0) {
-
                         if (scripts.length > 1) {
-
                             const script = bgScriptChooser(scripts);
                             logger.warn(
                                 extension,
@@ -224,7 +223,6 @@ export class MigrateManifest implements MigrationModule {
                                 service_worker: scripts[0],
                             };
                         }
-
                     } else {
                         // Empty scripts array - remove background entirely
                         extension.manifest['background'] = {};
@@ -346,10 +344,10 @@ export class MigrateManifest implements MigrationModule {
                     error:
                         error instanceof Error
                             ? {
-                                message: error.message,
-                                stack: error.stack,
-                                name: error.name,
-                            }
+                                  message: error.message,
+                                  stack: error.stack,
+                                  name: error.name,
+                              }
                             : String(error),
                 }
             );
@@ -396,7 +394,7 @@ const BG_SCRIPT_SCORE_MAP = new Map<RegExp, number>([
     [/\bspec\b/i, -15],
     [/\bmock(s)?\b/i, -12],
     [/\bdemo\b/i, -10],
-    [/\bexample(s)?\b/i, -10]
+    [/\bexample(s)?\b/i, -10],
 ]);
 
 /**
@@ -467,7 +465,6 @@ function createTransformedFile(originalFile: LazyFile, newContent: string): Lazy
     transformedFile.getAST = () => {
         // Parse the transformed content to generate AST for subsequent modules
         try {
-            const espree = require('espree');
             // Try as script first (most common)
             return espree.parse(newContent, {
                 ecmaVersion: 'latest',
@@ -477,7 +474,6 @@ function createTransformedFile(originalFile: LazyFile, newContent: string): Lazy
             });
         } catch {
             try {
-                const espree = require('espree');
                 // Fallback to module parsing
                 return espree.parse(newContent, {
                     ecmaVersion: 'latest',
@@ -485,7 +481,7 @@ function createTransformedFile(originalFile: LazyFile, newContent: string): Lazy
                     loc: true,
                     range: true,
                 });
-            } catch (error) {
+            } catch {
                 // If parsing fails, return undefined
                 return undefined;
             }
