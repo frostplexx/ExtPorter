@@ -9,7 +9,7 @@ import { Tags } from '../../types/tags';
 import { TwinningMapping } from '../../types/twinning_mapping';
 import { BlacklistChecker } from '../../utils/blacklist_checker';
 import { FormatPreservingGenerator } from '../../utils/format_preserving_generator';
-import { loadApiMappings, countPotentialTransformations } from './api-mappings-loader';
+import { loadApiMappings } from './api-mappings-loader';
 import { applyApiTransformations } from './ast-transformers';
 
 /**
@@ -17,7 +17,6 @@ import { applyApiTransformations } from './ast-transformers';
  * to their Manifest V3 equivalents using AST-based transformations.
  */
 export class RenameAPIS implements MigrationModule {
-
     /**
      * Processes all JavaScript files in the extension and
      * applies API transformations based on the loaded mapping rules.
@@ -26,16 +25,15 @@ export class RenameAPIS implements MigrationModule {
         const startTime = Date.now();
 
         try {
-
             // Validate extension input
             if (!extension || !extension.id || !extension.files || !extension.manifest) {
                 return new MigrationError(extension, new Error('Invalid extension structure'));
             }
 
-            //TODO: Memomize
+            // Load API mappings (cached after first load for performance)
             const mappings = loadApiMappings();
-            // return if no mappings available
 
+            // Return if no mappings available
             if (mappings.mappings.length === 0) {
                 return new MigrationError(extension, new Error('No API mappings available'));
             }
@@ -132,26 +130,21 @@ export class RenameAPIS implements MigrationModule {
         extension: Extension | undefined,
         onTransformed: (transformed: boolean) => void
     ): LazyFile {
-
         const ast = file.getAST();
 
         if (!ast) {
             const fileSize = file.getSize();
             const fileSizeKB = Math.round(fileSize / 1024);
             const content = file.getContent();
-            const isWebpackBundle = BlacklistChecker.getInstance().isWebpackBundle(content)
+            const isWebpackBundle = BlacklistChecker.getInstance().isWebpackBundle(content);
 
-            logger.error(
-                null,
-                `AST parsing failed for file ${file.path}`,
-                {
-                    path: file.path,
-                    fileSizeKB: fileSizeKB,
-                    isWebpackBundle: isWebpackBundle,
-                    content: content,
-                    issue: 'Large files (>100KB) cannot be parsed for API transformations',
-                }
-            );
+            logger.error(null, `AST parsing failed for file ${file.path}`, {
+                path: file.path,
+                fileSizeKB: fileSizeKB,
+                isWebpackBundle: isWebpackBundle,
+                content: content,
+                issue: 'Large files (>100KB) cannot be parsed for API transformations',
+            });
 
             onTransformed(false);
             return file;
@@ -277,7 +270,6 @@ export class RenameAPIS implements MigrationModule {
                 blacklistedFiles,
                 duration,
             });
-
         }
     }
 
