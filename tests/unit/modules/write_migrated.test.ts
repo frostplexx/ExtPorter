@@ -21,12 +21,12 @@ describe('WriteMigrated', () => {
             name: 'Test Extension',
             manifest_v2_path: '/test/path',
             manifest: {},
-            files: []
+            files: [],
         } as Extension;
 
         // Mock MigrationWriter.shared
         mockMigrationWriter = {
-            queueExtension: jest.fn()
+            queueExtension: jest.fn(),
         } as any;
 
         (MigrationWriter as any).shared = mockMigrationWriter;
@@ -42,7 +42,7 @@ describe('WriteMigrated', () => {
                 'Extension queued for async write',
                 {
                     extensionName: mockExtension.name,
-                    extensionId: mockExtension.id
+                    extensionId: mockExtension.id,
                 }
             );
             expect(result).toBe(mockExtension);
@@ -62,7 +62,7 @@ describe('WriteMigrated', () => {
                 {
                     extensionName: mockExtension.name,
                     extensionId: mockExtension.id,
-                    error: 'Queue failed'
+                    error: 'Queue failed',
                 }
             );
             expect(result).toBeInstanceOf(MigrationError);
@@ -83,7 +83,7 @@ describe('WriteMigrated', () => {
                 {
                     extensionName: mockExtension.name,
                     extensionId: mockExtension.id,
-                    error: 'String error'
+                    error: 'String error',
                 }
             );
             expect(result).toBeInstanceOf(MigrationError);

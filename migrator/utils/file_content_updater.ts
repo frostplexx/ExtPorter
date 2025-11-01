@@ -32,7 +32,9 @@ export class FileContentUpdater {
                 file.cleanContent();
             }
         } catch (error) {
-            throw new Error(`Failed to write file content for ${file.path}: ${error instanceof Error ? error.message : String(error)}`);
+            throw new Error(
+                `Failed to write file content for ${file.path}: ${error instanceof Error ? error.message : String(error)}`
+            );
         }
     }
 

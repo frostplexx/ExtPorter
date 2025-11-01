@@ -74,10 +74,10 @@ async function main() {
         if (directExtensionId) {
             // Direct access to extension
             const extensions = await explorer.getAllExtensions();
-            let ext = extensions.find(e => e.id === directExtensionId);
+            let ext = extensions.find((e) => e.id === directExtensionId);
 
             if (!ext) {
-                ext = extensions.find(e => e.mv3_extension_id === directExtensionId);
+                ext = extensions.find((e) => e.mv3_extension_id === directExtensionId);
             }
 
             if (!ext) {
@@ -113,13 +113,11 @@ async function main() {
                 const selected = await explorer.searchExtensions(extensions);
 
                 if (!selected) {
-                    console.log(chalk.cyan('\n👋 Goodbye!'));
                     break;
                 }
 
                 const shouldContinue = await explorer.runActionLoop(selected);
                 if (!shouldContinue) {
-                    console.log(chalk.cyan('\n👋 Goodbye!'));
                     break;
                 }
             }

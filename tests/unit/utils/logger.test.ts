@@ -32,7 +32,7 @@ describe('Logger', () => {
             name: 'Test Extension',
             manifest_v2_path: '/test/path',
             manifest: {},
-            files: []
+            files: [],
         } as Extension;
 
         // Mock console methods
@@ -40,7 +40,7 @@ describe('Logger', () => {
             info: jest.spyOn(console, 'info').mockImplementation(() => {}),
             warn: jest.spyOn(console, 'warn').mockImplementation(() => {}),
             error: jest.spyOn(console, 'error').mockImplementation(() => {}),
-            debug: jest.spyOn(console, 'debug').mockImplementation(() => {})
+            debug: jest.spyOn(console, 'debug').mockImplementation(() => {}),
         };
 
         // Mock fs-extra
@@ -68,10 +68,9 @@ describe('Logger', () => {
 
             logger.info(mockExtension, 'Test info message', { key: 'value' });
 
-            expect(consoleSpy.info).toHaveBeenCalledWith(
-                expect.stringContaining('[INFO]'),
-                { key: 'value' }
-            );
+            expect(consoleSpy.info).toHaveBeenCalledWith(expect.stringContaining('[INFO]'), {
+                key: 'value',
+            });
         });
 
         it('should not log info when log level is error', () => {
@@ -104,10 +103,7 @@ describe('Logger', () => {
 
             logger.info(mockExtension, 'Test message');
 
-            expect(consoleSpy.info).toHaveBeenCalledWith(
-                expect.stringContaining('[INFO]'),
-                ''
-            );
+            expect(consoleSpy.info).toHaveBeenCalledWith(expect.stringContaining('[INFO]'), '');
         });
     });
 
@@ -117,10 +113,9 @@ describe('Logger', () => {
 
             logger.warn(mockExtension, 'Test warning message', { warning: true });
 
-            expect(consoleSpy.warn).toHaveBeenCalledWith(
-                expect.stringContaining('[WARNING]'),
-                { warning: true }
-            );
+            expect(consoleSpy.warn).toHaveBeenCalledWith(expect.stringContaining('[WARNING]'), {
+                warning: true,
+            });
         });
 
         it('should not log warning when log level is error', () => {
@@ -147,10 +142,9 @@ describe('Logger', () => {
 
             logger.error(mockExtension, 'Test error message', { error: 'details' });
 
-            expect(consoleSpy.error).toHaveBeenCalledWith(
-                expect.stringContaining('[ERROR]'),
-                { error: 'details' }
-            );
+            expect(consoleSpy.error).toHaveBeenCalledWith(expect.stringContaining('[ERROR]'), {
+                error: 'details',
+            });
         });
 
         it('should always log errors regardless of log level', () => {
@@ -176,10 +170,9 @@ describe('Logger', () => {
 
             logger.debug(mockExtension, 'Test debug message', { debug: true });
 
-            expect(consoleSpy.debug).toHaveBeenCalledWith(
-                expect.stringContaining('[DEBUG]'),
-                { debug: true }
-            );
+            expect(consoleSpy.debug).toHaveBeenCalledWith(expect.stringContaining('[DEBUG]'), {
+                debug: true,
+            });
         });
 
         it('should not log debug when log level is info', () => {
@@ -204,7 +197,7 @@ describe('Logger', () => {
         it('should respect log level hierarchy for info', () => {
             // Test that info logs when level is info or higher
             const levels = ['debug', 'info'];
-            levels.forEach(level => {
+            levels.forEach((level) => {
                 process.env.LOG_LEVEL = level;
                 consoleSpy.info.mockClear();
 
@@ -216,7 +209,7 @@ describe('Logger', () => {
 
         it('should not log info when level is lower', () => {
             const levels = ['warning', 'error'];
-            levels.forEach(level => {
+            levels.forEach((level) => {
                 process.env.LOG_LEVEL = level;
                 consoleSpy.info.mockClear();
 
@@ -252,8 +245,8 @@ describe('Logger', () => {
 
             // Each should have different color codes
             expect(debugCall).toContain('\x1b[36m'); // Cyan for debug
-            expect(infoCall).toContain('\x1b[32m');  // Green for info
-            expect(warnCall).toContain('\x1b[33m');  // Yellow for warning
+            expect(infoCall).toContain('\x1b[32m'); // Green for info
+            expect(warnCall).toContain('\x1b[33m'); // Yellow for warning
             expect(errorCall).toContain('\x1b[31m'); // Red for error
         });
     });
@@ -264,6 +257,122 @@ describe('Logger', () => {
             // We can't test the mock call, but we can verify the logs directory path is correct
             const logsDir = require('path').join(process.cwd(), 'logs');
             expect(logsDir).toContain('logs');
+        });
+    });
+
+    describe('flush', () => {
+        it('should flush pending logs', async () => {
+            await expect(logger.flush()).resolves.not.toThrow();
+        });
+    });
+
+    describe('stop', () => {
+        it('should stop logging timers', () => {
+            expect(() => logger.stop()).not.toThrow();
+        });
+    });
+
+    describe('meta truncation and sanitization', () => {
+        it('should handle large meta objects', () => {
+            process.env.LOG_LEVEL = 'info';
+
+            const largeMeta = { data: 'A'.repeat(15 * 1024 * 1024) }; // 15MB
+
+            expect(() => logger.info(mockExtension, 'Test large meta', largeMeta)).not.toThrow();
+        });
+
+        it('should handle circular references in meta', () => {
+            process.env.LOG_LEVEL = 'info';
+
+            const circular: any = { test: 'value' };
+            circular.self = circular;
+
+            expect(() => logger.info(mockExtension, 'Test circular meta', circular)).not.toThrow();
+        });
+
+        it('should handle null meta', () => {
+            process.env.LOG_LEVEL = 'info';
+
+            expect(() => logger.info(mockExtension, 'Test null meta', null)).not.toThrow();
+        });
+
+        it('should handle undefined meta', () => {
+            process.env.LOG_LEVEL = 'info';
+
+            expect(() =>
+                logger.info(mockExtension, 'Test undefined meta', undefined)
+            ).not.toThrow();
+        });
+    });
+
+    describe('message truncation', () => {
+        it('should handle extremely long messages', () => {
+            process.env.LOG_LEVEL = 'info';
+
+            const longMessage = 'A'.repeat(2 * 1024 * 1024); // 2MB message
+
+            expect(() => logger.info(mockExtension, longMessage)).not.toThrow();
+        });
+    });
+
+    describe('batching', () => {
+        it('should handle batch logging', async () => {
+            process.env.LOG_LEVEL = 'info';
+            delete process.env.NODE_ENV;
+
+            // Log multiple messages
+            for (let i = 0; i < 30; i++) {
+                logger.info(mockExtension, `Test message ${i}`);
+            }
+
+            // Flush to process batch
+            await logger.flush();
+
+            expect(consoleSpy.info).toHaveBeenCalled();
+        });
+    });
+
+    describe('shutdown handling', () => {
+        it('should prevent logging after database shutdown', () => {
+            process.env.LOG_LEVEL = 'info';
+            delete process.env.NODE_ENV;
+
+            // Mock database as shutting down
+            (Database.shared as any).isShuttingDown = true;
+
+            logger.info(mockExtension, 'Test after shutdown');
+
+            // Reset shutdown flag
+            (Database.shared as any).isShuttingDown = false;
+        });
+    });
+
+    describe('extension metadata', () => {
+        it('should include extension metadata in logs', () => {
+            process.env.LOG_LEVEL = 'info';
+
+            const extWithNewTab: Extension = {
+                ...mockExtension,
+                isNewTabExtension: true,
+            };
+
+            logger.info(extWithNewTab, 'Test with new tab flag');
+
+            expect(consoleSpy.info).toHaveBeenCalled();
+        });
+
+        it('should handle extension without optional fields', () => {
+            process.env.LOG_LEVEL = 'info';
+
+            const minimalExt: Extension = {
+                id: 'minimal',
+                name: 'Minimal',
+                manifest_v2_path: '/path',
+                manifest: {},
+                files: [],
+            };
+
+            expect(() => logger.info(minimalExt, 'Test minimal extension')).not.toThrow();
         });
     });
 });

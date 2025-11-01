@@ -25,7 +25,9 @@ export interface Extension {
         api_renames: number;
         manifest_changes: number;
         file_modifications: number;
+        webRequest_to_dnr_migrations: number;
     };
+    tags?: string[]; // Store tag names as enum string names (e.g., 'MANIFEST_MIGRATED') for readability in MongoDB
     fakeium_validation?: {
         enabled: boolean;
         is_equivalent: boolean;

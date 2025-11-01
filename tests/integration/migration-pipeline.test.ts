@@ -30,11 +30,11 @@ describe('Migration Pipeline Integration Tests', () => {
     });
 
     describe('Simple Extension Migration', () => {
-        it('should successfully migrate a simple extension through the complete pipeline', () => {
+        it('should successfully migrate a simple extension through the complete pipeline', async () => {
             const extension = createTestExtension(SAMPLE_EXTENSIONS[0], testDir);
 
             // Step 1: Manifest Migration
-            const manifestResult = MigrateManifest.migrate(extension);
+            const manifestResult = await MigrateManifest.migrate(extension);
             expect(manifestResult).not.toBeInstanceOf(MigrationError);
 
             if (!(manifestResult instanceof MigrationError)) {
@@ -45,7 +45,7 @@ describe('Migration Pipeline Integration Tests', () => {
                 expect(manifestResult.manifest.background.service_worker).toBe('background.js');
 
                 // Step 2: CSP Migration
-                const cspResult = MigrateCSP.migrate(manifestResult);
+                const cspResult = await MigrateCSP.migrate(manifestResult);
                 expect(cspResult).not.toBeInstanceOf(MigrationError);
 
                 if (!(cspResult instanceof MigrationError)) {
@@ -73,11 +73,11 @@ describe('Migration Pipeline Integration Tests', () => {
     });
 
     describe('Complex Extension Migration', () => {
-        it('should successfully migrate a complex extension with remote resources', () => {
+        it('should successfully migrate a complex extension with remote resources', async () => {
             const extension = createTestExtension(SAMPLE_EXTENSIONS[1], testDir);
 
             // Step 1: Manifest Migration
-            const manifestResult = MigrateManifest.migrate(extension);
+            const manifestResult = await MigrateManifest.migrate(extension);
             expect(manifestResult).not.toBeInstanceOf(MigrationError);
 
             if (!(manifestResult instanceof MigrationError)) {
@@ -138,14 +138,14 @@ describe('Migration Pipeline Integration Tests', () => {
     });
 
     describe('New Tab Extension Migration', () => {
-        it('should correctly identify and migrate new tab extensions', () => {
+        it('should correctly identify and migrate new tab extensions', async () => {
             const extension = createTestExtension(SAMPLE_EXTENSIONS[2], testDir);
 
             // Verify it's identified as a new tab extension
             expect(extension.isNewTabExtension).toBeUndefined(); // Will be set by find_extensions in real scenario
 
             // Manifest Migration
-            const manifestResult = MigrateManifest.migrate(extension);
+            const manifestResult = await MigrateManifest.migrate(extension);
             expect(manifestResult).not.toBeInstanceOf(MigrationError);
 
             if (!(manifestResult instanceof MigrationError)) {
@@ -178,7 +178,7 @@ describe('Migration Pipeline Integration Tests', () => {
     });
 
     describe('Migration Error Handling', () => {
-        it('should handle corrupted extension gracefully', () => {
+        it('should handle corrupted extension gracefully', async () => {
             const corruptedExtension: Extension = {
                 id: 'corrupted-extension',
                 name: 'corrupted-extension',
@@ -187,7 +187,7 @@ describe('Migration Pipeline Integration Tests', () => {
                 files: [],
             };
 
-            const manifestResult = MigrateManifest.migrate(corruptedExtension);
+            const manifestResult = await MigrateManifest.migrate(corruptedExtension);
             expect(manifestResult).toBeInstanceOf(MigrationError);
 
             if (manifestResult instanceof MigrationError) {
@@ -211,6 +211,7 @@ describe('Migration Pipeline Integration Tests', () => {
                 try {
                     file.close();
                 } catch (error) {
+                    console.log(error as any);
                     // Expected for missing files
                 }
             });
@@ -218,7 +219,7 @@ describe('Migration Pipeline Integration Tests', () => {
     });
 
     describe('Migration Pipeline Consistency', () => {
-        it('should produce consistent results when run multiple times', () => {
+        it('should produce consistent results when run multiple times', async () => {
             const extension1 = createTestExtension(SAMPLE_EXTENSIONS[1], testDir);
             const extension2 = createTestExtension(
                 SAMPLE_EXTENSIONS[1],
@@ -227,10 +228,10 @@ describe('Migration Pipeline Integration Tests', () => {
 
             // Run pipeline on both extensions
             const result1 = ResourceDownloader.migrate(
-                MigrateManifest.migrate(extension1) as Extension
+                (await MigrateManifest.migrate(extension1)) as Extension
             );
             const result2 = ResourceDownloader.migrate(
-                MigrateManifest.migrate(extension2) as Extension
+                (await MigrateManifest.migrate(extension2)) as Extension
             );
 
             expect(result1).not.toBeInstanceOf(MigrationError);
@@ -263,14 +264,14 @@ describe('Migration Pipeline Integration Tests', () => {
     });
 
     describe('Migration Output Validation', () => {
-        it('should create valid MV3 manifests', () => {
+        it('should create valid MV3 manifests', async () => {
             const extension = createTestExtension(SAMPLE_EXTENSIONS[1], testDir);
-            let result = MigrateManifest.migrate(extension);
+            let result = await MigrateManifest.migrate(extension);
 
             expect(result).not.toBeInstanceOf(MigrationError);
             if (!(result instanceof MigrationError)) {
                 // Apply CSP migration
-                result = MigrateCSP.migrate(result);
+                result = await MigrateCSP.migrate(result);
                 expect(result).not.toBeInstanceOf(MigrationError);
             }
 
@@ -321,9 +322,9 @@ describe('Migration Pipeline Integration Tests', () => {
         });
 
         it('should preserve important extension metadata', () => {
-            SAMPLE_EXTENSIONS.forEach((fixture) => {
+            SAMPLE_EXTENSIONS.forEach(async (fixture) => {
                 const extension = createTestExtension(fixture, testDir);
-                const result = MigrateManifest.migrate(extension);
+                const result = await MigrateManifest.migrate(extension);
 
                 expect(result).not.toBeInstanceOf(MigrationError);
                 if (!(result instanceof MigrationError)) {

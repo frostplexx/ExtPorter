@@ -18,7 +18,7 @@ export class LLMService {
             num_predict: 4000,
             top_p: 0.85,
             top_k: 30,
-            ...config
+            ...config,
         };
         this.effectiveEndpoint = config.endpoint;
     }
@@ -81,12 +81,22 @@ export class LLMService {
                 } else {
                     // Model not found, try to pull it
                     console.log(chalk.yellow(`⚠ Model '${this.config.model}' not found`));
-                    console.log(chalk.dim(`Downloading model '${this.config.model}'... (this may take a few minutes)`));
+                    console.log(
+                        chalk.dim(
+                            `Downloading model '${this.config.model}'... (this may take a few minutes)`
+                        )
+                    );
 
-                    const pullResult = await this.runCommand('ollama', ['pull', this.config.model], true);
+                    const pullResult = await this.runCommand(
+                        'ollama',
+                        ['pull', this.config.model],
+                        true
+                    );
 
                     if (pullResult.success) {
-                        console.log(chalk.green(`✓ Model '${this.config.model}' downloaded successfully`));
+                        console.log(
+                            chalk.green(`✓ Model '${this.config.model}' downloaded successfully`)
+                        );
                         return true;
                     } else {
                         console.log(chalk.red(`✗ Failed to download model: ${pullResult.error}`));
@@ -101,7 +111,7 @@ export class LLMService {
                 await this.runCommand('ollama', ['serve'], false, true);
 
                 // Wait a bit for Ollama to start
-                await new Promise(resolve => setTimeout(resolve, 2000));
+                await new Promise((resolve) => setTimeout(resolve, 2000));
 
                 // Check again
                 const recheckResult = await this.runCommand('ollama', ['list'], false);
@@ -111,14 +121,26 @@ export class LLMService {
 
                     // Now check/download the model
                     if (!recheckResult.output.includes(this.config.model)) {
-                        console.log(chalk.dim(`Downloading model '${this.config.model}'... (this may take a few minutes)`));
-                        const pullResult = await this.runCommand('ollama', ['pull', this.config.model], true);
+                        console.log(
+                            chalk.dim(
+                                `Downloading model '${this.config.model}'... (this may take a few minutes)`
+                            )
+                        );
+                        const pullResult = await this.runCommand(
+                            'ollama',
+                            ['pull', this.config.model],
+                            true
+                        );
 
                         if (!pullResult.success) {
-                            console.log(chalk.red(`✗ Failed to download model: ${pullResult.error}`));
+                            console.log(
+                                chalk.red(`✗ Failed to download model: ${pullResult.error}`)
+                            );
                             return false;
                         }
-                        console.log(chalk.green(`✓ Model '${this.config.model}' downloaded successfully`));
+                        console.log(
+                            chalk.green(`✓ Model '${this.config.model}' downloaded successfully`)
+                        );
                     }
                     return true;
                 } else {
@@ -146,7 +168,7 @@ export class LLMService {
                     // Run in background
                     const proc = spawn(command, args, {
                         detached: true,
-                        stdio: 'ignore'
+                        stdio: 'ignore',
                     });
                     proc.unref();
                     resolve({ success: true, output: '' });
@@ -154,7 +176,7 @@ export class LLMService {
                 }
 
                 const proc = spawn(command, args, {
-                    stdio: showOutput ? 'inherit' : 'pipe'
+                    stdio: showOutput ? 'inherit' : 'pipe',
                 });
 
                 let output = '';
@@ -174,7 +196,7 @@ export class LLMService {
                     resolve({
                         success: code === 0,
                         output,
-                        error: error || undefined
+                        error: error || undefined,
                     });
                 });
 
@@ -182,14 +204,14 @@ export class LLMService {
                     resolve({
                         success: false,
                         output: '',
-                        error: err.message
+                        error: err.message,
                     });
                 });
             } catch (err: any) {
                 resolve({
                     success: false,
                     output: '',
-                    error: err.message
+                    error: err.message,
                 });
             }
         });
@@ -199,7 +221,10 @@ export class LLMService {
      * Generate completion using chat messages (recommended)
      * Uses the /api/chat endpoint which properly separates system/user messages
      */
-    async generateChatCompletion(messages: ChatMessage[], options: GenerationOptions = {}): Promise<string> {
+    async generateChatCompletion(
+        messages: ChatMessage[],
+        options: GenerationOptions = {}
+    ): Promise<string> {
         const { streamToConsole = true } = options;
 
         return new Promise((resolve, reject) => {
@@ -211,7 +236,11 @@ export class LLMService {
             // Set a timeout (3 minutes)
             const timeout = setTimeout(() => {
                 req.destroy();
-                reject(new Error('Request timed out after 3 minutes. The model might be too slow or the prompt too large.'));
+                reject(
+                    new Error(
+                        'Request timed out after 3 minutes. The model might be too slow or the prompt too large.'
+                    )
+                );
             }, 180000);
 
             // Ollama chat API format
@@ -224,7 +253,7 @@ export class LLMService {
                     num_predict: this.config.num_predict,
                     top_p: this.config.top_p,
                     top_k: this.config.top_k,
-                }
+                },
             });
 
             const options_req = {
@@ -271,7 +300,7 @@ export class LLMService {
                                 resolve(fullResponse);
                             }
                         } catch (e) {
-                            logger.error(null, e as any)
+                            logger.error(null, e as any);
                             // Skip invalid JSON lines
                         }
                     }
@@ -292,7 +321,7 @@ export class LLMService {
                                 fullResponse += parsed.message.content;
                             }
                         } catch (e) {
-                            logger.error(null, e as any)
+                            logger.error(null, e as any);
                             // Ignore
                         }
                     }
@@ -337,21 +366,25 @@ export class LLMService {
             // Set a timeout (3 minutes)
             const timeout = setTimeout(() => {
                 req.destroy();
-                reject(new Error('Request timed out after 3 minutes. The model might be too slow or the prompt too large.'));
+                reject(
+                    new Error(
+                        'Request timed out after 3 minutes. The model might be too slow or the prompt too large.'
+                    )
+                );
             }, 180000);
 
             // Ollama API format - enable streaming for live output
             const data = JSON.stringify({
                 model: this.config.model,
                 prompt: prompt,
-                stream: true,  // Enable streaming
+                stream: true, // Enable streaming
                 options: {
                     temperature: this.config.temperature,
                     num_predict: this.config.num_predict,
                     top_p: this.config.top_p,
                     top_k: this.config.top_k,
-                    stop: ['\n\n\n\n', '###', '===='] // Stop at excessive newlines
-                }
+                    stop: ['\n\n\n\n', '###', '===='], // Stop at excessive newlines
+                },
             });
 
             const options = {
@@ -402,7 +435,7 @@ export class LLMService {
                                 resolve(fullResponse);
                             }
                         } catch (e) {
-                            logger.error(null, e as any)
+                            logger.error(null, e as any);
                             // Skip invalid JSON lines
                         }
                     }
@@ -424,7 +457,7 @@ export class LLMService {
                                 fullResponse += parsed.response;
                             }
                         } catch (e) {
-                            logger.error(null, e as any)
+                            logger.error(null, e as any);
                             // Ignore
                         }
                     }
@@ -467,7 +500,7 @@ export class LLMService {
 export async function ensureOllamaRunning(model: string): Promise<boolean> {
     const service = new LLMService({
         endpoint: 'http://localhost:11434',
-        model: model
+        model: model,
     });
     await service.initialize();
     return true;
@@ -476,7 +509,7 @@ export async function ensureOllamaRunning(model: string): Promise<boolean> {
 export async function callLLMAPI(prompt: string, endpoint: string, model: string): Promise<string> {
     const service = new LLMService({
         endpoint: endpoint,
-        model: model
+        model: model,
     });
     await service.initialize();
     const result = await service.generateCompletion(prompt);

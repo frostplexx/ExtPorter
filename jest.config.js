@@ -21,7 +21,13 @@ module.exports = {
     moduleNameMapper: {
         '^(\\.{1,2}/.*)\\.js$': '$1',
     },
-    collectCoverageFrom: ['migrator/**/*.ts', '!migrator/**/*.d.ts', '!migrator/index.ts', '!migrator/scripts/**'],
+    transformIgnorePatterns: ['node_modules/(?!(chalk)/)'],
+    collectCoverageFrom: [
+        'migrator/**/*.ts',
+        '!migrator/**/*.d.ts',
+        '!migrator/index.ts',
+        '!migrator/scripts/**',
+    ],
     coverageDirectory: 'coverage',
     coverageReporters: ['text', 'lcov', 'html'],
     setupFilesAfterEnv: ['<rootDir>/tests/setup.ts'],

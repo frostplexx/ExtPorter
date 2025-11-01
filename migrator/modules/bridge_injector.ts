@@ -5,7 +5,7 @@ import { ExtFileType } from '../types/ext_file_types';
 import * as fs from 'fs';
 import * as path from 'path';
 import { logger } from '../utils/logger';
-import { FileContentUpdater } from '../utils/file_content_updater';
+import { Tags } from '../types/tags';
 
 /**
  * This module injects the ext_bridge.js compatibility layer into Chrome extensions
@@ -13,7 +13,8 @@ import { FileContentUpdater } from '../utils/file_content_updater';
  */
 export class BridgeInjector implements MigrationModule {
     private static readonly BRIDGE_FILENAME = 'ext_bridge.js';
-    private static readonly CALLBACK_PATTERN = /chrome(\.\w+){2,}\((?:.*?,\s*)?(?:function\s*\(|\([^)]*\)\s*=>|\w+\s*(?:\)|,))/;
+    private static readonly CALLBACK_PATTERN =
+        /chrome(\.\w+){2,}\((?:.*?,\s*)?(?:function\s*\(|\([^)]*\)\s*=>|\w+\s*(?:\)|,))/;
 
     /**
      * Checks if an extension likely uses callback-based Chrome APIs
@@ -30,14 +31,17 @@ export class BridgeInjector implements MigrationModule {
                     }
                 } catch (error) {
                     // If we can't read the file, skip it and continue
-                    logger.warn(extension, `Failed to read file ${file.path} for bridge detection`, error);
+                    logger.warn(
+                        extension,
+                        `Failed to read file ${file.path} for bridge detection`,
+                        error
+                    );
                     continue;
                 }
             }
         }
         return false;
     }
-
 
     /**
      * Loads the bridge file content from the templates directory.
@@ -81,14 +85,18 @@ export class BridgeInjector implements MigrationModule {
 
     /**
      * Injects importScripts call into a service worker file.
+     * Returns the transformed file or null if injection failed.
      */
-    private static injectBridgeIntoServiceWorker(extension: Extension, serviceWorkerPath: string): boolean {
+    private static injectBridgeIntoServiceWorker(
+        extension: Extension,
+        serviceWorkerPath: string
+    ): LazyFile | null {
         // Find the service worker file in the extension
-        const serviceWorkerFile = extension.files.find(file => file.path === serviceWorkerPath);
+        const serviceWorkerFile = extension.files.find((file) => file.path === serviceWorkerPath);
 
         if (!serviceWorkerFile) {
             logger.warn(extension, `Service worker file not found: ${serviceWorkerPath}`);
-            return false;
+            return null;
         }
 
         try {
@@ -99,42 +107,45 @@ export class BridgeInjector implements MigrationModule {
             const importStatement = `importScripts('${BridgeInjector.BRIDGE_FILENAME}');`;
             if (currentContent.includes(importStatement)) {
                 logger.debug(extension, 'Bridge import already present in service worker');
-                return true;
+                return null; // No transformation needed
             }
 
             // Prepend import statement
             const newContent = `${importStatement}\n${currentContent}`;
 
-            // Update the file content
-            FileContentUpdater.updateFileContent(serviceWorkerFile, newContent);
-
             logger.info(extension, `Bridge injected into service worker: ${serviceWorkerPath}`);
-            return true;
+
+            // Create and return transformed file (in memory only)
+            return BridgeInjector.createTransformedFile(serviceWorkerFile, newContent);
         } catch (error) {
             logger.error(
                 extension,
                 `Error injecting bridge into service worker ${serviceWorkerPath}: ${error instanceof Error ? error.message : String(error)}`,
                 {
-                    error: error instanceof Error ? {
-                        message: error.message,
-                        stack: error.stack,
-                        name: error.name
-                    } : String(error)
+                    error:
+                        error instanceof Error
+                            ? {
+                                  message: error.message,
+                                  stack: error.stack,
+                                  name: error.name,
+                              }
+                            : String(error),
                 }
             );
-            return false;
+            return null;
         }
     }
 
     /**
      * Injects bridge script tag into an HTML file.
+     * Returns the transformed file or null if injection failed.
      */
-    private static injectBridgeIntoHTML(extension: Extension, htmlPath: string): boolean {
-        const htmlFile = extension.files.find(file => file.path === htmlPath);
+    private static injectBridgeIntoHTML(extension: Extension, htmlPath: string): LazyFile | null {
+        const htmlFile = extension.files.find((file) => file.path === htmlPath);
 
         if (!htmlFile) {
             logger.warn(extension, `HTML file not found: ${htmlPath}`);
-            return false;
+            return null;
         }
 
         try {
@@ -143,16 +154,20 @@ export class BridgeInjector implements MigrationModule {
             // Calculate the correct relative path from the HTML file to the bridge file
             // The bridge file is always in the root, so we need to go up directories
             const htmlDir = path.dirname(htmlPath);
-            const relativePath = htmlDir && htmlDir !== '.'
-                ? path.posix.join(...htmlDir.split(path.sep).map(() => '..'), BridgeInjector.BRIDGE_FILENAME)
-                : BridgeInjector.BRIDGE_FILENAME;
+            const relativePath =
+                htmlDir && htmlDir !== '.'
+                    ? path.posix.join(
+                          ...htmlDir.split(path.sep).map(() => '..'),
+                          BridgeInjector.BRIDGE_FILENAME
+                      )
+                    : BridgeInjector.BRIDGE_FILENAME;
 
             const scriptTag = `<script src="${relativePath}"></script>`;
 
             // Check if already injected (check for both the filename and the script tag)
             if (content.includes(BridgeInjector.BRIDGE_FILENAME)) {
                 logger.debug(extension, `Bridge already in ${htmlPath}`);
-                return true;
+                return null; // No transformation needed
             }
 
             // Inject before first existing script or before </head> or before </body>
@@ -166,46 +181,57 @@ export class BridgeInjector implements MigrationModule {
                 newContent = content.replace('</body>', `    ${scriptTag}\n</body>`);
             } else {
                 logger.warn(extension, `Could not find injection point in ${htmlPath}`);
-                return false;
+                return null;
             }
 
-            FileContentUpdater.updateFileContent(htmlFile, newContent);
             logger.info(extension, `Bridge injected into HTML: ${htmlPath}`);
-            return true;
+
+            // Create and return transformed file (in memory only)
+            return BridgeInjector.createTransformedFile(htmlFile, newContent);
         } catch (error) {
             logger.error(
                 extension,
                 `Error injecting bridge into ${htmlPath}: ${error instanceof Error ? error.message : String(error)}`,
                 {
-                    error: error instanceof Error ? {
-                        message: error.message,
-                        stack: error.stack,
-                        name: error.name
-                    } : String(error)
+                    error:
+                        error instanceof Error
+                            ? {
+                                  message: error.message,
+                                  stack: error.stack,
+                                  name: error.name,
+                              }
+                            : String(error),
                 }
             );
-            return false;
+            return null;
         }
     }
 
     /**
      * Injects the bridge file into the manifest's script arrays.
+     * Modifies extension.files to replace files with transformed versions.
      */
     private static injectBridgeIntoManifest(manifest: any, extension?: Extension): any {
-
         const updatedManifest = JSON.parse(JSON.stringify(manifest));
+
+        // Track transformed files to replace in extension.files
+        const transformedFiles: Map<string, LazyFile> = new Map();
 
         // Inject into background service worker
         if (updatedManifest.background && updatedManifest.background.service_worker) {
             if (extension) {
-                const success = BridgeInjector.injectBridgeIntoServiceWorker(
+                const transformedFile = BridgeInjector.injectBridgeIntoServiceWorker(
                     extension,
                     updatedManifest.background.service_worker
                 );
-                if (success) {
+                if (transformedFile) {
+                    transformedFiles.set(transformedFile.path, transformedFile);
                     logger.info(extension, 'Bridge successfully injected into service worker');
                 } else {
-                    logger.warn(extension, 'Failed to inject bridge into service worker, bridge may not work in background context');
+                    logger.debug(
+                        extension,
+                        'No bridge injection needed for service worker (already present or failed)'
+                    );
                 }
             } else {
                 logger.warn(
@@ -265,30 +291,67 @@ export class BridgeInjector implements MigrationModule {
         if (extension) {
             // Inject into options page
             if (updatedManifest.options_page) {
-                BridgeInjector.injectBridgeIntoHTML(extension, updatedManifest.options_page);
+                const transformedFile = BridgeInjector.injectBridgeIntoHTML(
+                    extension,
+                    updatedManifest.options_page
+                );
+                if (transformedFile) {
+                    transformedFiles.set(transformedFile.path, transformedFile);
+                }
             }
 
             // Inject into options_ui page
             if (updatedManifest.options_ui?.page) {
-                BridgeInjector.injectBridgeIntoHTML(extension, updatedManifest.options_ui.page);
+                const transformedFile = BridgeInjector.injectBridgeIntoHTML(
+                    extension,
+                    updatedManifest.options_ui.page
+                );
+                if (transformedFile) {
+                    transformedFiles.set(transformedFile.path, transformedFile);
+                }
             }
 
             // Inject into action/browser_action/page_action popups
             const popupKeys = ['action', 'browser_action', 'page_action'];
             for (const key of popupKeys) {
                 if (updatedManifest[key]?.default_popup) {
-                    BridgeInjector.injectBridgeIntoHTML(extension, updatedManifest[key].default_popup);
+                    const transformedFile = BridgeInjector.injectBridgeIntoHTML(
+                        extension,
+                        updatedManifest[key].default_popup
+                    );
+                    if (transformedFile) {
+                        transformedFiles.set(transformedFile.path, transformedFile);
+                    }
                 }
             }
 
             // Inject into devtools page
             if (updatedManifest.devtools_page) {
-                BridgeInjector.injectBridgeIntoHTML(extension, updatedManifest.devtools_page);
+                const transformedFile = BridgeInjector.injectBridgeIntoHTML(
+                    extension,
+                    updatedManifest.devtools_page
+                );
+                if (transformedFile) {
+                    transformedFiles.set(transformedFile.path, transformedFile);
+                }
             }
 
             // Inject into sidebar action (Firefox)
             if (updatedManifest.sidebar_action?.default_panel) {
-                BridgeInjector.injectBridgeIntoHTML(extension, updatedManifest.sidebar_action.default_panel);
+                const transformedFile = BridgeInjector.injectBridgeIntoHTML(
+                    extension,
+                    updatedManifest.sidebar_action.default_panel
+                );
+                if (transformedFile) {
+                    transformedFiles.set(transformedFile.path, transformedFile);
+                }
+            }
+
+            // Replace files in extension.files with transformed versions
+            if (transformedFiles.size > 0) {
+                extension.files = extension.files.map((file) =>
+                    transformedFiles.has(file.path) ? transformedFiles.get(file.path)! : file
+                );
             }
         }
 
@@ -298,11 +361,10 @@ export class BridgeInjector implements MigrationModule {
     /**
      * Main migration method that injects the bridge into extensions that need it.
      */
-    public static migrate(extension: Extension): Extension | MigrationError {
+    public static async migrate(extension: Extension): Promise<Extension | MigrationError> {
         const startTime = Date.now();
 
         try {
-
             // Validate extension input
             if (!extension || !extension.id || !extension.files || !extension.manifest) {
                 return new MigrationError(extension, new Error('Invalid extension structure'));
@@ -329,7 +391,10 @@ export class BridgeInjector implements MigrationModule {
             const bridgeFile = BridgeInjector.createBridgeFile();
 
             // Update manifest to include bridge
-            const updatedManifest = BridgeInjector.injectBridgeIntoManifest(extension.manifest, extension);
+            const updatedManifest = BridgeInjector.injectBridgeIntoManifest(
+                extension.manifest,
+                extension
+            );
 
             // Add bridge file to extension files
             const updatedFiles = [...extension.files, bridgeFile];
@@ -340,12 +405,23 @@ export class BridgeInjector implements MigrationModule {
                 bridgeFile: BridgeInjector.BRIDGE_FILENAME,
             });
 
-            // Return updated extension
-            return {
+            // Create updated extension
+            const updatedExtension = {
                 ...extension,
                 manifest: updatedManifest,
                 files: updatedFiles,
             };
+
+            // Add BRIDGE_INJECTED tag to extension object
+            if (!updatedExtension.tags) {
+                updatedExtension.tags = [];
+            }
+            const bridgeTag = Tags[Tags.BRIDGE_INJECTED];
+            if (!updatedExtension.tags.includes(bridgeTag)) {
+                updatedExtension.tags.push(bridgeTag);
+            }
+
+            return updatedExtension;
         } catch (error) {
             const duration = Date.now() - startTime;
             logger.error(extension, 'Bridge injection failed', {
@@ -390,7 +466,7 @@ export class BridgeInjector implements MigrationModule {
      * This checks the actual file content, not just the manifest.
      */
     public static hasBridgeInHTML(extension: Extension, htmlPath: string): boolean {
-        const htmlFile = extension.files.find(file => file.path === htmlPath);
+        const htmlFile = extension.files.find((file) => file.path === htmlPath);
 
         if (!htmlFile) {
             return false;
@@ -402,9 +478,42 @@ export class BridgeInjector implements MigrationModule {
             // (could be with or without relative path)
             return content.includes(BridgeInjector.BRIDGE_FILENAME);
         } catch (error) {
-            logger.error(extension, error as any)
+            logger.error(extension, error as any);
             return false;
         }
+    }
+
+    /**
+     * Creates a transformed file with modified content stored in memory.
+     * This avoids modifying the original MV2 source files.
+     * @param originalFile The original file to transform
+     * @param newContent The new content for the transformed file
+     * @returns A new LazyFile object with the modified content
+     */
+    private static createTransformedFile(originalFile: LazyFile, newContent: string): LazyFile {
+        // Create new instance inheriting from LazyFile prototype
+        const transformedFile = Object.create(LazyFile.prototype);
+
+        // Copy basic properties
+        transformedFile.path = originalFile.path;
+        transformedFile.filetype = originalFile.filetype;
+        transformedFile._transformedContent = newContent;
+        // Copy absolute path for reference (but won't write to it)
+        transformedFile._absolutePath = (originalFile as any)._absolutePath;
+
+        // Override methods to work with transformed content
+        transformedFile.getContent = () => newContent;
+        transformedFile.getSize = () => Buffer.byteLength(newContent, 'utf8');
+        transformedFile.close = () => {
+            /* No-op for in-memory content */
+        };
+        transformedFile.getAST = () => {
+            // Bridge injections don't need AST parsing
+            return undefined;
+        };
+        transformedFile.getBuffer = () => Buffer.from(newContent, 'utf8');
+
+        return transformedFile;
     }
 
     /**

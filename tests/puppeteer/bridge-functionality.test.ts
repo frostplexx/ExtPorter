@@ -69,29 +69,29 @@ describe('Bridge Functionality Test', () => {
             const mockChrome = {
                 storage: {
                     local: {
-                        set: function(data: any) {
+                        set: function (data: any) {
                             // MV3 APIs return promises
                             return Promise.resolve().then(() => {
                                 Object.assign(storageData, data);
                             });
                         },
-                        get: function(keys: string[]) {
+                        get: function (keys: string[]) {
                             // MV3 APIs return promises
                             return Promise.resolve().then(() => {
                                 const result: any = {};
-                                keys.forEach(key => {
+                                keys.forEach((key) => {
                                     if (storageData[key] !== undefined) {
                                         result[key] = storageData[key];
                                     }
                                 });
                                 return result;
                             });
-                        }
-                    }
+                        },
+                    },
                 },
                 runtime: {
-                    lastError: undefined
-                }
+                    lastError: undefined,
+                },
             };
 
             (window as any).chrome = mockChrome;
@@ -102,29 +102,41 @@ describe('Bridge Functionality Test', () => {
             // Test that the bridge correctly handles callback APIs
             return new Promise((resolve) => {
                 // Test callback-style API
-                (window as any).chrome.storage.local.set({ testKey: 'testValue' }, function() {
+                (window as any).chrome.storage.local.set({ testKey: 'testValue' }, function () {
                     if ((window as any).chrome.runtime.lastError) {
-                        resolve({ success: false, error: (window as any).chrome.runtime.lastError.message });
+                        resolve({
+                            success: false,
+                            error: (window as any).chrome.runtime.lastError.message,
+                        });
                     } else {
                         // Test get with callback
-                        (window as any).chrome.storage.local.get(['testKey'], function(result: any) {
-                            if ((window as any).chrome.runtime.lastError) {
-                                resolve({ success: false, error: (window as any).chrome.runtime.lastError.message });
-                            } else {
-                                // Check if result is defined
-                                if (!result) {
-                                    resolve({ success: false, error: 'Result is undefined' });
-                                } else if (result.testKey === undefined) {
-                                    resolve({ success: false, error: `Cannot read properties of undefined (reading 'testKey')` });
-                                } else {
+                        (window as any).chrome.storage.local.get(
+                            ['testKey'],
+                            function (result: any) {
+                                if ((window as any).chrome.runtime.lastError) {
                                     resolve({
-                                        success: true,
-                                        value: result.testKey,
-                                        matches: result.testKey === 'testValue'
+                                        success: false,
+                                        error: (window as any).chrome.runtime.lastError.message,
                                     });
+                                } else {
+                                    // Check if result is defined
+                                    if (!result) {
+                                        resolve({ success: false, error: 'Result is undefined' });
+                                    } else if (result.testKey === undefined) {
+                                        resolve({
+                                            success: false,
+                                            error: `Cannot read properties of undefined (reading 'testKey')`,
+                                        });
+                                    } else {
+                                        resolve({
+                                            success: true,
+                                            value: result.testKey,
+                                            matches: result.testKey === 'testValue',
+                                        });
+                                    }
                                 }
                             }
-                        });
+                        );
                     }
                 });
             });
@@ -133,7 +145,7 @@ describe('Bridge Functionality Test', () => {
         expect(testResult).toEqual({
             success: true,
             value: 'testValue',
-            matches: true
+            matches: true,
         });
     });
 
@@ -163,8 +175,8 @@ describe('Bridge Functionality Test', () => {
         expect(bridgeContent).toContain('_chromeExtBridgeLoaded');
         expect(bridgeContent).toContain('createCallbackCompatibleMethod');
         expect(bridgeContent).toContain('chrome.runtime.lastError');
-        expect(bridgeContent).toContain('typeof result.then === \'function\'');
-        expect(bridgeContent).toContain('typeof lastArg === \'function\'');
+        expect(bridgeContent).toContain("typeof result.then === 'function'");
+        expect(bridgeContent).toContain("typeof lastArg === 'function'");
 
         // Verify it wraps the original chrome object
         expect(bridgeContent).toContain('const originalChrome = self.chrome');

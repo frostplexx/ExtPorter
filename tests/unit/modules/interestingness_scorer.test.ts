@@ -23,7 +23,7 @@ describe('InterestingnessScorer', () => {
             getBuffer: jest.fn().mockReturnValue(Buffer.from('console.log("test");')),
             getPath: jest.fn().mockReturnValue('test.js'),
             getSize: jest.fn().mockReturnValue(100),
-            getType: jest.fn().mockReturnValue('js' as any)
+            getType: jest.fn().mockReturnValue('js' as any),
         } as any;
 
         mockExtension = {
@@ -33,15 +33,15 @@ describe('InterestingnessScorer', () => {
             manifest: {
                 permissions: ['tabs'],
                 content_scripts: [{ matches: ['*://*/*'] }],
-                background: { service_worker: 'background.js' }
+                background: { service_worker: 'background.js' },
             },
-            files: [mockFile as any]
+            files: [mockFile as any],
         } as Extension;
     });
 
     describe('migrate', () => {
-        it('should successfully calculate interestingness score and add it to extension', () => {
-            const result = InterestingnessScorer.migrate(mockExtension);
+        it('should successfully calculate interestingness score and add it to extension', async () => {
+            const result = await InterestingnessScorer.migrate(mockExtension);
 
             expect(result).toBe(mockExtension);
             expect((result as any).interestingness_score).toBeDefined();
@@ -50,22 +50,22 @@ describe('InterestingnessScorer', () => {
                 mockExtension,
                 expect.stringContaining('Calculated interestingness score:'),
                 expect.objectContaining({
-                    breakdown: expect.any(Object)
+                    breakdown: expect.any(Object),
                 })
             );
         });
 
-        it('should handle errors and return MigrationError', () => {
+        it('should handle errors and return MigrationError', async () => {
             const error = new Error('Calculation failed');
             // Make extension.files throw an error when accessed to trigger outer error handler
             const brokenExtension = {
                 ...mockExtension,
                 get files(): any {
                     throw error;
-                }
+                },
             };
 
-            const result = InterestingnessScorer.migrate(brokenExtension);
+            const result = await InterestingnessScorer.migrate(brokenExtension);
 
             expect(result).toBeInstanceOf(MigrationError);
             expect((result as MigrationError).extension).toBe(brokenExtension);
@@ -73,114 +73,118 @@ describe('InterestingnessScorer', () => {
                 brokenExtension,
                 'Failed to calculate interestingness score',
                 expect.objectContaining({
-                    error
+                    error,
                 })
             );
         });
 
-        it('should calculate higher scores for extensions with dangerous permissions', () => {
+        it('should calculate higher scores for extensions with dangerous permissions', async () => {
             const extensionWithDangerousPerms = {
                 ...mockExtension,
                 manifest: {
-                    permissions: ['tabs', 'cookies', 'history']
-                }
+                    permissions: ['tabs', 'cookies', 'history'],
+                },
             };
 
-            const result = InterestingnessScorer.migrate(extensionWithDangerousPerms);
+            const result = await InterestingnessScorer.migrate(extensionWithDangerousPerms);
             const score1 = (result as any).interestingness_score;
 
             const extensionWithoutPerms = {
                 ...mockExtension,
-                manifest: {}
+                manifest: {},
             };
 
-            const result2 = InterestingnessScorer.migrate(extensionWithoutPerms);
+            const result2 = await InterestingnessScorer.migrate(extensionWithoutPerms);
             const score2 = (result2 as any).interestingness_score;
 
             expect(score1).toBeGreaterThan(score2);
         });
 
-        it('should calculate scores for extensions with webRequest patterns', () => {
+        it('should calculate scores for extensions with webRequest patterns', async () => {
             mockFile.getContent.mockReturnValue('chrome.webRequest.onBeforeRequest.addListener();');
 
-            const result = InterestingnessScorer.migrate(mockExtension);
+            const result = await InterestingnessScorer.migrate(mockExtension);
             const breakdown = (result as any).interestingness_breakdown;
 
             expect(breakdown.webRequest).toBeGreaterThan(0);
         });
 
-        it('should calculate scores for extensions with storage.local usage', () => {
+        it('should calculate scores for extensions with storage.local usage', async () => {
             mockFile.getContent.mockReturnValue('chrome.storage.local.get();');
 
-            const result = InterestingnessScorer.migrate(mockExtension);
+            const result = await InterestingnessScorer.migrate(mockExtension);
             const breakdown = (result as any).interestingness_breakdown;
 
             expect(breakdown.storage_local).toBeGreaterThan(0);
         });
 
-        it('should calculate scores for HTML content', () => {
+        it('should calculate scores for HTML content', async () => {
             mockFile.filetype = ExtFileType.HTML;
-            mockFile.getContent.mockReturnValue('<html>\n<body>\n<div>Test</div>\n</body>\n</html>');
+            mockFile.getContent.mockReturnValue(
+                '<html>\n<body>\n<div>Test</div>\n</body>\n</html>'
+            );
 
-            const result = InterestingnessScorer.migrate(mockExtension);
+            const result = await InterestingnessScorer.migrate(mockExtension);
             const breakdown = (result as any).interestingness_breakdown;
 
             expect(breakdown.html_lines).toBeGreaterThan(0);
         });
 
-        it('should detect crypto patterns', () => {
+        it('should detect crypto patterns', async () => {
             mockFile.getContent.mockReturnValue('eval("some code"); btoa("encoded");');
 
-            const result = InterestingnessScorer.migrate(mockExtension);
+            const result = await InterestingnessScorer.migrate(mockExtension);
             const breakdown = (result as any).interestingness_breakdown;
 
             expect(breakdown.crypto_patterns).toBeGreaterThan(0);
         });
 
-        it('should detect network request patterns', () => {
-            mockFile.getContent.mockReturnValue('fetch("http://example.com"); new XMLHttpRequest();');
+        it('should detect network request patterns', async () => {
+            mockFile.getContent.mockReturnValue(
+                'fetch("http://example.com"); new XMLHttpRequest();'
+            );
 
-            const result = InterestingnessScorer.migrate(mockExtension);
+            const result = await InterestingnessScorer.migrate(mockExtension);
             const breakdown = (result as any).interestingness_breakdown;
 
             expect(breakdown.network_requests).toBeGreaterThan(0);
         });
 
-        it('should score background pages/service workers', () => {
+        it('should score background pages/service workers', async () => {
             const extensionWithBackground = {
                 ...mockExtension,
                 manifest: {
-                    background: { service_worker: 'background.js' }
-                }
+                    background: { service_worker: 'background.js' },
+                },
             };
 
-            const result = InterestingnessScorer.migrate(extensionWithBackground);
+            const result = await InterestingnessScorer.migrate(extensionWithBackground);
             const breakdown = (result as any).interestingness_breakdown;
 
             expect(breakdown.background_page).toBeGreaterThan(0);
         });
 
-        it('should score content scripts', () => {
+        it('should score content scripts', async () => {
             const extensionWithContentScripts = {
                 ...mockExtension,
                 manifest: {
-                    content_scripts: [{ matches: ['*://*/*'] }]
-                }
+                    content_scripts: [{ matches: ['*://*/*'] }],
+                },
             };
 
-            const result = InterestingnessScorer.migrate(extensionWithContentScripts);
+            const result = await InterestingnessScorer.migrate(extensionWithContentScripts);
             const breakdown = (result as any).interestingness_breakdown;
 
             expect(breakdown.content_scripts).toBeGreaterThan(0);
         });
 
-        it('should calculate extension size contribution', () => {
+        it('should calculate extension size contribution', async () => {
             // Create a large content to exceed 100KB threshold (score is per 100KB)
             const largeContent = 'x'.repeat(150 * 1024); // 150KB of content
             mockFile.getContent.mockReturnValue(largeContent);
             mockFile.getBuffer.mockReturnValue(Buffer.from(largeContent));
 
-            const result = InterestingnessScorer.migrate(mockExtension);
+            const result = await InterestingnessScorer.migrate(mockExtension);
             const breakdown = (result as any).interestingness_breakdown;
 
             expect(breakdown.extension_size).toBeGreaterThan(0);
