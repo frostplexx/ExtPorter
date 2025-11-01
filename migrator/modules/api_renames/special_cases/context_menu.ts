@@ -4,16 +4,16 @@ import { logger } from '../../../utils/logger';
 import { SpecialTransform } from '../../../types/special_transform';
 
 export class ContextMenuTransform implements SpecialTransform {
-    static contextMenuCalls: any[] = [];
 
     // Special handling for context menu onclick transformations
-    public static try_transform(node: ESTree.Node): boolean {
+    // Pass contextMenuCalls array explicitly to avoid static mutable state
+    public static try_transform(node: ESTree.Node, contextMenuCalls: any[]): boolean {
         if (this.isContextMenusCreateCall(node)) {
             const onclickProperty = this.extractOnclickFromContextMenu(
                 node as ESTree.CallExpression
             );
             if (onclickProperty) {
-                this.contextMenuCalls.push({ node, onclickProperty });
+                contextMenuCalls.push({ node, onclickProperty });
 
                 return true;
             }
