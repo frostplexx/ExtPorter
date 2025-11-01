@@ -4,6 +4,12 @@ import { Extension } from '../types/extension';
 import { globals } from '../index';
 import { logger } from '../utils/logger';
 import { ExtFileType } from '../types/ext_file_types';
+import {
+    normalizeJavaScriptContent,
+    normalizeJSONContent,
+    normalizeHTMLContent,
+    normalizeCSSContent,
+} from '../utils/file_normalizer';
 
 interface WriteTask {
     extension: Extension;
@@ -168,7 +174,10 @@ export class MigrationWriter {
 
     private async writeManifest(extension: Extension, outputPath: string): Promise<void> {
         const manifestPath = path.join(outputPath, 'manifest.json');
-        const manifestContent = JSON.stringify(extension.manifest, null, 2);
+        let manifestContent = JSON.stringify(extension.manifest, null, 2);
+
+        // Normalize JSON content (line endings, EOF newline)
+        manifestContent = normalizeJSONContent(manifestContent);
 
         try {
             await fs.writeFile(manifestPath, manifestContent, 'utf8');
@@ -195,7 +204,17 @@ export class MigrationWriter {
                     file.filetype === ExtFileType.HTML
                 ) {
                     // Write text files with UTF-8 encoding
-                    const content = file.getContent();
+                    let content = file.getContent();
+
+                    // Normalize content based on file type
+                    if (file.filetype === ExtFileType.JS) {
+                        content = normalizeJavaScriptContent(content);
+                    } else if (file.filetype === ExtFileType.CSS) {
+                        content = normalizeCSSContent(content);
+                    } else if (file.filetype === ExtFileType.HTML) {
+                        content = normalizeHTMLContent(content);
+                    }
+
                     await fs.writeFile(filePath, content, 'utf8');
                 } else {
                     // Write all other files (ExtFileType.OTHER) as binary to preserve data integrity
