@@ -11,6 +11,7 @@ module.exports = {
             },
         ],
     },
+    transformIgnorePatterns: ['node_modules/(?!(chalk)/)'],
     collectCoverageFrom: [
         'migrator/**/*.ts',
         '!migrator/**/*.d.ts',
