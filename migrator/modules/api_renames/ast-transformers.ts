@@ -42,6 +42,7 @@ export function applyApiTransformations(
         }
     });
 
+    // TODO: should probably be moved into special_cases/context_menu.ts
     // Add contextMenus.onClicked listener after all other transformations
     if (ContextMenuTranform.contextMenuCalls.length > 0) {
         ContextMenuTranform.addContextMenusOnClickedListener(

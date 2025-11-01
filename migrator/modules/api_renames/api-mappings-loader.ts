@@ -38,37 +38,3 @@ export function loadApiMappings(): TwinningMapping {
     // At this point cachedApiMappings is guaranteed to not be null
     return api_mappings!;
 }
-
-/**
- * Counts potential API transformations in file content using regex patterns.
- * Used to detect how many transformations would have been applied if AST parsing succeeded.
- *
- * @param content File content to analyze
- * @param mappings API transformation mappings
- * @returns Number of potential transformations
- */
-export function countPotentialTransformations(content: string, mappings: TwinningMapping): number {
-    let count = 0;
-
-    for (const mapping of mappings.mappings) {
-        // Extract API pattern from source mapping (remove return/semicolon)
-        const sourcePattern = mapping.source.body.replace(/^return\s+/, '').replace(/;$/, '');
-
-        // Create regex pattern to match API usage
-        // Handle both function calls and property access
-        const apiBase = sourcePattern.replace(/\([^)]*\)$/, ''); // Remove function call parens
-        const escapedApi = apiBase.replace(/\./g, '\\.'); // Escape dots for regex
-
-        // Match both property access and function calls
-        const functionCallPattern = new RegExp(`\\b${escapedApi}\\s*\\(`, 'g');
-        const propertyAccessPattern = new RegExp(`\\b${escapedApi}(?!\\w)`, 'g');
-
-        const functionMatches = content.match(functionCallPattern) || [];
-        const propertyMatches = content.match(propertyAccessPattern) || [];
-
-        // Avoid double counting - if we have function calls, don't count property access
-        count += functionMatches.length > 0 ? functionMatches.length : propertyMatches.length;
-    }
-
-    return count;
-}

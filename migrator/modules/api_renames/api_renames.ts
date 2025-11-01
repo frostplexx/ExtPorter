@@ -26,14 +26,16 @@ export class RenameAPIS implements MigrationModule {
         const startTime = Date.now();
 
         try {
+
             // Validate extension input
             if (!extension || !extension.id || !extension.files || !extension.manifest) {
                 return new MigrationError(extension, new Error('Invalid extension structure'));
             }
 
+            //TODO: Memomize
             const mappings = loadApiMappings();
-
             // return if no mappings available
+
             if (mappings.mappings.length === 0) {
                 return new MigrationError(extension, new Error('No API mappings available'));
             }
@@ -43,6 +45,7 @@ export class RenameAPIS implements MigrationModule {
             let transformedFiles = 0;
             let blacklistedFiles = 0;
 
+            // TODO: Should only be initialized once and then reused
             const blacklistChecker = BlacklistChecker.getInstance();
 
             const transformedFilesArray = extension.files.map((file) => {
@@ -53,6 +56,7 @@ export class RenameAPIS implements MigrationModule {
 
                 // Check if file is blacklisted from transformation (with content signature detection)
                 const fileContent = file.getContent();
+
                 const blacklistResult = blacklistChecker.isFileBlacklisted(file.path, fileContent);
                 if (blacklistResult.isBlacklisted) {
                     blacklistedFiles++;
@@ -96,6 +100,7 @@ export class RenameAPIS implements MigrationModule {
                 files: transformedFilesArray,
             };
 
+            // TODO: make this more generic so its a single function that can be used in every module?
             // Add API_RENAMES_APPLIED tag to extension object
             if (!updatedExtension.tags) {
                 updatedExtension.tags = [];
@@ -127,107 +132,26 @@ export class RenameAPIS implements MigrationModule {
         extension: Extension | undefined,
         onTransformed: (transformed: boolean) => void
     ): LazyFile {
+
         const ast = file.getAST();
+
         if (!ast) {
-            // Enhanced error reporting for AST parsing failures
             const fileSize = file.getSize();
             const fileSizeKB = Math.round(fileSize / 1024);
-
-            // Check if this could be a large file issue
-            const isLargeFile = fileSize > 100000; // >100KB
-
-            // Count potential API transformations that would have been applied
             const content = file.getContent();
-            const potentialTransformations = countPotentialTransformations(content, mappings);
+            const isWebpackBundle = BlacklistChecker.getInstance().isWebpackBundle(content)
 
-            // Check if this is a webpack bundle
-            const isWebpackBundle =
-                content.includes('__webpack_require__') ||
-                content.includes('webpackChunk') ||
-                /\(\d+,\s*function\s*\(\s*\w+,\s*\w+,\s*\w+\s*\)/.test(content.substring(0, 10000));
-
-            if (isLargeFile && potentialTransformations > 0) {
-                if (isWebpackBundle) {
-                    // This is a critical issue - large file with APIs that need transformation
-                    logger.error(
-                        null,
-                        'AST parsing failed for large file with API transformations needed',
-                        {
-                            path: file.path,
-                            fileSizeKB: fileSizeKB,
-                            potentialTransformations: potentialTransformations,
-                            issue: 'Large files (>100KB) cannot be parsed for API transformations',
-                        }
-                    );
-
-                    // Enhanced user-visible warning for webpack bundles
-                    logger.warn(
-                        extension,
-                        'Webpack bundle detected with API transformations needed',
-                        {
-                            path: file.path,
-                            fileSizeKB: fileSizeKB,
-                            potentialTransformations: potentialTransformations,
-                            solutions: [
-                                'Use development/unminified build for migration',
-                                'Migrate source files before webpack bundling',
-                                'Manual migration may be required',
-                            ],
-                        }
-                    );
-                } else {
-                    // Large non-webpack file with APIs that need transformation
-                    logger.error(
-                        null,
-                        'AST parsing failed for large file with API transformations needed',
-                        {
-                            path: file.path,
-                            fileSizeKB: fileSizeKB,
-                            potentialTransformations: potentialTransformations,
-                            issue: 'Large files (>100KB) cannot be parsed for API transformations',
-                        }
-                    );
-
-                    // Log user-visible warning
-                    logger.warn(
-                        extension,
-                        'Large file API transformations skipped - may cause MV3 runtime errors',
-                        {
-                            path: file.path,
-                            fileSizeKB: fileSizeKB,
-                            potentialTransformations: potentialTransformations,
-                            issue: 'File exceeds 100KB AST parsing limit',
-                            impact: 'May cause runtime errors in Manifest V3',
-                        }
-                    );
-                }
-            } else if (potentialTransformations > 0) {
-                // Smaller webpack bundle that failed to parse
-                logger.error(null, 'Webpack bundle detected with API transformations needed', {
+            logger.error(
+                null,
+                `AST parsing failed for file ${file.path}`,
+                {
                     path: file.path,
                     fileSizeKB: fileSizeKB,
-                    potentialTransformations: potentialTransformations,
-                    issue: 'Webpack bundles cannot be automatically migrated',
-                });
-            } else {
-                // File failed to parse but no APIs detected
-                if (isWebpackBundle) {
-                    logger.debug(
-                        null,
-                        'Webpack bundle detected but no API transformations needed',
-                        {
-                            path: file.path,
-                            fileSizeKB: fileSizeKB,
-                            bundleType: 'webpack',
-                        }
-                    );
-                } else {
-                    logger.debug(null, 'AST parsing failed but no API transformations needed', {
-                        path: file.path,
-                        fileSizeKB: fileSizeKB,
-                    });
+                    isWebpackBundle: isWebpackBundle,
+                    content: content,
+                    issue: 'Large files (>100KB) cannot be parsed for API transformations',
                 }
-            }
+            );
 
             onTransformed(false);
             return file;
@@ -343,9 +267,6 @@ export class RenameAPIS implements MigrationModule {
                     processedFiles,
                     duration,
                 });
-
-                // Check if blacklisted files include webpack bundles and provide guidance
-                RenameAPIS.logWebpackGuidance(extension, blacklistedFiles);
             } else {
                 logger.info(extension, 'No API changes required');
             }
@@ -355,36 +276,6 @@ export class RenameAPIS implements MigrationModule {
                 processedFiles,
                 blacklistedFiles,
                 duration,
-            });
-
-            if (blacklistedFiles > 0) {
-                RenameAPIS.logWebpackGuidance(extension, blacklistedFiles);
-            }
-        }
-    }
-
-    /**
-     * Provides user guidance for webpack-based extensions
-     */
-    private static logWebpackGuidance(
-        extension: Extension | undefined,
-        blacklistedFiles: number
-    ): void {
-        // Check if any blacklisted files are likely webpack bundles
-        const hasWebpackFiles = extension?.files?.some((file) => {
-            if (file.filetype !== ExtFileType.JS) return false;
-            const content = file.getContent();
-            return (
-                content.includes('__webpack_require__') ||
-                content.includes('webpackChunk') ||
-                file.path.includes('bundle') ||
-                file.path.includes('webpack')
-            );
-        });
-
-        if (hasWebpackFiles) {
-            logger.info(extension, 'Webpack extension detected - providing migration guidance', {
-                blacklistedFiles
             });
 
         }
