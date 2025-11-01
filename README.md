@@ -1,6 +1,9 @@
 <p align="center">
     <!-- <img src="https://nixos.wiki/images/thumb/2/20/Home-nixos-logo.png/414px-Home-nixos-logo.png" width=200/> -->
-    <h1 align="center"><code>ExtPorter</code></h1>
+    <h1 align="center">
+        <img align="center" width="250" height="1024" alt="ExtPorter" src="https://github.com/user-attachments/assets/fcef26a0-379f-49b8-87ba-4163aea3ffb0" /></br>
+        <code>ExtPorter</code>
+    </h1>
     <div style="display: grid;" align="center">
         <img src="https://github.com/frostplexx/ExtPorter/actions/workflows/test.yml/badge.svg" height=20/>
     </div>
