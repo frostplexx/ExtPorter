@@ -3,8 +3,8 @@ import { TwinningMapping } from '../../types/twinning_mapping';
 import { logger } from '../../utils/logger';
 import { traverseAST, nodeMatchesSourcePattern, updateMemberExpressionPath } from './ast-utils';
 import { isParameterTransformationRequired, transformParameters } from './parameter-transformers';
-import { applySpecialTranforms } from './special-case-transformers';
-import { ContextMenuTranform } from './special_cases/context_menu';
+import { applySpecialTransforms } from './special-case-transformers';
+import { ContextMenuTransform } from './special_cases/context_menu';
 
 /**
  * Applies API transformations to an AST.
@@ -27,7 +27,7 @@ export function applyApiTransformations(
 
     // traverse the AST
     traverseAST(transformedAST, (node: any) => {
-        if (applySpecialTranforms(node)) {
+        if (applySpecialTransforms(node)) {
             transformationCount++;
             return;
         }
@@ -44,13 +44,13 @@ export function applyApiTransformations(
 
     // TODO: should probably be moved into special_cases/context_menu.ts
     // Add contextMenus.onClicked listener after all other transformations
-    if (ContextMenuTranform.contextMenuCalls.length > 0) {
-        ContextMenuTranform.addContextMenusOnClickedListener(
+    if (ContextMenuTransform.contextMenuCalls.length > 0) {
+        ContextMenuTransform.addContextMenusOnClickedListener(
             transformedAST,
-            ContextMenuTranform.contextMenuCalls
+            ContextMenuTransform.contextMenuCalls
         );
         // Clear the accumulated calls for the next file
-        ContextMenuTranform.contextMenuCalls = [];
+        ContextMenuTransform.contextMenuCalls = [];
     }
 
     if (transformationCount > 0) {
