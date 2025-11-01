@@ -10,7 +10,7 @@ import { SpecialTransform } from '../../types/special_transform';
  * @param node AST node to potentially transform
  * @returns True if a transformation was applied, false otherwise
  */
-export function applySpecialTranforms(node: ESTree.Node): boolean {
+export function applySpecialTransforms(node: ESTree.Node): boolean {
     const special_cases: (typeof SpecialTransform)[] = [ContextMenuTranform, WindowOpenTranform];
 
     for (const special_case of special_cases) {
