@@ -1,3 +1,4 @@
+import * as ESTree from 'estree';
 
 /**
  * Abstract base class for migration modules that transform extensions.
@@ -16,15 +17,12 @@ export abstract class SpecialTransform {
      * migration behavior. The default implementation throws an error to ensure
      * subclasses provide their own implementation.
      *
-     * @param extension - The extension object to migrate
-     * @returns {Extension} The migrated extension object or {null} of the migration fails
+     * @param node - The AST node to potentially transform
+     * @returns {boolean} True if transformation was applied, false otherwise
      * @throws {Error} When called directly on the base class without being overridden
      * @static
      */
-    public static try_transform(
-        node: any
-    ): boolean {
+    public static try_transform(node: ESTree.Node): boolean {
         throw new Error(`Method must be implemented by subclass - ${node}`);
     }
 }
-

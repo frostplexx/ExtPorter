@@ -1,19 +1,17 @@
+import * as ESTree from 'estree';
 import { buildMemberExpressionPath } from '../ast-utils';
 import { logger } from '../../../utils/logger';
 import { SpecialTransform } from '../../../types/special_transform';
 
-
-
 export class WindowOpenTranform implements SpecialTransform {
-    
     // Special handling for window.open() in service workers
-    public static try_transform(node: any): boolean {
+    public static try_transform(node: ESTree.Node): boolean {
         if (this.isWindowOpenCall(node)) {
-            this.transformWindowOpenToTabsCreate(node);
-            return true
+            this.transformWindowOpenToTabsCreate(node as ESTree.CallExpression);
+            return true;
         }
 
-        return false
+        return false;
     }
 
     /**
@@ -22,7 +20,7 @@ export class WindowOpenTranform implements SpecialTransform {
      * @param node AST node to check
      * @returns True if node is a window.open() call
      */
-    public static isWindowOpenCall(node: any): boolean {
+    public static isWindowOpenCall(node: ESTree.Node): node is ESTree.CallExpression {
         if (node.type !== 'CallExpression') return false;
 
         // Check for window.open()
@@ -45,7 +43,7 @@ export class WindowOpenTranform implements SpecialTransform {
      *
      * @param node CallExpression AST node for window.open() call
      */
-    public static transformWindowOpenToTabsCreate(node: any): void {
+    public static transformWindowOpenToTabsCreate(node: ESTree.CallExpression): void {
         const args = node.arguments;
         if (!args || args.length === 0) return;
 
@@ -53,7 +51,10 @@ export class WindowOpenTranform implements SpecialTransform {
         const urlArg = args[0];
 
         // Create chrome.tabs.create({ url: urlArg })
-        node.callee = {
+        // Using 'as any' here because we're manually constructing AST nodes
+        // that will be serialized back to code, so exact ESTree type compliance
+        // is less critical than functionality
+        (node as any).callee = {
             type: 'MemberExpression',
             object: {
                 type: 'MemberExpression',
@@ -66,35 +67,37 @@ export class WindowOpenTranform implements SpecialTransform {
                     name: 'tabs',
                 },
                 computed: false,
+                optional: false,
             },
             property: {
                 type: 'Identifier',
                 name: 'create',
             },
             computed: false,
+            optional: false,
         };
 
         // Create the options object with url property
         const optionsObject = {
-            type: 'ObjectExpression',
+            type: 'ObjectExpression' as const,
             properties: [
                 {
-                    type: 'Property',
+                    type: 'Property' as const,
                     method: false,
                     shorthand: false,
                     computed: false,
                     key: {
-                        type: 'Identifier',
+                        type: 'Identifier' as const,
                         name: 'url',
                     },
                     value: urlArg,
-                    kind: 'init',
+                    kind: 'init' as const,
                 },
             ],
         };
 
         // Replace arguments with the options object
-        node.arguments = [optionsObject];
+        (node as any).arguments = [optionsObject];
 
         logger.debug(null, 'Transformed window.open() to chrome.tabs.create()');
     }
