@@ -3,7 +3,8 @@ import { buildMemberExpressionPath } from '../ast-utils';
 import { logger } from '../../../utils/logger';
 import { SpecialTransform } from '../../../types/special_transform';
 
-export class WindowOpenTransform implements SpecialTransform {
+// Note: This class only contains static methods and does not implement SpecialTransform at the instance level.
+export class WindowOpenTransform {
     // Special handling for window.open() in service workers
     public static try_transform(node: ESTree.Node): boolean {
         if (this.isWindowOpenCall(node)) {
