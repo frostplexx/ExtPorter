@@ -17,6 +17,7 @@ export class MigrationWriter {
     private readonly concurrentWrites = 3;
     private activeWriters = 0;
     private autoPro = true; // Auto-process queue (can be disabled for testing)
+    private readonly fileBatchSize = 50; // Number of files to write concurrently
 
     private constructor() {
         // Handle graceful shutdown
@@ -181,42 +182,48 @@ export class MigrationWriter {
     }
 
     private async writeFiles(extension: Extension, outputPath: string): Promise<void> {
-        const writePromises = extension.files.map(async (file) => {
-            const filePath = path.join(outputPath, file.path);
-            const fileDir = path.dirname(filePath);
+        // Process files in batches to avoid "too many open files" error
+        const files = extension.files;
+        
+        for (let i = 0; i < files.length; i += this.fileBatchSize) {
+            const batch = files.slice(i, i + this.fileBatchSize);
+            const writePromises = batch.map(async (file) => {
+                const filePath = path.join(outputPath, file.path);
+                const fileDir = path.dirname(filePath);
 
-            try {
-                await fs.mkdir(fileDir, { recursive: true });
+                try {
+                    await fs.mkdir(fileDir, { recursive: true });
 
-                // Use text encoding only for recognized text file types, binary copy for everything else
-                if (
-                    file.filetype === ExtFileType.JS ||
-                    file.filetype === ExtFileType.CSS ||
-                    file.filetype === ExtFileType.HTML
-                ) {
-                    // Write text files with UTF-8 encoding
-                    const content = file.getContent();
-                    await fs.writeFile(filePath, content, 'utf8');
-                } else {
-                    // Write all other files (ExtFileType.OTHER) as binary to preserve data integrity
-                    const buffer = file.getBuffer();
-                    await fs.writeFile(filePath, buffer);
-                }
-            } catch (error) {
-                logger.error(extension, 'Failed to write file', {
-                    filePath: file.path,
-                    fileType: file.filetype,
-                    isTextFile:
+                    // Use text encoding only for recognized text file types, binary copy for everything else
+                    if (
                         file.filetype === ExtFileType.JS ||
                         file.filetype === ExtFileType.CSS ||
-                        file.filetype === ExtFileType.HTML,
-                    error: error instanceof Error ? error.message : String(error),
-                });
-                throw error;
-            }
-        });
+                        file.filetype === ExtFileType.HTML
+                    ) {
+                        // Write text files with UTF-8 encoding
+                        const content = file.getContent();
+                        await fs.writeFile(filePath, content, 'utf8');
+                    } else {
+                        // Write all other files (ExtFileType.OTHER) as binary to preserve data integrity
+                        const buffer = file.getBuffer();
+                        await fs.writeFile(filePath, buffer);
+                    }
+                } catch (error) {
+                    logger.error(extension, 'Failed to write file', {
+                        filePath: file.path,
+                        fileType: file.filetype,
+                        isTextFile:
+                            file.filetype === ExtFileType.JS ||
+                            file.filetype === ExtFileType.CSS ||
+                            file.filetype === ExtFileType.HTML,
+                        error: error instanceof Error ? error.message : String(error),
+                    });
+                    throw error;
+                }
+            });
 
-        await Promise.all(writePromises);
+            await Promise.all(writePromises);
+        }
     }
 
     private async calculateDirectorySize(dirPath: string): Promise<number> {
