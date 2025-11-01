@@ -3,7 +3,7 @@ import { buildMemberExpressionPath } from '../ast-utils';
 import { logger } from '../../../utils/logger';
 import { SpecialTransform } from '../../../types/special_transform';
 
-export class WindowOpenTranform implements SpecialTransform {
+export class WindowOpenTransform implements SpecialTransform {
     // Special handling for window.open() in service workers
     public static try_transform(node: ESTree.Node): boolean {
         if (this.isWindowOpenCall(node)) {
