@@ -25,7 +25,7 @@ services:
     shm_size: 2gb
 
   mongodb:
-    image: mongo:8.0
+    image: mongo:8.2
     container_name: migrator-mongodb
     restart: unless-stopped
     ports:

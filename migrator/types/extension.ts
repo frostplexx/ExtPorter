@@ -28,6 +28,19 @@ export interface Extension {
         webRequest_to_dnr_migrations: number;
     };
     tags?: string[]; // Store tag names as enum string names (e.g., 'MANIFEST_MIGRATED') for readability in MongoDB
+    fakeium_validation?: {
+        enabled: boolean;
+        is_equivalent: boolean;
+        similarity_score: number;
+        mv2_api_calls: number;
+        mv3_api_calls: number;
+        matched_calls: number;
+        mv2_only_calls: number;
+        mv3_only_calls: number;
+        differences: string[];
+        validation_errors: string[];
+        duration_ms: number;
+    };
 }
 
 export function closeExtensionFiles(extension: Extension): void {
