@@ -18,6 +18,12 @@ import { applyApiTransformations } from './ast-transformers';
  */
 export class RenameAPIS implements MigrationModule {
     /**
+     * Cached blacklist checker instance (singleton pattern).
+     * Reused across all migrations for performance.
+     */
+    private static readonly blacklistChecker = BlacklistChecker.getInstance();
+
+    /**
      * Processes all JavaScript files in the extension and
      * applies API transformations based on the loaded mapping rules.
      */
@@ -43,9 +49,6 @@ export class RenameAPIS implements MigrationModule {
             let transformedFiles = 0;
             let blacklistedFiles = 0;
 
-            // TODO: Should only be initialized once and then reused
-            const blacklistChecker = BlacklistChecker.getInstance();
-
             const transformedFilesArray = extension.files.map((file) => {
                 // skip files that arent js
                 if (file.filetype !== ExtFileType.JS) {
@@ -55,7 +58,10 @@ export class RenameAPIS implements MigrationModule {
                 // Check if file is blacklisted from transformation (with content signature detection)
                 const fileContent = file.getContent();
 
-                const blacklistResult = blacklistChecker.isFileBlacklisted(file.path, fileContent);
+                const blacklistResult = RenameAPIS.blacklistChecker.isFileBlacklisted(
+                    file.path,
+                    fileContent
+                );
                 if (blacklistResult.isBlacklisted) {
                     blacklistedFiles++;
                     logger.debug(extension, 'File blacklisted from transformation', {
@@ -98,7 +104,7 @@ export class RenameAPIS implements MigrationModule {
                 files: transformedFilesArray,
             };
 
-            // TODO: make this more generic so its a single function that can be used in every module?
+            // TODO?: make this more generic so its a single function that can be used in every module?
             // Add API_RENAMES_APPLIED tag to extension object
             if (!updatedExtension.tags) {
                 updatedExtension.tags = [];
@@ -136,7 +142,7 @@ export class RenameAPIS implements MigrationModule {
             const fileSize = file.getSize();
             const fileSizeKB = Math.round(fileSize / 1024);
             const content = file.getContent();
-            const isWebpackBundle = BlacklistChecker.getInstance().isWebpackBundle(content);
+            const isWebpackBundle = RenameAPIS.blacklistChecker.isWebpackBundle(content);
 
             logger.error(null, `AST parsing failed for file ${file.path}`, {
                 path: file.path,
