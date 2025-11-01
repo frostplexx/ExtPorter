@@ -176,5 +176,235 @@ describe('MigrationWriter', () => {
             const status = writer.getQueueStatus();
             expect(status.queueLength).toBe(0);
         });
+
+        it('should return immediately when queue is empty', async () => {
+            const writer = MigrationWriter.shared;
+
+            await expect(writer.flush()).resolves.toBeUndefined();
+        });
+
+        it('should handle flush timeout', async () => {
+            const writer = MigrationWriter.shared;
+
+            await writer.queueExtension(mockExtension);
+
+            // Mock a scenario where writers don't complete
+            (writer as any).activeWriters = 1;
+
+            // Create a promise that will resolve after a short delay
+            const flushPromise = writer.flush();
+
+            // Wait a bit then reset the active writers to allow flush to complete
+            setTimeout(() => {
+                (writer as any).activeWriters = 0;
+            }, 100);
+
+            // This should resolve once activeWriters is reset
+            await expect(flushPromise).resolves.toBeUndefined();
+        }, 35000);
+    });
+
+    describe('auto-process', () => {
+        it('should enable auto-processing', () => {
+            const writer = MigrationWriter.shared;
+
+            writer.setAutoProcess(true);
+
+            expect(() => writer.setAutoProcess(false)).not.toThrow();
+        });
+
+        it('should queue without auto-processing when disabled', async () => {
+            const writer = MigrationWriter.shared;
+            writer.setAutoProcess(false);
+
+            await writer.queueExtension(mockExtension);
+
+            const status = writer.getQueueStatus();
+            expect(status.queueLength).toBe(1);
+        });
+    });
+
+    describe('file type handling', () => {
+        it('should write CSS files as text', async () => {
+            const writer = MigrationWriter.shared;
+            const cssFile = {
+                path: 'style.css',
+                filetype: ExtFileType.CSS,
+                getContent: jest.fn().mockReturnValue('body { color: red; }'),
+                getBuffer: jest.fn().mockReturnValue(Buffer.from('body { color: red; }')),
+            };
+
+            const ext = {
+                ...mockExtension,
+                files: [cssFile as any],
+            };
+
+            await writer.writeExtensionSync(ext, '/test/output/css-ext');
+
+            expect(fs.writeFile).toHaveBeenCalledWith(
+                expect.stringContaining('style.css'),
+                'body { color: red; }',
+                'utf8'
+            );
+        });
+
+        it('should write HTML files as text', async () => {
+            const writer = MigrationWriter.shared;
+            const htmlFile = {
+                path: 'page.html',
+                filetype: ExtFileType.HTML,
+                getContent: jest.fn().mockReturnValue('<html></html>'),
+                getBuffer: jest.fn().mockReturnValue(Buffer.from('<html></html>')),
+            };
+
+            const ext = {
+                ...mockExtension,
+                files: [htmlFile as any],
+            };
+
+            await writer.writeExtensionSync(ext, '/test/output/html-ext');
+
+            expect(fs.writeFile).toHaveBeenCalledWith(
+                expect.stringContaining('page.html'),
+                '<html></html>',
+                'utf8'
+            );
+        });
+
+        it('should write other files as binary', async () => {
+            const writer = MigrationWriter.shared;
+            const imageFile = {
+                path: 'icon.png',
+                filetype: ExtFileType.OTHER,
+                getContent: jest.fn(),
+                getBuffer: jest.fn().mockReturnValue(Buffer.from([0x89, 0x50, 0x4e, 0x47])),
+            };
+
+            const ext = {
+                ...mockExtension,
+                files: [imageFile as any],
+            };
+
+            await writer.writeExtensionSync(ext, '/test/output/binary-ext');
+
+            expect(fs.writeFile).toHaveBeenCalledWith(
+                expect.stringContaining('icon.png'),
+                expect.any(Buffer)
+            );
+        });
+    });
+
+    describe('new tab subfolder', () => {
+        it('should write to new_tab_extensions subfolder when enabled', async () => {
+            const originalEnv = process.env.NEW_TAB_SUBFOLDER;
+            process.env.NEW_TAB_SUBFOLDER = 'true';
+
+            const writer = MigrationWriter.shared;
+            const newTabExt = {
+                ...mockExtension,
+                isNewTabExtension: true,
+            };
+
+            // Need to queue and process to test path logic
+            writer.setAutoProcess(false);
+            await writer.queueExtension(newTabExt);
+
+            // Manually trigger write
+            const task = (writer as any).writeQueue[0];
+            await (writer as any).writeExtensionToDisk(task.extension);
+
+            expect(fs.mkdir).toHaveBeenCalledWith(
+                expect.stringContaining('new_tab_extensions'),
+                expect.anything()
+            );
+
+            process.env.NEW_TAB_SUBFOLDER = originalEnv;
+        });
+
+        it('should use mv3_extension_id when available', async () => {
+            const writer = MigrationWriter.shared;
+            const ext = {
+                ...mockExtension,
+                mv3_extension_id: 'mv3-id-12345',
+            };
+
+            writer.setAutoProcess(false);
+            await writer.queueExtension(ext);
+
+            const task = (writer as any).writeQueue[0];
+            await (writer as any).writeExtensionToDisk(task.extension);
+
+            expect(fs.mkdir).toHaveBeenCalledWith(
+                expect.stringContaining('mv3-id-12345'),
+                expect.anything()
+            );
+        });
+    });
+
+    describe('error handling', () => {
+        it('should handle directory creation errors', async () => {
+            const writer = MigrationWriter.shared;
+            (fs.mkdir as any).mockRejectedValue(new Error('Directory creation failed'));
+
+            await expect(
+                writer.writeExtensionSync(mockExtension, '/test/output/error-ext')
+            ).rejects.toThrow('Directory creation failed');
+        });
+
+        it('should handle manifest write errors', async () => {
+            const writer = MigrationWriter.shared;
+            (fs.writeFile as any).mockRejectedValueOnce(new Error('Manifest write failed'));
+
+            await expect(
+                writer.writeExtensionSync(mockExtension, '/test/output/error-ext')
+            ).rejects.toThrow();
+        });
+
+        it('should handle file write errors in queue', async () => {
+            const writer = MigrationWriter.shared;
+            writer.setAutoProcess(false);
+
+            (fs.writeFile as any).mockRejectedValue(new Error('File write failed'));
+
+            await writer.queueExtension(mockExtension);
+
+            // Process queue manually
+            await writer.flush();
+
+            // Should not throw, but log the error
+            const status = writer.getQueueStatus();
+            expect(status.queueLength).toBe(0);
+        });
+    });
+
+    describe('concurrent writes', () => {
+        it('should handle concurrent write requests', async () => {
+            const writer = MigrationWriter.shared;
+            const extensions = Array.from({ length: 5 }, (_, i) => ({
+                ...mockExtension,
+                id: `ext-${i}`,
+            }));
+
+            writer.setAutoProcess(false);
+
+            await Promise.all(extensions.map((ext) => writer.queueExtension(ext)));
+
+            const status = writer.getQueueStatus();
+            expect(status.queueLength).toBe(5);
+
+            await writer.flush();
+
+            const finalStatus = writer.getQueueStatus();
+            expect(finalStatus.queueLength).toBe(0);
+        });
+    });
+
+    describe('signal handling', () => {
+        it('should be constructed with signal handlers', () => {
+            // The constructor sets up signal handlers
+            // We can verify the instance exists
+            const instance = MigrationWriter.shared;
+            expect(instance).toBeDefined();
+        });
     });
 });
