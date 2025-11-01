@@ -3,7 +3,7 @@ import { buildMemberExpressionPath } from '../ast-utils';
 import { logger } from '../../../utils/logger';
 import { SpecialTransform } from '../../../types/special_transform';
 
-export class ContextMenuTranform implements SpecialTransform {
+export class ContextMenuTransform implements SpecialTransform {
     static contextMenuCalls: any[] = [];
 
     // Special handling for context menu onclick transformations
