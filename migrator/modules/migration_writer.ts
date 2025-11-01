@@ -184,7 +184,7 @@ export class MigrationWriter {
     private async writeFiles(extension: Extension, outputPath: string): Promise<void> {
         // Process files in batches to avoid "too many open files" error
         const files = extension.files;
-        
+
         for (let i = 0; i < files.length; i += this.fileBatchSize) {
             const batch = files.slice(i, i + this.fileBatchSize);
             const writePromises = batch.map(async (file) => {
