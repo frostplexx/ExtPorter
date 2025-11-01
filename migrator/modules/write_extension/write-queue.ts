@@ -19,7 +19,7 @@ export class WriteQueue {
     private isProcessing = false;
     private readonly concurrentWrites = 10;
     private activeWriters = 0;
-    private autoPro = true; 
+    private autoPro = true; // Auto-process queue (can be disabled for testing)
 
     private constructor() {
         // Handle graceful shutdown
