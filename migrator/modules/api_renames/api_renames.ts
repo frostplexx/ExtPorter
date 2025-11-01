@@ -24,6 +24,28 @@ export class RenameAPIS implements MigrationModule {
     private static readonly blacklistChecker = BlacklistChecker.getInstance();
 
     /**
+     * Shared espree parser options for script parsing.
+     * Cached to avoid object creation overhead.
+     */
+    private static readonly SCRIPT_PARSE_OPTIONS = {
+        ecmaVersion: 'latest' as const,
+        sourceType: 'script' as const,
+        loc: true,
+        range: true,
+    };
+
+    /**
+     * Shared espree parser options for module parsing.
+     * Cached to avoid object creation overhead.
+     */
+    private static readonly MODULE_PARSE_OPTIONS = {
+        ecmaVersion: 'latest' as const,
+        sourceType: 'module' as const,
+        loc: true,
+        range: true,
+    };
+
+    /**
      * Processes all JavaScript files in the extension and
      * applies API transformations based on the loaded mapping rules.
      */
@@ -104,15 +126,8 @@ export class RenameAPIS implements MigrationModule {
                 files: transformedFilesArray,
             };
 
-            // TODO?: make this more generic so its a single function that can be used in every module?
             // Add API_RENAMES_APPLIED tag to extension object
-            if (!updatedExtension.tags) {
-                updatedExtension.tags = [];
-            }
-            const apiRenameTag = Tags[Tags.API_RENAMES_APPLIED];
-            if (!updatedExtension.tags.includes(apiRenameTag)) {
-                updatedExtension.tags.push(apiRenameTag);
-            }
+            RenameAPIS.addTagToExtension(updatedExtension, Tags.API_RENAMES_APPLIED);
 
             return updatedExtension;
         } catch (error) {
@@ -169,6 +184,7 @@ export class RenameAPIS implements MigrationModule {
         }
 
         // Generate code with preserved formatting and comments
+        // Note: getContent() is called here only once per transformed file
         const originalContent = file.getContent();
         const newContent = FormatPreservingGenerator.generateWithPreservedFormatting(
             transformedAST,
@@ -212,21 +228,17 @@ export class RenameAPIS implements MigrationModule {
         transformedFile.getAST = () => {
             try {
                 // Try as script first (most common)
-                return espree.parse(newContent, {
-                    ecmaVersion: 'latest',
-                    sourceType: 'script',
-                    loc: true,
-                    range: true,
-                } as any) as ESTree.Program;
+                return espree.parse(
+                    newContent,
+                    RenameAPIS.SCRIPT_PARSE_OPTIONS as any
+                ) as ESTree.Program;
             } catch {
                 try {
                     // Fallback to module parsing
-                    return espree.parse(newContent, {
-                        ecmaVersion: 'latest',
-                        sourceType: 'module',
-                        loc: true,
-                        range: true,
-                    } as any) as ESTree.Program;
+                    return espree.parse(
+                        newContent,
+                        RenameAPIS.MODULE_PARSE_OPTIONS as any
+                    ) as ESTree.Program;
                 } catch (moduleError) {
                     logger.error(null, `Parsing Error`, {
                         path: originalFile.path,
@@ -292,5 +304,22 @@ export class RenameAPIS implements MigrationModule {
         logger.error(extension, `Migration error at ${startTime}`, {
             error: error instanceof Error ? error.message : String(error),
         });
+    }
+
+    /**
+     * Adds a tag to an extension if it doesn't already exist.
+     * Utility method for consistent tag management across migration modules.
+     *
+     * @param extension Extension to add tag to
+     * @param tag Tag enum value to add
+     */
+    private static addTagToExtension(extension: Extension, tag: Tags): void {
+        if (!extension.tags) {
+            extension.tags = [];
+        }
+        const tagValue = Tags[tag];
+        if (!extension.tags.includes(tagValue)) {
+            extension.tags.push(tagValue);
+        }
     }
 }
