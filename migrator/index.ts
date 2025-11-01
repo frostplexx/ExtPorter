@@ -15,6 +15,8 @@ import { MigrationError } from './types/migration_module';
 // import { ResourceDownloader } from './modules/resource_downloader';
 import { BridgeInjector } from './modules/bridge_injector';
 import { WebRequestMigrator } from './modules/web_request_migrator';
+import { ServiceWorkerCompat } from './modules/service_worker_compat';
+import { OffscreenMigrator } from './modules/offscreen_migrator';
 import {
     checkMemoryThreshold,
     clearExtensionMemory,
@@ -95,6 +97,8 @@ async function main() {
         // ResourceDownloader.migrate,
         RenameAPIS.migrate,
         BridgeInjector.migrate,
+        ServiceWorkerCompat.migrate, // Fix window, localStorage, DOM issues
+        OffscreenMigrator.migrate, // Add offscreen document if needed
         InterestingnessScorer.migrate,
         WriteMigrated.migrate,
     ];
