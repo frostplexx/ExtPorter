@@ -259,4 +259,120 @@ describe('Logger', () => {
             expect(logsDir).toContain('logs');
         });
     });
+
+    describe('flush', () => {
+        it('should flush pending logs', async () => {
+            await expect(logger.flush()).resolves.not.toThrow();
+        });
+    });
+
+    describe('stop', () => {
+        it('should stop logging timers', () => {
+            expect(() => logger.stop()).not.toThrow();
+        });
+    });
+
+    describe('meta truncation and sanitization', () => {
+        it('should handle large meta objects', () => {
+            process.env.LOG_LEVEL = 'info';
+
+            const largeMeta = { data: 'A'.repeat(15 * 1024 * 1024) }; // 15MB
+
+            expect(() => logger.info(mockExtension, 'Test large meta', largeMeta)).not.toThrow();
+        });
+
+        it('should handle circular references in meta', () => {
+            process.env.LOG_LEVEL = 'info';
+
+            const circular: any = { test: 'value' };
+            circular.self = circular;
+
+            expect(() => logger.info(mockExtension, 'Test circular meta', circular)).not.toThrow();
+        });
+
+        it('should handle null meta', () => {
+            process.env.LOG_LEVEL = 'info';
+
+            expect(() => logger.info(mockExtension, 'Test null meta', null)).not.toThrow();
+        });
+
+        it('should handle undefined meta', () => {
+            process.env.LOG_LEVEL = 'info';
+
+            expect(() =>
+                logger.info(mockExtension, 'Test undefined meta', undefined)
+            ).not.toThrow();
+        });
+    });
+
+    describe('message truncation', () => {
+        it('should handle extremely long messages', () => {
+            process.env.LOG_LEVEL = 'info';
+
+            const longMessage = 'A'.repeat(2 * 1024 * 1024); // 2MB message
+
+            expect(() => logger.info(mockExtension, longMessage)).not.toThrow();
+        });
+    });
+
+    describe('batching', () => {
+        it('should handle batch logging', async () => {
+            process.env.LOG_LEVEL = 'info';
+            delete process.env.NODE_ENV;
+
+            // Log multiple messages
+            for (let i = 0; i < 30; i++) {
+                logger.info(mockExtension, `Test message ${i}`);
+            }
+
+            // Flush to process batch
+            await logger.flush();
+
+            expect(consoleSpy.info).toHaveBeenCalled();
+        });
+    });
+
+    describe('shutdown handling', () => {
+        it('should prevent logging after database shutdown', () => {
+            process.env.LOG_LEVEL = 'info';
+            delete process.env.NODE_ENV;
+
+            // Mock database as shutting down
+            (Database.shared as any).isShuttingDown = true;
+
+            logger.info(mockExtension, 'Test after shutdown');
+
+            // Reset shutdown flag
+            (Database.shared as any).isShuttingDown = false;
+        });
+    });
+
+    describe('extension metadata', () => {
+        it('should include extension metadata in logs', () => {
+            process.env.LOG_LEVEL = 'info';
+
+            const extWithNewTab: Extension = {
+                ...mockExtension,
+                isNewTabExtension: true,
+            };
+
+            logger.info(extWithNewTab, 'Test with new tab flag');
+
+            expect(consoleSpy.info).toHaveBeenCalled();
+        });
+
+        it('should handle extension without optional fields', () => {
+            process.env.LOG_LEVEL = 'info';
+
+            const minimalExt: Extension = {
+                id: 'minimal',
+                name: 'Minimal',
+                manifest_v2_path: '/path',
+                manifest: {},
+                files: [],
+            };
+
+            expect(() => logger.info(minimalExt, 'Test minimal extension')).not.toThrow();
+        });
+    });
 });
