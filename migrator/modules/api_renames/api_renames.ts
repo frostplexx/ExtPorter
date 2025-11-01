@@ -246,7 +246,7 @@ export class RenameAPIS implements MigrationModule {
                             moduleError instanceof Error
                                 ? moduleError.message
                                 : String(moduleError),
-                        message: Buffer.byteLength(newContent, 'utf8'),
+                        contentSize: Buffer.byteLength(newContent, 'utf8'),
                     });
                     return undefined;
                 }
