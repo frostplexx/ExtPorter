@@ -15,13 +15,6 @@ import { MigrationError } from './types/migration_module';
 // import { ResourceDownloader } from './modules/resource_downloader';
 import { BridgeInjector } from './modules/bridge_injector';
 import { WebRequestMigrator } from './modules/web_request_migrator';
-import {
-    checkMemoryThreshold,
-    clearExtensionMemory,
-    forceGarbageCollection,
-    logMemoryUsage,
-} from './utils/garbage';
-import { FakeiumValidator } from './modules/fakeium_validator';
 import { checkMemoryThreshold, clearExtensionMemory, forceGarbageCollection, logMemoryUsage } from './utils/garbage';
 
 // Load environment variables once at application startup
@@ -142,21 +135,6 @@ async function main() {
                 } else {
                     migrationSuccessful = false;
                     break;
-                }
-            }
-
-            // Run fakeium validation if migration was successful
-            if (migrationSuccessful && process.env.ENABLE_FAKEIUM_VALIDATION === 'true') {
-                try {
-                    const validated = await FakeiumValidator.migrateAsync(extension);
-                    if (validated && !(validated instanceof MigrationError)) {
-                        extension = validated;
-                    }
-                } catch (validationError) {
-                    // Don't fail the migration if validation fails
-                    logger.error(extension, 'Fakeium validation threw error but migration continues', {
-                        error: validationError instanceof Error ? validationError.message : String(validationError)
-                    });
                 }
             }
 
