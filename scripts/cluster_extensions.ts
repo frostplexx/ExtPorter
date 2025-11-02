@@ -1026,7 +1026,7 @@ function generateVisualization(
                                 <td style="padding: 12px; text-align: center;">
                                     <strong style="color: #fff;">\${api.count}</strong>
                                     <button 
-                                        onclick="showAPIDetails('\${api.mv2API}', \${JSON.stringify(api.extensions)})"
+                                        onclick="showAPIDetails('\${api.mv2API}', \${JSON.stringify(api.extensions).replace(/"/g, '&quot;')})"
                                         style="margin-left: 8px; padding: 4px 12px; background: #667eea; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.85rem;">
                                         View
                                     </button>
