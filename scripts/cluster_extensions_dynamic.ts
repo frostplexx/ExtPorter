@@ -271,20 +271,6 @@ function findOptimalClusters(
         return Math.max(1, extensions.length);
     }
 
-    // For very large datasets (>1000), use heuristic instead of exhaustive search
-    if (extensions.length > 1000) {
-        console.log(chalk.blue('Large dataset detected, using heuristic for cluster count...'));
-        // Rule of thumb: sqrt(n/2) clusters
-        const heuristicK = Math.floor(Math.sqrt(extensions.length / 2));
-        const clampedK = Math.max(minClusters, Math.min(maxClusters, heuristicK));
-        console.log(
-            chalk.green(
-                `✓ Using ${clampedK} clusters (heuristic for ${extensions.length} extensions)`
-            )
-        );
-        return clampedK;
-    }
-
     const vectors = extensions.map((ext) => {
         const vector = apiUsageToVector(ext.baseApiUsage, vocabulary);
         return normalizeVector(vector);
@@ -790,14 +776,9 @@ async function loadExtensionsFromOutput(outputPath: string): Promise<ExtensionDa
 // TODO: Add generateVisualization function here
 
 async function main() {
-    console.log(chalk.bold.cyan('\n🔬 Extension API Clustering Tool\n'));
+    console.log(chalk.bold.cyan('\n🔬 Dynamic Extension API Clustering Tool\n'));
 
     const args = process.argv.slice(2);
-
-    // Auto-detect from .env file
-    const envInputPath = process.env.INPUT_DIR;
-    const envOutputPath = process.env.OUTPUT_DIR;
-    const envMongoUri = process.env.MONGODB_URI;
 
     // Parse arguments
     let inputPath: string | null = null;
@@ -805,7 +786,6 @@ async function main() {
     let useDatabase = false;
     let numClusters: number | 'auto' = 'auto';
     let visualizationFile = './cluster_visualization.html';
-    let autoMode = false;
 
     for (let i = 0; i < args.length; i++) {
         if (args[i] === '--input' || args[i] === '-i') {
@@ -814,8 +794,6 @@ async function main() {
             outputPath = args[++i];
         } else if (args[i] === '--database' || args[i] === '-d') {
             useDatabase = true;
-        } else if (args[i] === '--auto' || args[i] === '-a') {
-            autoMode = true;
         } else if (args[i] === '--clusters' || args[i] === '-c') {
             const val = args[++i];
             numClusters = val === 'auto' ? 'auto' : parseInt(val);
@@ -823,65 +801,22 @@ async function main() {
             visualizationFile = args[++i];
         } else if (args[i] === '--help' || args[i] === '-h') {
             console.log(`
-Usage: npm run cluster [-- options]
-
-The tool automatically detects input/output directories from .env file.
+Usage: npm run cluster:dynamic [-- options]
 
 Options:
-  -a, --auto               Use .env settings (INPUT_DIR, OUTPUT_DIR, MONGODB_URI)
-  -i, --input <path>       Path to input extensions directory (overrides .env)
-  -o, --output <path>      Path to migrated extensions output directory (overrides .env)
+  -i, --input <path>       Path to input extensions directory
+  -o, --output <path>      Path to migrated extensions output directory
   -d, --database           Load extensions from MongoDB database
   -c, --clusters <num>     Number of clusters (default: auto)
   -v, --viz <file>         Output HTML file (default: ./cluster_visualization.html)
   -h, --help               Show this help message
 
-Environment Variables (from .env):
-  INPUT_DIR=${envInputPath || 'not set'}
-  OUTPUT_DIR=${envOutputPath || 'not set'}
-  MONGODB_URI=${envMongoUri ? 'configured' : 'not set'}
-
 Examples:
-  # Auto-detect everything from .env (recommended)
-  npm run cluster
-
-  # Auto-detect with custom cluster count
-  npm run cluster -- --clusters 10
-
-  # Override .env with specific path
-  npm run cluster -- --input ./my-extensions
-
-  # Compare .env input vs output
-  npm run cluster -- --auto --database
+  npm run cluster:dynamic -- --input ./extensions --clusters auto
+  npm run cluster:dynamic -- --input ./extensions --clusters 5
             `);
             process.exit(0);
         }
-    }
-
-    // Apply .env defaults if not explicitly provided
-    if (!inputPath && !outputPath && !useDatabase) {
-        autoMode = true;
-    }
-
-    if (autoMode) {
-        console.log(chalk.blue('Using configuration from .env file...'));
-
-        if (!inputPath && envInputPath) {
-            inputPath = envInputPath;
-            console.log(chalk.gray(`  INPUT_DIR: ${envInputPath}`));
-        }
-
-        if (!outputPath && envOutputPath) {
-            outputPath = envOutputPath;
-            console.log(chalk.gray(`  OUTPUT_DIR: ${envOutputPath}`));
-        }
-
-        if (!useDatabase && envMongoUri) {
-            useDatabase = true;
-            console.log(chalk.gray(`  MONGODB_URI: configured`));
-        }
-
-        console.log('');
     }
 
     // Load extensions
@@ -904,18 +839,6 @@ Examples:
 
     if (allExtensions.length === 0) {
         console.log(chalk.red('\n❌ Error: No extensions loaded.\n'));
-
-        if (!envInputPath && !envOutputPath && !envMongoUri) {
-            console.log(chalk.yellow('No paths configured in .env file.'));
-            console.log(chalk.gray('Please set INPUT_DIR, OUTPUT_DIR, or MONGODB_URI in .env\n'));
-        }
-
-        console.log(chalk.gray('Specify at least one source:'));
-        console.log(chalk.gray('  --input <path>   - Load from filesystem'));
-        console.log(chalk.gray('  --output <path>  - Load from output directory'));
-        console.log(chalk.gray('  --database       - Load from MongoDB'));
-        console.log(chalk.gray('  --auto           - Use .env configuration\n'));
-
         process.exit(1);
     }
 
@@ -928,25 +851,7 @@ Examples:
     if (numClusters === 'auto') {
         finalClusterCount = findOptimalClusters(allExtensions, vocabulary);
     } else {
-        const requestedClusters =
-            typeof numClusters === 'number' ? numClusters : parseInt(String(numClusters));
-        if (isNaN(requestedClusters) || requestedClusters < 1) {
-            console.log(chalk.red(`Invalid cluster count: ${numClusters}`));
-            finalClusterCount = findOptimalClusters(allExtensions, vocabulary);
-        } else {
-            finalClusterCount = Math.min(requestedClusters, Math.floor(allExtensions.length / 2));
-            console.log(
-                chalk.blue(`Using ${finalClusterCount} clusters (requested: ${requestedClusters})`)
-            );
-        }
-    }
-
-    // Validate final cluster count
-    if (isNaN(finalClusterCount) || finalClusterCount < 1) {
-        console.log(
-            chalk.red(`Error: Invalid cluster count (${finalClusterCount}). Using 5 as default.`)
-        );
-        finalClusterCount = Math.min(5, Math.floor(allExtensions.length / 2));
+        finalClusterCount = Math.min(numClusters as number, Math.floor(allExtensions.length / 2));
     }
 
     // Perform clustering

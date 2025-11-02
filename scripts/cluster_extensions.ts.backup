@@ -29,55 +29,35 @@ import chalk from 'chalk';
 // Load environment variables
 dotenv.config();
 
-// API patterns to extract
-const CHROME_API_PATTERNS = [
-    // Core APIs
-    'chrome.runtime',
-    'chrome.storage',
-    'chrome.tabs',
-    'chrome.windows',
-    'chrome.extension',
+// MV2 to MV3 API migration map
+const MV2_TO_MV3_MAP: { [key: string]: { mv3: string; status: string } } = {
+    'chrome.browserAction': { mv3: 'chrome.action', status: 'deprecated' },
+    'chrome.pageAction': { mv3: 'chrome.action', status: 'deprecated' },
+    'chrome.webRequest': { mv3: 'chrome.declarativeNetRequest', status: 'limited' },
+    'chrome.tabs.executeScript': { mv3: 'chrome.scripting.executeScript', status: 'deprecated' },
+    'chrome.tabs.insertCSS': { mv3: 'chrome.scripting.insertCSS', status: 'deprecated' },
+    'chrome.extension.getBackgroundPage': {
+        mv3: 'chrome.runtime.getBackgroundPage',
+        status: 'deprecated',
+    },
+    'chrome.extension.getURL': { mv3: 'chrome.runtime.getURL', status: 'deprecated' },
+    'chrome.extension.sendMessage': { mv3: 'chrome.runtime.sendMessage', status: 'deprecated' },
+};
 
-    // UI APIs
-    'chrome.action',
-    'chrome.browserAction',
-    'chrome.pageAction',
-    'chrome.contextMenus',
-    'chrome.notifications',
-    'chrome.omnibox',
-
-    // Content APIs
-    'chrome.scripting',
-    'chrome.contentSettings',
-    'chrome.cookies',
-    'chrome.downloads',
-    'chrome.history',
-    'chrome.bookmarks',
-
-    // Network APIs
-    'chrome.webRequest',
-    'chrome.webNavigation',
-    'chrome.declarativeNetRequest',
-    'chrome.proxy',
-
-    // Advanced APIs
-    'chrome.alarms',
-    'chrome.identity',
-    'chrome.management',
-    'chrome.permissions',
-    'chrome.privacy',
-    'chrome.sessions',
-    'chrome.topSites',
-    'chrome.webstore',
-
-    // Other
-    'chrome.commands',
-    'chrome.i18n',
-    'chrome.idle',
-    'chrome.system',
-    'chrome.tts',
-    'chrome.offscreen',
-];
+/**
+ * Check if an API needs migration
+ */
+function needsMigration(api: string): boolean {
+    if (MV2_TO_MV3_MAP[api]) {
+        return true;
+    }
+    for (const deprecatedApi of Object.keys(MV2_TO_MV3_MAP)) {
+        if (api.startsWith(deprecatedApi + '.')) {
+            return true;
+        }
+    }
+    return false;
+}
 
 interface APIUsage {
     [api: string]: number;
@@ -88,7 +68,8 @@ interface ExtensionData {
     name: string;
     source: 'filesystem' | 'database' | 'output';
     manifestVersion: number;
-    apiUsage: APIUsage;
+    baseApiUsage: APIUsage; // e.g., chrome.tabs
+    fullApiUsage: APIUsage; // e.g., chrome.tabs.query
     totalApiCalls: number;
 }
 
@@ -101,38 +82,100 @@ interface ClusterResult {
 }
 
 /**
- * Extract Chrome API usage from an extension
+ * Extract Chrome API usage dynamically (no hardcoded patterns)
  */
-function extractAPIUsage(extension: Extension): APIUsage {
-    const apiUsage: APIUsage = {};
+function extractAllAPIUsage(extension: Extension): {
+    baseApiUsage: APIUsage;
+    fullApiUsage: APIUsage;
+} {
+    const baseApiUsage: APIUsage = {};
+    const fullApiUsage: APIUsage = {};
 
-    // Initialize all APIs to 0
-    CHROME_API_PATTERNS.forEach((api) => {
-        apiUsage[api] = 0;
-    });
+    const bump = (map: APIUsage, key: string, inc = 1) => {
+        map[key] = (map[key] || 0) + inc;
+    };
 
-    // Count API occurrences in all JavaScript files
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const espree = require('espree');
+
     for (const file of extension.files) {
+        let content = '';
         try {
-            const content = file.getContent();
+            content = file.getContent();
+        } catch (e) {
+            continue;
+        }
 
-            // Count each API pattern
-            for (const api of CHROME_API_PATTERNS) {
-                // Escape dots for regex
-                const pattern = api.replace(/\./g, '\\.');
-                const regex = new RegExp(pattern, 'g');
-                const matches = content.match(regex);
-                if (matches) {
-                    apiUsage[api] += matches.length;
+        try {
+            const ast = espree.parse(content, {
+                ecmaVersion: 'latest',
+                sourceType: 'script',
+                ecmaFeatures: { jsx: true },
+                range: false,
+                loc: false,
+            });
+
+            const stack: any[] = [ast];
+            while (stack.length) {
+                const node: any = stack.pop();
+                if (!node || typeof node !== 'object') continue;
+
+                for (const key of Object.keys(node)) {
+                    const val: any = (node as any)[key];
+                    if (val && typeof val === 'object') {
+                        if (Array.isArray(val)) {
+                            for (let i = val.length - 1; i >= 0; i--) stack.push(val[i]);
+                        } else {
+                            stack.push(val);
+                        }
+                    }
+                }
+
+                if (node.type === 'MemberExpression') {
+                    const parts: string[] = [];
+                    let cur: any = node;
+                    let valid = true;
+                    while (cur && cur.type === 'MemberExpression') {
+                        const prop = cur.property;
+                        const obj = cur.object;
+                        if (cur.computed) {
+                            valid = false;
+                            break;
+                        }
+                        if (prop && prop.type === 'Identifier') {
+                            parts.unshift(prop.name);
+                        } else {
+                            valid = false;
+                            break;
+                        }
+                        cur = obj;
+                    }
+                    if (valid && cur && cur.type === 'Identifier' && cur.name === 'chrome') {
+                        const full = 'chrome.' + parts.join('.');
+                        bump(fullApiUsage, full);
+                        const segs = full.split('.');
+                        if (segs.length >= 2) {
+                            const base = segs.slice(0, 2).join('.');
+                            bump(baseApiUsage, base);
+                        }
+                    }
                 }
             }
-        } catch (error) {
-            // Skip files that can't be read
-            continue;
+        } catch (_parseErr) {
+            // Fallback: regex scan
+            const matches = content.match(/chrome(?:\.[A-Za-z_$][\w$])+/g) || [];
+            for (const m of matches) {
+                bump(fullApiUsage, m);
+                const segs = m.split('.');
+                if (segs.length >= 2) {
+                    const base = segs.slice(0, 2).join('.');
+                    bump(baseApiUsage, base);
+                }
+            }
         }
     }
 
-    return apiUsage;
+    return { baseApiUsage, fullApiUsage };
 }
 
 /**
@@ -303,7 +346,7 @@ function generateClusterNameRuleBased(commonAPIs: string[], _extensions: Extensi
     if (commonAPIs.length === 0) {
         return 'General Extensions';
     }
-    
+
     // Define API category patterns with priorities
     const categories: Array<{ apis: string[]; name: string; priority: number }> = [
         {
@@ -362,171 +405,19 @@ function generateClusterNameRuleBased(commonAPIs: string[], _extensions: Extensi
             priority: 4,
         },
     ];
-    
+
     // Find best matching category
     let bestCategory = '';
     let bestScore = 0;
     let bestPriority = 0;
-    
+
     for (const category of categories) {
-        const matchCount = category.apis.filter(api => commonAPIs.includes(api)).length;
+        const matchCount = category.apis.filter((api) => commonAPIs.includes(api)).length;
         const score = matchCount * category.priority;
-        
+
         if (score > bestScore || (score === bestScore && category.priority > bestPriority)) {
             bestScore = score;
             bestPriority = category.priority;
-            bestCategory = category.name;
-        }
-    }
-    
-    if (bestCategory) {
-        return bestCategory;
-    }
-    
-    // Fallback: Generate name from top APIs
-    const topAPIs = commonAPIs.slice(0, 2).map(api => {
-        const shortName = api.replace('chrome.', '');
-        return shortName.charAt(0).toUpperCase() + shortName.slice(1);
-    });
-    
-    if (topAPIs.length === 1) {
-        return `${topAPIs[0]} Extensions`;
-    } else if (topAPIs.length === 2) {
-        return `${topAPIs[0]} + ${topAPIs[1]}`;
-    }
-    
-    return 'Mixed Extensions';
-}
-
-/**
- * Generate cluster name using LLM (optional)
- */
-async function generateClusterNameWithLLM(
-    commonAPIs: string[],
-    extensions: ExtensionData[]
-): Promise<{ name: string; description: string }> {
-    try {
-        // Dynamic import to avoid loading LLM if not needed
-        const { LLMService } = await import('../migrator/features/llm');
-        const { buildPromptFromFile } = await import('../migrator/features/llm');
-        const path = await import('path');
-        
-        const llm = LLMService.fromEnv();
-        await llm.initialize();
-        
-        // Prepare variables for prompt
-        const variables = {
-            extension_count: extensions.length,
-            common_apis: commonAPIs
-                .slice(0, 10)
-                .map(api => `  - ${api}`)
-                .join('\n'),
-            extension_names: extensions
-                .slice(0, 5)
-                .map(ext => `  - ${ext.name}`)
-                .join('\n'),
-        };
-        
-        const promptPath = path.join(__dirname, 'clustering', 'cluster-naming-prompt.txt');
-        const prompt = buildPromptFromFile(promptPath, variables);
-        
-        const response = await llm.generate(prompt, {
-            temperature: 0.3,
-            num_predict: 100,
-        });
-        
-        await llm.cleanup();
-        
-        // Parse response
-        const lines = response.trim().split('\n');
-        const nameLine = lines.find(l => l.startsWith('NAME:'));
-        const descLine = lines.find(l => l.startsWith('DESCRIPTION:'));
-        
-        const name = nameLine ? nameLine.replace('NAME:', '').trim() : '';
-        const description = descLine ? descLine.replace('DESCRIPTION:', '').trim() : '';
-        
-        if (name && description) {
-            return { name, description };
-        }
-    } catch (error) {
-        // LLM failed or not configured - that's okay
-        console.log(chalk.gray(`  Note: LLM naming unavailable (using rule-based names)`));
-    }
-    
-    // Fallback to rule-based
-    return {
-        name: generateClusterNameRuleBased(commonAPIs, extensions),
-        description: '',
-    };
-}
-
-/**
- * Generate cluster name (with optional LLM)
- */
-async function generateClusterName(
-    commonAPIs: string[],
-    extensions: ExtensionData[],
-    useLLM: boolean = false
-): Promise<{ name: string; description: string }> {
-    if (useLLM && process.env.LLM_ENDPOINT) {
-        return await generateClusterNameWithLLM(commonAPIs, extensions);
-    }
-    
-    return {
-        name: generateClusterNameRuleBased(commonAPIs, extensions),
-        description: '',
-    };
-}
-
-    // Define API category patterns
-    const categories: { [key: string]: { apis: string[]; name: string } } = {
-        contentScripting: {
-            apis: ['chrome.scripting', 'chrome.tabs.executeScript'],
-            name: 'Content Script Extensions',
-        },
-        uiCustomization: {
-            apis: [
-                'chrome.action',
-                'chrome.browserAction',
-                'chrome.pageAction',
-                'chrome.contextMenus',
-            ],
-            name: 'UI Enhancement Extensions',
-        },
-        networkControl: {
-            apis: ['chrome.webRequest', 'chrome.declarativeNetRequest', 'chrome.proxy'],
-            name: 'Network Control Extensions',
-        },
-        dataManagement: {
-            apis: ['chrome.storage', 'chrome.cookies', 'chrome.history', 'chrome.bookmarks'],
-            name: 'Data Management Extensions',
-        },
-        tabManagement: {
-            apis: ['chrome.tabs', 'chrome.windows'],
-            name: 'Tab & Window Managers',
-        },
-        notifications: {
-            apis: ['chrome.notifications', 'chrome.alarms'],
-            name: 'Notification Extensions',
-        },
-        downloads: {
-            apis: ['chrome.downloads'],
-            name: 'Download Managers',
-        },
-        development: {
-            apis: ['chrome.devtools', 'chrome.debugger'],
-            name: 'Developer Tools',
-        },
-    };
-
-    // Check which category best matches
-    let bestCategory = '';
-    let bestScore = 0;
-
-    for (const [key, category] of Object.entries(categories)) {
-        const matchCount = category.apis.filter((api) => commonAPIs.includes(api)).length;
-        if (matchCount > bestScore) {
-            bestScore = matchCount;
             bestCategory = category.name;
         }
     }
@@ -537,7 +428,6 @@ async function generateClusterName(
 
     // Fallback: Generate name from top APIs
     const topAPIs = commonAPIs.slice(0, 2).map((api) => {
-        // Remove 'chrome.' prefix and capitalize
         const shortName = api.replace('chrome.', '');
         return shortName.charAt(0).toUpperCase() + shortName.slice(1);
     });
@@ -545,7 +435,7 @@ async function generateClusterName(
     if (topAPIs.length === 1) {
         return `${topAPIs[0]} Extensions`;
     } else if (topAPIs.length === 2) {
-        return `${topAPIs[0]} + ${topAPIs[1]} Extensions`;
+        return `${topAPIs[0]} + ${topAPIs[1]}`;
     }
 
     return 'Mixed Extensions';
@@ -607,7 +497,7 @@ function clusterExtensions(extensions: ExtensionData[], numClusters: number): Cl
 
         // Generate cluster name
         const clusterName = generateClusterNameRuleBased(commonAPIs, exts);
-        
+
         clusterResults.push({
             clusterId,
             clusterName,
@@ -634,6 +524,7 @@ function generateVisualization(
     // Prepare data for visualization
     const clusterData = clusters.map((cluster) => ({
         id: cluster.clusterId,
+        name: cluster.clusterName,
         extensions: cluster.extensions.map((ext) => ({
             id: ext.id,
             name: ext.name,
@@ -797,11 +688,19 @@ function generateVisualization(
         .badge-output { background: #4facfe; color: white; }
         .badge-mv2 { background: #fa709a; color: white; margin-left: 4px; }
         .badge-mv3 { background: #30cfd0; color: white; margin-left: 4px; }
-        #visualization {
+        #visualization, #migration-chart, #complexity-chart {
             width: 100%;
-            height: 600px;
+            height: 500px;
             border-radius: 8px;
             background: #0f0f0f;
+        }
+        #edge-cases {
+            max-height: 600px;
+            overflow-y: auto;
+        }
+        code {
+            font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
+            font-size: 0.9em;
         }
         .modal {
             display: none;
@@ -885,12 +784,36 @@ function generateVisualization(
         </div>
         
         <div class="section">
-            <h2>📊 Cluster Visualization</h2>
-            <div id="visualization"></div>
+            <h2>🔍 Migration Status Analysis</h2>
+            <p style="color: #888; margin-bottom: 20px;">
+                Identify which clusters still use deprecated MV2 APIs vs MV3 APIs
+            </p>
+            <div id="migration-chart"></div>
         </div>
         
         <div class="section">
-            <h2>📦 Clusters</h2>
+            <h2>📊 API Complexity by Cluster</h2>
+            <p style="color: #888; margin-bottom: 20px;">
+                Bubble size = total API calls. Find outliers and edge cases easily.
+            </p>
+            <div id="complexity-chart"></div>
+        </div>
+        
+        <div class="section">
+            <h2>⚠️ Potential Edge Cases</h2>
+            <div id="edge-cases"></div>
+        </div>
+        
+        <div class="section">
+            <h2>🔧 API Migration Coverage</h2>
+            <p style="color: #888; margin-bottom: 20px;">
+                Track which deprecated MV2 APIs are still in use and need migration
+            </p>
+            <div id="api-coverage"></div>
+        </div>
+        
+        <div class="section">
+            <h2>📦 Cluster Details</h2>
             <div class="cluster-grid" id="clusters"></div>
         </div>
     </div>
@@ -906,44 +829,288 @@ function generateVisualization(
         const clusterData = ${JSON.stringify(clusterData)};
         const colors = ['#667eea', '#f093fb', '#4facfe', '#fa709a', '#30cfd0', '#a8edea', '#fed6e3', '#c471f5', '#12c2e9', '#f857a6'];
         
-        // Create 3D scatter plot
-        const traces = clusterData.map((cluster, idx) => ({
-            x: cluster.extensions.map(e => e.totalApiCalls),
-            y: cluster.extensions.map(e => e.topAPIs.length),
-            z: cluster.extensions.map(e => e.manifestVersion),
-            mode: 'markers',
-            type: 'scatter3d',
-            name: \`Cluster \${cluster.id}\`,
-            marker: {
-                size: 8,
-                color: colors[idx % colors.length],
-                line: { color: '#fff', width: 0.5 }
-            },
-            text: cluster.extensions.map(e => \`\${e.name}<br>APIs: \${e.totalApiCalls}<br>Source: \${e.source}\`),
-            hoverinfo: 'text'
-        }));
+        // Prepare API migration analysis
+        const mv2APIs = ['chrome.browserAction', 'chrome.pageAction', 'chrome.webRequest', 'chrome.tabs.executeScript', 'chrome.tabs.insertCSS'];
+        const mv3APIs = ['chrome.action', 'chrome.declarativeNetRequest', 'chrome.scripting'];
         
-        const layout = {
+        // Find API usage across all extensions
+        const allAPIs = new Set();
+        clusterData.forEach(cluster => {
+            cluster.commonAPIs.forEach(api => allAPIs.add(api));
+        });
+        
+        // Count MV2 vs MV3 API usage per cluster
+        const clusterMigrationData = clusterData.map(cluster => {
+            const mv2Count = cluster.extensions.filter(e => {
+                return mv2APIs.some(api => e.topAPIs.some(a => a.api === api));
+            }).length;
+            const mv3Count = cluster.extensions.filter(e => {
+                return mv3APIs.some(api => e.topAPIs.some(a => a.api === api));
+            }).length;
+            const bothCount = cluster.extensions.filter(e => {
+                const hasMV2 = mv2APIs.some(api => e.topAPIs.some(a => a.api === api));
+                const hasMV3 = mv3APIs.some(api => e.topAPIs.some(a => a.api === api));
+                return hasMV2 && hasMV3;
+            }).length;
+            
+            return {
+                name: cluster.name || \`Cluster \${cluster.id}\`,
+                mv2Only: mv2Count - bothCount,
+                mv3Only: mv3Count - bothCount,
+                both: bothCount,
+                total: cluster.size
+            };
+        });
+        
+        // Create stacked bar chart for migration status
+        const migrationTrace1 = {
+            x: clusterMigrationData.map(d => d.name),
+            y: clusterMigrationData.map(d => d.mv2Only),
+            name: 'MV2 APIs Only',
+            type: 'bar',
+            marker: { color: '#fa709a' }
+        };
+        
+        const migrationTrace2 = {
+            x: clusterMigrationData.map(d => d.name),
+            y: clusterMigrationData.map(d => d.both),
+            name: 'Mixed MV2+MV3',
+            type: 'bar',
+            marker: { color: '#f093fb' }
+        };
+        
+        const migrationTrace3 = {
+            x: clusterMigrationData.map(d => d.name),
+            y: clusterMigrationData.map(d => d.mv3Only),
+            name: 'MV3 APIs Only',
+            type: 'bar',
+            marker: { color: '#30cfd0' }
+        };
+        
+        const migrationLayout = {
             paper_bgcolor: '#0f0f0f',
             plot_bgcolor: '#0f0f0f',
             font: { color: '#e0e0e0' },
-            scene: {
-                xaxis: { title: 'Total API Calls', gridcolor: '#333', color: '#888' },
-                yaxis: { title: 'Unique APIs Used', gridcolor: '#333', color: '#888' },
-                zaxis: { title: 'Manifest Version', gridcolor: '#333', color: '#888' },
-                bgcolor: '#0f0f0f'
+            barmode: 'stack',
+            title: {
+                text: 'Migration Status by Cluster',
+                font: { color: '#e0e0e0', size: 18 }
             },
-            showlegend: true,
+            xaxis: {
+                title: 'Cluster',
+                gridcolor: '#333',
+                color: '#888'
+            },
+            yaxis: {
+                title: 'Number of Extensions',
+                gridcolor: '#333',
+                color: '#888'
+            },
             legend: {
-                x: 0,
-                y: 1,
                 bgcolor: '#1a1a1a',
                 bordercolor: '#333',
                 borderwidth: 1
             }
         };
         
-        Plotly.newPlot('visualization', traces, layout, {responsive: true});
+        Plotly.newPlot('migration-chart', [migrationTrace1, migrationTrace2, migrationTrace3], migrationLayout, {responsive: true});
+        
+        // Create 2D scatter plot showing API complexity vs cluster
+        const complexityTraces = clusterData.map((cluster, idx) => ({
+            x: cluster.extensions.map(() => idx),
+            y: cluster.extensions.map(e => e.topAPIs.length),
+            mode: 'markers',
+            type: 'scatter',
+            name: cluster.name || \`Cluster \${cluster.id}\`,
+            marker: {
+                size: cluster.extensions.map(e => Math.min(e.totalApiCalls / 2, 30)),
+                color: colors[idx % colors.length],
+                line: { color: '#fff', width: 1 },
+                opacity: 0.7
+            },
+            text: cluster.extensions.map(e => \`\${e.name}<br>Unique APIs: \${e.topAPIs.length}<br>Total calls: \${e.totalApiCalls}<br>Source: \${e.source}\`),
+            hoverinfo: 'text'
+        }));
+        
+        const complexityLayout = {
+            paper_bgcolor: '#0f0f0f',
+            plot_bgcolor: '#0f0f0f',
+            font: { color: '#e0e0e0' },
+            title: {
+                text: 'API Complexity Distribution',
+                font: { color: '#e0e0e0', size: 18 }
+            },
+            xaxis: {
+                title: 'Cluster',
+                ticktext: clusterData.map(c => c.name || \`Cluster \${c.id}\`),
+                tickvals: clusterData.map((_, idx) => idx),
+                gridcolor: '#333',
+                color: '#888'
+            },
+            yaxis: {
+                title: 'Unique APIs Used',
+                gridcolor: '#333',
+                color: '#888'
+            },
+            showlegend: false,
+            hovermode: 'closest'
+        };
+        
+        Plotly.newPlot('complexity-chart', complexityTraces, complexityLayout, {responsive: true});
+        
+        // Detect edge cases
+        const edgeCases = [];
+        
+        // Find extensions with unusual API combinations
+        clusterData.forEach(cluster => {
+            cluster.extensions.forEach(ext => {
+                const hasMV2API = ext.topAPIs.some(a => mv2APIs.includes(a.api));
+                const hasMV3API = ext.topAPIs.some(a => mv3APIs.includes(a.api));
+                const unusualAPIs = ext.topAPIs.filter(a => 
+                    !cluster.commonAPIs.includes(a.api)
+                );
+                
+                if (hasMV2API && !hasMV3API) {
+                    edgeCases.push({
+                        extension: ext,
+                        cluster: cluster.name || \`Cluster \${cluster.id}\`,
+                        reason: 'Uses deprecated MV2 APIs',
+                        severity: 'high',
+                        apis: ext.topAPIs.filter(a => mv2APIs.includes(a.api)).map(a => a.api)
+                    });
+                }
+                
+                if (unusualAPIs.length >= 3) {
+                    edgeCases.push({
+                        extension: ext,
+                        cluster: cluster.name || \`Cluster \${cluster.id}\`,
+                        reason: \`Uses \${unusualAPIs.length} APIs not common in cluster\`,
+                        severity: 'medium',
+                        apis: unusualAPIs.slice(0, 3).map(a => a.api)
+                    });
+                }
+                
+                if (ext.topAPIs.length >= 15) {
+                    edgeCases.push({
+                        extension: ext,
+                        cluster: cluster.name || \`Cluster \${cluster.id}\`,
+                        reason: 'Very high API complexity (15+ unique APIs)',
+                        severity: 'medium',
+                        apis: [\`Uses \${ext.topAPIs.length} unique APIs\`]
+                    });
+                }
+            });
+        });
+        
+        // Create API coverage table
+        const apiMigrationMap = {
+            'chrome.browserAction': { mv3: 'chrome.action', status: 'deprecated' },
+            'chrome.pageAction': { mv3: 'chrome.action', status: 'deprecated' },
+            'chrome.webRequest': { mv3: 'chrome.declarativeNetRequest', status: 'limited' },
+            'chrome.tabs.executeScript': { mv3: 'chrome.scripting.executeScript', status: 'deprecated' },
+            'chrome.tabs.insertCSS': { mv3: 'chrome.scripting.insertCSS', status: 'deprecated' },
+        };
+        
+        const apiCoverage = Object.entries(apiMigrationMap).map(([mv2API, info]) => {
+            const extensionsUsing = [];
+            clusterData.forEach(cluster => {
+                cluster.extensions.forEach(ext => {
+                    if (ext.topAPIs.some(a => a.api === mv2API)) {
+                        extensionsUsing.push({
+                            name: ext.name,
+                            cluster: cluster.name || \`Cluster \${cluster.id}\`,
+                            source: ext.source
+                        });
+                    }
+                });
+            });
+            
+            return {
+                mv2API,
+                mv3API: info.mv3,
+                status: info.status,
+                count: extensionsUsing.length,
+                extensions: extensionsUsing
+            };
+        }).filter(api => api.count > 0);
+        
+        const apiCoverageContainer = document.getElementById('api-coverage');
+        if (apiCoverage.length === 0) {
+            apiCoverageContainer.innerHTML = '<p style="color: #30cfd0; padding: 20px;">✓ No deprecated MV2 APIs detected in dataset!</p>';
+        } else {
+            apiCoverageContainer.innerHTML = \`
+                <table style="width: 100%; border-collapse: collapse;">
+                    <thead>
+                        <tr style="background: #1a1a1a; border-bottom: 2px solid #333;">
+                            <th style="padding: 12px; text-align: left;">MV2 API (Deprecated)</th>
+                            <th style="padding: 12px; text-align: left;">MV3 Replacement</th>
+                            <th style="padding: 12px; text-align: center;">Status</th>
+                            <th style="padding: 12px; text-align: center;">Extensions Using</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        \${apiCoverage.map(api => \`
+                            <tr style="border-bottom: 1px solid #222;">
+                                <td style="padding: 12px;">
+                                    <code style="color: #fa709a; background: #1a1a1a; padding: 4px 8px; border-radius: 4px;">
+                                        \${api.mv2API}
+                                    </code>
+                                </td>
+                                <td style="padding: 12px;">
+                                    <code style="color: #30cfd0; background: #1a1a1a; padding: 4px 8px; border-radius: 4px;">
+                                        \${api.mv3API}
+                                    </code>
+                                </td>
+                                <td style="padding: 12px; text-align: center;">
+                                    <span class="badge" style="background: \${api.status === 'deprecated' ? '#fa709a' : '#f093fb'}; color: white;">
+                                        \${api.status}
+                                    </span>
+                                </td>
+                                <td style="padding: 12px; text-align: center;">
+                                    <strong style="color: #fff;">\${api.count}</strong>
+                                    <button 
+                                        onclick="showAPIDetails('\${api.mv2API}', \${JSON.stringify(api.extensions).replace(/"/g, '&quot;')})"
+                                        style="margin-left: 8px; padding: 4px 12px; background: #667eea; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.85rem;">
+                                        View
+                                    </button>
+                                </td>
+                            </tr>
+                        \`).join('')}
+                    </tbody>
+                </table>
+            \`;
+        }
+        
+        // Render edge cases
+        const edgeCasesContainer = document.getElementById('edge-cases');
+        if (edgeCases.length === 0) {
+            edgeCasesContainer.innerHTML = '<p style="color: #30cfd0; padding: 20px;">✓ No obvious edge cases detected!</p>';
+        } else {
+            edgeCasesContainer.innerHTML = \`
+                <div style="margin-bottom: 15px; color: #888;">
+                    Found \${edgeCases.length} potential edge case\${edgeCases.length !== 1 ? 's' : ''} that may need special attention
+                </div>
+                \${edgeCases.map(ec => \`
+                    <div style="background: #1a1a1a; padding: 15px; margin: 10px 0; border-radius: 8px; border-left: 4px solid \${ec.severity === 'high' ? '#fa709a' : '#f093fb'};">
+                        <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 10px;">
+                            <div>
+                                <strong style="color: #fff;">\${ec.extension.name}</strong>
+                                <div style="font-size: 0.85rem; color: #666; margin-top: 4px;">in \${ec.cluster}</div>
+                            </div>
+                            <span class="badge" style="background: \${ec.severity === 'high' ? '#fa709a' : '#f093fb'}; color: white;">
+                                \${ec.severity}
+                            </span>
+                        </div>
+                        <div style="color: #aaa; font-size: 0.9rem; margin-bottom: 8px;">
+                            ⚠️ \${ec.reason}
+                        </div>
+                        <div style="font-size: 0.85rem; color: #888;">
+                            \${ec.apis.map(api => \`<code style="background: #0f0f0f; padding: 2px 6px; border-radius: 3px; margin-right: 4px;">\${api.replace('chrome.', '')}</code>\`).join('')}
+                        </div>
+                    </div>
+                \`).join('')}
+            \`;
+        }
         
         // Render cluster cards
         const clustersContainer = document.getElementById('clusters');
@@ -956,9 +1123,17 @@ function generateVisualization(
                 \`<li>\${api.replace('chrome.', '')}</li>\`
             ).join('');
             
+            // Count extensions with issues
+            const issueCount = edgeCases.filter(ec => 
+                cluster.extensions.some(e => e.id === ec.extension.id)
+            ).length;
+            
             card.innerHTML = \`
-                <h3 style="color: \${colors[idx % colors.length]}">Cluster \${cluster.id}</h3>
-                <div class="cluster-size">\${cluster.size} extension\${cluster.size !== 1 ? 's' : ''}</div>
+                <h3 style="color: \${colors[idx % colors.length]}">\${cluster.name || 'Cluster ' + cluster.id}</h3>
+                <div class="cluster-size">
+                    \${cluster.size} extension\${cluster.size !== 1 ? 's' : ''}
+                    \${issueCount > 0 ? \`<span style="color: #fa709a; margin-left: 8px;">⚠️ \${issueCount} edge case\${issueCount !== 1 ? 's' : ''}</span>\` : ''}
+                </div>
                 <div style="margin-bottom: 10px; color: #888; font-size: 0.9rem;">Common APIs:</div>
                 <ul class="api-list">
                     \${commonAPIsHtml || '<li style="color: #666;">No common APIs</li>'}
@@ -977,6 +1152,30 @@ function generateVisualization(
         window.onclick = (event) => {
             if (event.target == modal) modal.style.display = 'none';
         };
+        
+        function showAPIDetails(apiName, extensions) {
+            const modal = document.getElementById('extensionModal');
+            const content = \`
+                <h2 style="color: #fa709a; margin-bottom: 20px;">Extensions using \${apiName}</h2>
+                <p style="color: #888; margin-bottom: 20px;">
+                    These extensions still use the deprecated MV2 API and may need migration work.
+                </p>
+                \${extensions.map(ext => \`
+                    <div class="extension-item">
+                        <div>
+                            <strong>\${ext.name}</strong>
+                            <div style="font-size: 0.75rem; color: #666; margin-top: 4px;">
+                                Cluster: \${ext.cluster}
+                            </div>
+                        </div>
+                        <span class="badge badge-\${ext.source}">\${ext.source}</span>
+                    </div>
+                \`).join('')}
+            \`;
+            
+            document.getElementById('modalContent').innerHTML = content;
+            modal.style.display = 'block';
+        }
         
         function showClusterDetails(cluster, color) {
             const extensionsHtml = cluster.extensions.map(ext => {
@@ -1014,7 +1213,7 @@ function generateVisualization(
             }).join('');
             
             document.getElementById('modalContent').innerHTML = \`
-                <h2 style="color: \${color}; margin-bottom: 20px;">Cluster \${cluster.id} Details</h2>
+                <h2 style="color: \${color}; margin-bottom: 20px;">\${cluster.name || 'Cluster ' + cluster.id}</h2>
                 <div style="margin-bottom: 20px;">
                     <strong style="color: #888;">Common APIs:</strong>
                     <div style="margin-top: 10px;">
@@ -1193,7 +1392,7 @@ Examples:
     // Print summary
     console.log(chalk.bold.cyan('\n📊 Clustering Summary:\n'));
     clusters.forEach((cluster) => {
-        console.log(chalk.bold(`Cluster ${cluster.clusterId}:`));
+        console.log(chalk.bold(`${cluster.clusterName} (Cluster ${cluster.clusterId}):`));
         console.log(`  Extensions: ${cluster.extensions.length}`);
         console.log(`  Common APIs: ${cluster.commonAPIs.slice(0, 3).join(', ')}`);
         console.log('');

@@ -30,6 +30,7 @@
         "db:setup": "docker-compose up -d",
         "ext": "ts-node ext_analyzer/ext.ts",
         "cluster": "ts-node scripts/cluster_extensions.ts",
+        "cluster:dynamic": "ts-node scripts/cluster_extensions_dynamic.ts",
         "lint": "eslint migrator --ext .ts",
         "lint:fix": "eslint migrator --ext .ts --fix",
         "format": "nix run nixpkgs#prettier -- --write \"**/*.{ts,tsx,js,jsx,json,css,md}\""
