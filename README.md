@@ -18,6 +18,7 @@ of Chrome extension migration in the face of Google's deprecation of Manifest V2
 ## Features
 
 - **Automated MV2 → MV3 Migration**: Converts extension manifests, API calls, and code structure
+- **API Clustering & Visualization**: Machine learning-based clustering of extensions by API usage patterns
 - **Database Integration**: Tracks migration results and statistics with MongoDB
 - **Docker Support**: Full containerized development and deployment
 - **Manual Analysis**: Provides tools for manually analysing if the migration succeeded
@@ -101,6 +102,43 @@ Then run the following command to migrate:
 ```bash
 yarn migrate
 ```
+
+### API Clustering & Analysis
+
+ExtPorter includes a powerful clustering tool that analyzes extensions by their Chrome API usage patterns. **The tool automatically reads from your .env file** - just run it!
+
+```bash
+# Simplest usage - auto-detects from .env
+yarn cluster
+
+# That's it! It automatically:
+# - Loads extensions from INPUT_DIR
+# - Loads migrated extensions from OUTPUT_DIR
+# - Connects to MongoDB using MONGODB_URI
+# - Generates interactive visualization
+```
+
+The tool generates an interactive HTML visualization with:
+
+- 3D scatter plot of extensions by API usage
+- Cluster breakdown with common APIs
+- Extension details and statistics
+- MV2/MV3 comparison views
+
+**Advanced usage:**
+
+```bash
+# Custom cluster count
+yarn cluster -- --clusters 10
+
+# Override .env paths
+yarn cluster -- --input /path/to/extensions
+
+# Manual configuration (ignore .env)
+yarn cluster -- --input ./ext --output ./out --database
+```
+
+See [scripts/CLUSTERING_QUICK_START.md](scripts/CLUSTERING_QUICK_START.md) for a quick start or [scripts/README_CLUSTERING.md](scripts/README_CLUSTERING.md) for detailed documentation.
 
 ### Manual Analysis
 

@@ -1,0 +1,24 @@
+You are analyzing a cluster of Chrome extensions based on their API usage patterns.
+
+Cluster Information:
+- Number of extensions: {{extension_count}}
+- Common Chrome APIs used by these extensions:
+{{common_apis}}
+
+Extension Examples:
+{{extension_names}}
+
+Your task:
+1. Generate a SHORT, descriptive name for this cluster (2-4 words max)
+2. Write a brief description (1 sentence, max 20 words) of what these extensions typically do
+
+Guidelines:
+- Focus on the PRIMARY functionality indicated by the APIs
+- Use clear, non-technical language
+- Be specific, not generic
+- Examples: "Ad Blockers", "Tab Managers", "Password Managers", "Developer Tools"
+- Avoid: "Extension Cluster", "Group of Extensions", "Various Extensions"
+
+Output Format (respond with ONLY these two lines, nothing else):
+NAME: [your 2-4 word cluster name]
+DESCRIPTION: [your 1 sentence description]
