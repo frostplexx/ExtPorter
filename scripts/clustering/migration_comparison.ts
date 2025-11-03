@@ -209,13 +209,13 @@ export function compareMigration(pair: MigrationPair): MigrationComparison {
 function findMigrationTarget(mv2Api: string, mv3APIs: Set<string>): string | null {
     // Check exact mapping
     const exactMapping = MV2_TO_MV3_MAP[mv2Api];
-    if (exactMapping && mv3APIs.has(exactMapping.mv3API)) {
+    if (exactMapping && exactMapping.mv3API && mv3APIs.has(exactMapping.mv3API)) {
         return exactMapping.mv3API;
     }
 
     // Check domain-level mapping (e.g., chrome.browserAction.* → chrome.action.*)
     for (const [mv2Pattern, mapping] of Object.entries(MV2_TO_MV3_MAP)) {
-        if (mv2Api.startsWith(mv2Pattern + '.')) {
+        if (mv2Api.startsWith(mv2Pattern + '.') && mapping.mv3API) {
             // Replace the MV2 prefix with MV3 prefix
             const suffix = mv2Api.substring(mv2Pattern.length);
             const mv3Candidate = mapping.mv3API + suffix;

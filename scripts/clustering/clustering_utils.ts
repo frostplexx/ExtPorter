@@ -507,6 +507,7 @@ export function generateClusterName(commonAPIs: string[], _extensions: Extension
  * MV2 to MV3 API migration map
  */
 export const MV2_TO_MV3_MAP: { [key: string]: MigrationInfo } = {
+    // Action APIs (browserAction/pageAction → action)
     'chrome.browserAction': {
         mv2API: 'chrome.browserAction',
         mv3API: 'chrome.action',
@@ -519,12 +520,16 @@ export const MV2_TO_MV3_MAP: { [key: string]: MigrationInfo } = {
         status: 'deprecated',
         autoMigratable: true,
     },
+
+    // Web Request API (blocking → declarativeNetRequest)
     'chrome.webRequest': {
         mv2API: 'chrome.webRequest',
         mv3API: 'chrome.declarativeNetRequest',
         status: 'limited',
         autoMigratable: false,
     },
+
+    // Scripting APIs (tabs → scripting)
     'chrome.tabs.executeScript': {
         mv2API: 'chrome.tabs.executeScript',
         mv3API: 'chrome.scripting.executeScript',
@@ -534,6 +539,20 @@ export const MV2_TO_MV3_MAP: { [key: string]: MigrationInfo } = {
     'chrome.tabs.insertCSS': {
         mv2API: 'chrome.tabs.insertCSS',
         mv3API: 'chrome.scripting.insertCSS',
+        status: 'deprecated',
+        autoMigratable: true,
+    },
+    'chrome.tabs.removeCSS': {
+        mv2API: 'chrome.tabs.removeCSS',
+        mv3API: 'chrome.scripting.removeCSS',
+        status: 'deprecated',
+        autoMigratable: true,
+    },
+
+    // Extension API (moved to runtime)
+    'chrome.extension': {
+        mv2API: 'chrome.extension',
+        mv3API: 'chrome.runtime',
         status: 'deprecated',
         autoMigratable: true,
     },
@@ -554,6 +573,134 @@ export const MV2_TO_MV3_MAP: { [key: string]: MigrationInfo } = {
         mv3API: 'chrome.runtime.sendMessage',
         status: 'deprecated',
         autoMigratable: true,
+    },
+    'chrome.extension.onMessage': {
+        mv2API: 'chrome.extension.onMessage',
+        mv3API: 'chrome.runtime.onMessage',
+        status: 'deprecated',
+        autoMigratable: true,
+    },
+    'chrome.extension.onConnect': {
+        mv2API: 'chrome.extension.onConnect',
+        mv3API: 'chrome.runtime.onConnect',
+        status: 'deprecated',
+        autoMigratable: true,
+    },
+    'chrome.extension.connect': {
+        mv2API: 'chrome.extension.connect',
+        mv3API: 'chrome.runtime.connect',
+        status: 'deprecated',
+        autoMigratable: true,
+    },
+    'chrome.extension.getViews': {
+        mv2API: 'chrome.extension.getViews',
+        mv3API: 'chrome.runtime.getViews',
+        status: 'deprecated',
+        autoMigratable: true,
+    },
+
+    // App API (entirely removed)
+    'chrome.app': {
+        mv2API: 'chrome.app',
+        mv3API: null,
+        status: 'removed',
+        autoMigratable: false,
+    },
+
+    // Permissions API (shape changed)
+    'chrome.permissions': {
+        mv2API: 'chrome.permissions',
+        mv3API: 'chrome.permissions',
+        status: 'changed',
+        autoMigratable: false,
+    },
+
+    // Storage API (limits changed for sync)
+    'chrome.storage': {
+        mv2API: 'chrome.storage',
+        mv3API: 'chrome.storage',
+        status: 'changed',
+        autoMigratable: false,
+    },
+
+    // Management API (some methods changed)
+    'chrome.management': {
+        mv2API: 'chrome.management',
+        mv3API: 'chrome.management',
+        status: 'changed',
+        autoMigratable: false,
+    },
+
+    // Tabs API (some methods deprecated)
+    'chrome.tabs': {
+        mv2API: 'chrome.tabs',
+        mv3API: 'chrome.tabs',
+        status: 'changed',
+        autoMigratable: false,
+    },
+
+    // Windows API (some changes)
+    'chrome.windows': {
+        mv2API: 'chrome.windows',
+        mv3API: 'chrome.windows',
+        status: 'changed',
+        autoMigratable: false,
+    },
+
+    // Bookmarks API (some changes)
+    'chrome.bookmarks': {
+        mv2API: 'chrome.bookmarks',
+        mv3API: 'chrome.bookmarks',
+        status: 'changed',
+        autoMigratable: false,
+    },
+
+    // History API (some changes)
+    'chrome.history': {
+        mv2API: 'chrome.history',
+        mv3API: 'chrome.history',
+        status: 'changed',
+        autoMigratable: false,
+    },
+
+    // Downloads API (some changes)
+    'chrome.downloads': {
+        mv2API: 'chrome.downloads',
+        mv3API: 'chrome.downloads',
+        status: 'changed',
+        autoMigratable: false,
+    },
+
+    // Context Menus API (some changes)
+    'chrome.contextMenus': {
+        mv2API: 'chrome.contextMenus',
+        mv3API: 'chrome.contextMenus',
+        status: 'changed',
+        autoMigratable: false,
+    },
+
+    // Notifications API (some changes)
+    'chrome.notifications': {
+        mv2API: 'chrome.notifications',
+        mv3API: 'chrome.notifications',
+        status: 'changed',
+        autoMigratable: false,
+    },
+
+    // Omnibox API (some changes)
+    'chrome.omnibox': {
+        mv2API: 'chrome.omnibox',
+        mv3API: 'chrome.omnibox',
+        status: 'changed',
+        autoMigratable: false,
+    },
+
+    // Proxy API (deprecated)
+    'chrome.proxy': {
+        mv2API: 'chrome.proxy',
+        mv3API: null,
+        status: 'removed',
+        autoMigratable: false,
     },
 };
 

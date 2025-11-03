@@ -1,0 +1,24 @@
+{
+  "name": "zspacesystems.com",
+  "description": "zspacesystems is focus on providing various salutions and systems.",
+  "app": {
+    "urls": [
+      "http://www.zspacesystems.com/"
+    ],
+    "launch": {
+      "web_url": "http://www.zspacesystems.com/"
+    }
+  },
+  "manifest_version": 3,
+  "update_url": "http://clients2.google.com/service/update2/crx",
+  "version": "0.1",
+  "icons": {
+    "128": "icon.png"
+  },
+  "permissions": [],
+  "host_permissions": [],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self';",
+    "sandbox": "sandbox allow-scripts allow-forms allow-popups allow-modals; script-src 'self' 'unsafe-inline' 'unsafe-eval'; child-src 'self';"
+  }
+}

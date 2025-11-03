@@ -208,7 +208,7 @@ export interface APIDomainStats {
 
 export interface MigrationInfo {
     mv2API: string;
-    mv3API: string;
-    status: 'deprecated' | 'limited' | 'removed';
+    mv3API: string | null;
+    status: 'deprecated' | 'limited' | 'removed' | 'changed';
     autoMigratable: boolean;
 }

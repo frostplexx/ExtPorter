@@ -372,22 +372,22 @@
             <div class="stats-grid">
                 <div class="stat-card">
                     <div class="stat-label">Total Extensions</div>
-                    <div class="stat-value">8,944</div>
+                    <div class="stat-value">3,000</div>
                 </div>
                 <div class="stat-card green">
                     <div class="stat-label">Total API Calls</div>
-                    <div class="stat-value">187,856</div>
-                    <div class="stat-subtitle">Avg: 21 per ext</div>
+                    <div class="stat-value">90,348</div>
+                    <div class="stat-subtitle">Avg: 30 per ext</div>
                 </div>
                 <div class="stat-card blue">
                     <div class="stat-label">Unique APIs</div>
-                    <div class="stat-value">1154</div>
-                    <div class="stat-subtitle">Avg: 0.1 per ext</div>
+                    <div class="stat-value">1135</div>
+                    <div class="stat-subtitle">Avg: 0.4 per ext</div>
                 </div>
                 <div class="stat-card orange">
                     <div class="stat-label">Need Migration</div>
-                    <div class="stat-value">2748</div>
-                    <div class="stat-subtitle">30.7% of total</div>
+                    <div class="stat-value">1449</div>
+                    <div class="stat-subtitle">48.3% of total</div>
                 </div>
             </div>
             
@@ -398,9 +398,9 @@
                     <th>Count</th>
                     <th>Percentage</th>
                 </tr>
-                <tr><td>Filesystem</td><td>3000</td><td>33.5%</td></tr>
-                <tr><td>Database</td><td>2999</td><td>33.5%</td></tr>
-                <tr><td>Output</td><td>2945</td><td>32.9%</td></tr>
+                <tr><td>Filesystem</td><td>3000</td><td>100.0%</td></tr>
+                
+                
             </table>
             
             <h3>Manifest Versions</h3>
@@ -412,13 +412,13 @@
                 </tr>
                 <tr>
                     <td>Manifest V2</td>
-                    <td>3054</td>
-                    <td>34.1%</td>
+                    <td>3000</td>
+                    <td>100.0%</td>
                 </tr>
                 <tr>
                     <td>Manifest V3</td>
-                    <td>5890</td>
-                    <td>65.9%</td>
+                    <td>0</td>
+                    <td>0.0%</td>
                 </tr>
             </table>
         </section>
@@ -440,7 +440,7 @@
                     data: {
                         labels: ['Manifest V2', 'Manifest V3'],
                         datasets: [{
-                            data: [3054, 5890],
+                            data: [3000, 0],
                             backgroundColor: ['#ff9800', '#4caf50'],
                             borderWidth: 2,
                             borderColor: '#fff'
@@ -482,10 +482,10 @@
                 new Chart(document.getElementById('sourceChart'), {
                     type: 'pie',
                     data: {
-                        labels: ["Filesystem","Database","Output"],
+                        labels: ["Filesystem"],
                         datasets: [{
-                            data: [3000,2999,2945],
-                            backgroundColor: ["#2196f3","#ff9800","#4caf50"],
+                            data: [3000],
+                            backgroundColor: ["#2196f3"],
                             borderWidth: 2,
                             borderColor: '#fff'
                         }]
@@ -517,10 +517,10 @@
                 new Chart(document.getElementById('clusterChart'), {
                     type: 'bar',
                     data: {
-                        labels: ["General Extensions","Tab & Window Managers","Tab & Window Managers with ...","Core Runtime Extensions","Tab & Window Managers","Data Storage Extensions","Data Storage Extensions","Core Runtime Extensions","Tab & Window Managers","Extension Extensions"],
+                        labels: ["General Extensions","Tab & Window Managers","Tab & Window Managers","Tab & Window Managers with ...","Toolbar Button Extensions w...","Core Runtime Extensions","Data Storage Extensions","Extension Extensions","App Extensions","Tab & Window Managers"],
                         datasets: [{
                             label: 'Extensions',
-                            data: [5892,659,587,482,322,310,199,193,163,137],
+                            data: [1476,257,256,226,184,175,156,109,88,73],
                             backgroundColor: ["#ff6384","#36a2eb","#cc65fe","#ffce56","#ff9f40","#4bc0c0","#9966ff","#ff6384","#c9cbcf","#ff6384"],
                             borderWidth: 1,
                             borderColor: '#fff'
@@ -560,7 +560,7 @@
                         labels: ["chrome.tabs","chrome.app","chrome.notifications","chrome.webRequest","chrome.storage","chrome.extension","chrome.bookmarks","chrome.management","chrome.downloads","chrome.browserAction"],
                         datasets: [{
                             label: 'Extensions Using Domain',
-                            data: [1953,319,262,190,1270,624,66,55,51,482],
+                            data: [970,162,135,122,648,470,34,28,26,454],
                             backgroundColor: '#36a2eb',
                             borderWidth: 1,
                             borderColor: '#fff'
@@ -600,7 +600,7 @@
                     data: {
                         labels: ['Needs Migration', 'MV3 Compatible'],
                         datasets: [{
-                            data: [2748, 6196],
+                            data: [1449, 1551],
                             backgroundColor: ['#f44336', '#4caf50'],
                             borderWidth: 2,
                             borderColor: '#fff'
@@ -636,545 +636,14 @@
         </section>
     
         
-        <section id="migration-comparison">
-            <h2>🔄 Migration Comparison Analysis</h2>
-            <p>Comparing 5890 matched MV2/MV3 extension pairs</p>
-
-            <div class="charts-grid">
-                
-        <div class="chart-container">
-            <div class="chart-header">
-                <span class="chart-title">📊 Migration Quality Distribution</span>
-            </div>
-            <canvas id="migrationQualityChart" class="chart-canvas"></canvas>
-            <script>
-                new Chart(document.getElementById('migrationQualityChart'), {
-                    type: 'bar',
-                    data: {
-                        labels: ['Excellent', 'Good', 'Poor', 'Failed'],
-                        datasets: [{
-                            label: 'Migrations',
-                            data: [125, 3169, 617, 1979],
-                            backgroundColor: ['#4caf50', '#8bc34a', '#ff9800', '#f44336'],
-                            borderWidth: 1,
-                            borderColor: '#fff'
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        scales: {
-                            y: {
-                                beginAtZero: true,
-                                ticks: {
-                                    precision: 0
-                                }
-                            }
-                        },
-                        plugins: {
-                            legend: {
-                                display: false
-                            },
-                            tooltip: {
-                                callbacks: {
-                                    label: function(context) {
-                                        const total = context.dataset.data.reduce((a, b) => a + b, 0);
-                                        const percentage = ((context.parsed / total) * 100).toFixed(1);
-                                        return context.label + ': ' + context.parsed + ' (' + percentage + '%)';
-                                    }
-                                }
-                            }
-                        }
-                    }
-                });
-            </script>
-        </div>
-    
-                
-        <div class="chart-container">
-            <div class="chart-header">
-                <span class="chart-title">🔄 Top API Migration Patterns</span>
-            </div>
-            <canvas id="apiMigrationsChart" class="chart-canvas"></canvas>
-            <script>
-                new Chart(document.getElementById('apiMigrationsChart'), {
-                    type: 'horizontalBar',
-                    data: {
-                        labels: ["browserAction → action","extension → runtime","addListener → addListener","onClicked → onClicked","executeScript → executeScript","getURL → getURL","setBadgeText → setBadgeText","setIcon → setIcon"],
-                        datasets: [{
-                            label: 'Extensions',
-                            data: [406,292,239,239,233,225,147,136],
-                            backgroundColor: '#9c27b0',
-                            borderWidth: 1,
-                            borderColor: '#fff'
-                        }]
-                    },
-                    options: {
-                        indexAxis: 'y',
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        scales: {
-                            x: {
-                                beginAtZero: true,
-                                ticks: {
-                                    precision: 0
-                                }
-                            }
-                        },
-                        plugins: {
-                            legend: {
-                                display: false
-                            }
-                        }
-                    }
-                });
-            </script>
-        </div>
-    
-            </div>
-
-            <div class="stats-grid">
-                <div class="stat-card green">
-                    <div class="stat-label">Successful Migrations</div>
-                    <div class="stat-value">3292</div>
-                    <div class="stat-subtitle">55.9% of total</div>
+            <section id="migration-comparison">
+                <h2>🔄 Migration Comparison</h2>
+                <div class="insight-box">
+                    <p>⚠️ Migration comparison unavailable.</p>
+                    <p>Both MV2 (input) and MV3 (output) extensions are needed for comparison.</p>
                 </div>
-                <div class="stat-card orange">
-                    <div class="stat-label">Failed Migrations</div>
-                    <div class="stat-value">2598</div>
-                    <div class="stat-subtitle">44.1% of total</div>
-                </div>
-                <div class="stat-card blue">
-                    <div class="stat-label">Avg API Reduction</div>
-                    <div class="stat-value">NaN%</div>
-                </div>
-                <div class="stat-card blue">
-                    <div class="stat-label">Avg Call Reduction</div>
-                    <div class="stat-value">NaN%</div>
-                </div>
-            </div>
-            
-            <h3>Migration Quality Breakdown</h3>
-            <table>
-                <tr>
-                    <th>Quality</th>
-                    <th>Count</th>
-                    <th>Percentage</th>
-                    <th>Description</th>
-                </tr>
-                <tr style="background: #e8f5e9;">
-                    <td><strong>Excellent</strong></td>
-                    <td>125</td>
-                    <td>2.1%</td>
-                    <td>All deprecated APIs resolved</td>
-                </tr>
-                <tr style="background: #f1f8e9;">
-                    <td><strong>Good</strong></td>
-                    <td>3169</td>
-                    <td>53.8%</td>
-                    <td>≥80% deprecated APIs resolved</td>
-                </tr>
-                <tr style="background: #fff3e0;">
-                    <td><strong>Poor</strong></td>
-                    <td>617</td>
-                    <td>10.5%</td>
-                    <td>Some APIs resolved, but many remain</td>
-                </tr>
-                <tr style="background: #ffebee;">
-                    <td><strong>Failed</strong></td>
-                    <td>1979</td>
-                    <td>33.6%</td>
-                    <td>No deprecated APIs resolved</td>
-                </tr>
-            </table>
-            
-            <h3>Most Common API Migrations</h3>
-            <p>These API transformations occurred most frequently:</p>
-            <table>
-                <tr>
-                    <th>From (MV2)</th>
-                    <th></th>
-                    <th>To (MV3)</th>
-                    <th>Count</th>
-                </tr>
-                
-                    <tr>
-                        <td><code>chrome.browserAction</code></td>
-                        <td style="text-align: center;">→</td>
-                        <td><code>chrome.action</code></td>
-                        <td>406</td>
-                    </tr>
-                
-                    <tr>
-                        <td><code>chrome.extension</code></td>
-                        <td style="text-align: center;">→</td>
-                        <td><code>chrome.runtime</code></td>
-                        <td>292</td>
-                    </tr>
-                
-                    <tr>
-                        <td><code>chrome.browserAction.onClicked.addListener</code></td>
-                        <td style="text-align: center;">→</td>
-                        <td><code>chrome.action.onClicked.addListener</code></td>
-                        <td>239</td>
-                    </tr>
-                
-                    <tr>
-                        <td><code>chrome.browserAction.onClicked</code></td>
-                        <td style="text-align: center;">→</td>
-                        <td><code>chrome.action.onClicked</code></td>
-                        <td>239</td>
-                    </tr>
-                
-                    <tr>
-                        <td><code>chrome.tabs.executeScript</code></td>
-                        <td style="text-align: center;">→</td>
-                        <td><code>chrome.scripting.executeScript</code></td>
-                        <td>233</td>
-                    </tr>
-                
-                    <tr>
-                        <td><code>chrome.extension.getURL</code></td>
-                        <td style="text-align: center;">→</td>
-                        <td><code>chrome.runtime.getURL</code></td>
-                        <td>225</td>
-                    </tr>
-                
-                    <tr>
-                        <td><code>chrome.browserAction.setBadgeText</code></td>
-                        <td style="text-align: center;">→</td>
-                        <td><code>chrome.action.setBadgeText</code></td>
-                        <td>147</td>
-                    </tr>
-                
-                    <tr>
-                        <td><code>chrome.browserAction.setIcon</code></td>
-                        <td style="text-align: center;">→</td>
-                        <td><code>chrome.action.setIcon</code></td>
-                        <td>136</td>
-                    </tr>
-                
-                    <tr>
-                        <td><code>chrome.extension.onMessage</code></td>
-                        <td style="text-align: center;">→</td>
-                        <td><code>chrome.runtime.onMessage</code></td>
-                        <td>97</td>
-                    </tr>
-                
-                    <tr>
-                        <td><code>chrome.extension.onMessage.addListener</code></td>
-                        <td style="text-align: center;">→</td>
-                        <td><code>chrome.runtime.onMessage.addListener</code></td>
-                        <td>93</td>
-                    </tr>
-                
-                    <tr>
-                        <td><code>chrome.browserAction.setBadgeBackgroundColor</code></td>
-                        <td style="text-align: center;">→</td>
-                        <td><code>chrome.action.setBadgeBackgroundColor</code></td>
-                        <td>88</td>
-                    </tr>
-                
-                    <tr>
-                        <td><code>chrome.tabs.getSelected</code></td>
-                        <td style="text-align: center;">→</td>
-                        <td><code>chrome.tabs</code></td>
-                        <td>83</td>
-                    </tr>
-                
-                    <tr>
-                        <td><code>chrome.pageAction</code></td>
-                        <td style="text-align: center;">→</td>
-                        <td><code>chrome.action</code></td>
-                        <td>80</td>
-                    </tr>
-                
-                    <tr>
-                        <td><code>chrome.pageAction.show</code></td>
-                        <td style="text-align: center;">→</td>
-                        <td><code>chrome.action.show</code></td>
-                        <td>73</td>
-                    </tr>
-                
-                    <tr>
-                        <td><code>chrome.browserAction.setTitle</code></td>
-                        <td style="text-align: center;">→</td>
-                        <td><code>chrome.action.setTitle</code></td>
-                        <td>58</td>
-                    </tr>
-                
-            </table>
-            
-            
-                <h3>⚠️ Unmapped/Unresolved APIs</h3>
-                <p>These APIs were removed but no MV3 equivalent was detected:</p>
-                <div class="migration-section">
-                    
-                        <div class="migration-api">
-                            <div class="migration-api-name">chrome.tabs</div>
-                            <div class="migration-stats">Removed in 56 extension(s) without clear replacement</div>
-                        </div>
-                    
-                        <div class="migration-api">
-                            <div class="migration-api-name">chrome.webRequest.onBeforeRequest.addListener</div>
-                            <div class="migration-stats">Removed in 10 extension(s) without clear replacement</div>
-                        </div>
-                    
-                        <div class="migration-api">
-                            <div class="migration-api-name">chrome.webRequest.onBeforeRequest</div>
-                            <div class="migration-stats">Removed in 10 extension(s) without clear replacement</div>
-                        </div>
-                    
-                        <div class="migration-api">
-                            <div class="migration-api-name">chrome.webRequest</div>
-                            <div class="migration-stats">Removed in 8 extension(s) without clear replacement</div>
-                        </div>
-                    
-                        <div class="migration-api">
-                            <div class="migration-api-name">chrome.tabs.sendRequest</div>
-                            <div class="migration-stats">Removed in 3 extension(s) without clear replacement</div>
-                        </div>
-                    
-                        <div class="migration-api">
-                            <div class="migration-api-name">chrome.contextMenus.create</div>
-                            <div class="migration-stats">Removed in 2 extension(s) without clear replacement</div>
-                        </div>
-                    
-                        <div class="migration-api">
-                            <div class="migration-api-name">chrome.contextMenus</div>
-                            <div class="migration-stats">Removed in 2 extension(s) without clear replacement</div>
-                        </div>
-                    
-                        <div class="migration-api">
-                            <div class="migration-api-name">chrome.browserAction.onClicked.addListener</div>
-                            <div class="migration-stats">Removed in 1 extension(s) without clear replacement</div>
-                        </div>
-                    
-                        <div class="migration-api">
-                            <div class="migration-api-name">chrome.browserAction.onClicked</div>
-                            <div class="migration-stats">Removed in 1 extension(s) without clear replacement</div>
-                        </div>
-                    
-                        <div class="migration-api">
-                            <div class="migration-api-name">chrome.browserAction</div>
-                            <div class="migration-stats">Removed in 1 extension(s) without clear replacement</div>
-                        </div>
-                    
-                        <div class="migration-api">
-                            <div class="migration-api-name">chrome.pageAction.onClicked.addListener</div>
-                            <div class="migration-stats">Removed in 1 extension(s) without clear replacement</div>
-                        </div>
-                    
-                        <div class="migration-api">
-                            <div class="migration-api-name">chrome.pageAction.onClicked</div>
-                            <div class="migration-stats">Removed in 1 extension(s) without clear replacement</div>
-                        </div>
-                    
-                        <div class="migration-api">
-                            <div class="migration-api-name">chrome.pageAction</div>
-                            <div class="migration-stats">Removed in 1 extension(s) without clear replacement</div>
-                        </div>
-                    
-                        <div class="migration-api">
-                            <div class="migration-api-name">chrome.tabs.onUpdated.addListener</div>
-                            <div class="migration-stats">Removed in 1 extension(s) without clear replacement</div>
-                        </div>
-                    
-                        <div class="migration-api">
-                            <div class="migration-api-name">chrome.tabs.onUpdated</div>
-                            <div class="migration-stats">Removed in 1 extension(s) without clear replacement</div>
-                        </div>
-                    
-                </div>
-            
-            
-            
-                <h3>✅ Best Migration Examples</h3>
-                <p>Extensions that successfully migrated the most APIs:</p>
-                <div class="extension-list">
-                    
-                        <div class="extension-item" style="border-left: 4px solid #4caf50;">
-                            <div class="extension-name">Fitnesse Viewer</div>
-                            <div class="extension-apis">
-                                <strong>8 APIs migrated:</strong>
-                                <br/>&nbsp;&nbsp;• chrome.pageAction.show → chrome.action.show<br/>&nbsp;&nbsp;• chrome.pageAction → chrome.action<br/>&nbsp;&nbsp;• chrome.extension.onRequest.addListener → chrome.runtime<br/>&nbsp;&nbsp;• chrome.extension.onRequest → chrome.runtime<br/>&nbsp;&nbsp;• chrome.extension → chrome.runtime
-                                <br/>&nbsp;&nbsp;... and 3 more
-                            </div>
-                        </div>
-                    
-                        <div class="extension-item" style="border-left: 4px solid #4caf50;">
-                            <div class="extension-name">Skycust</div>
-                            <div class="extension-apis">
-                                <strong>7 APIs migrated:</strong>
-                                <br/>&nbsp;&nbsp;• chrome.pageAction.show → chrome.action.show<br/>&nbsp;&nbsp;• chrome.pageAction → chrome.action<br/>&nbsp;&nbsp;• chrome.extension.onMessage.addListener → chrome.runtime.onMessage.addListener<br/>&nbsp;&nbsp;• chrome.extension.onMessage → chrome.runtime.onMessage<br/>&nbsp;&nbsp;• chrome.extension → chrome.runtime
-                                <br/>&nbsp;&nbsp;... and 2 more
-                            </div>
-                        </div>
-                    
-                        <div class="extension-item" style="border-left: 4px solid #4caf50;">
-                            <div class="extension-name">BigURL Pro</div>
-                            <div class="extension-apis">
-                                <strong>7 APIs migrated:</strong>
-                                <br/>&nbsp;&nbsp;• chrome.tabs.executeScript → chrome.scripting.executeScript<br/>&nbsp;&nbsp;• chrome.browserAction.onClicked.addListener → chrome.action.onClicked.addListener<br/>&nbsp;&nbsp;• chrome.browserAction.onClicked → chrome.action.onClicked<br/>&nbsp;&nbsp;• chrome.browserAction → chrome.action<br/>&nbsp;&nbsp;• chrome.browserAction.setIcon → chrome.action.setIcon
-                                <br/>&nbsp;&nbsp;... and 2 more
-                            </div>
-                        </div>
-                    
-                        <div class="extension-item" style="border-left: 4px solid #4caf50;">
-                            <div class="extension-name">Custom colors for desmos</div>
-                            <div class="extension-apis">
-                                <strong>6 APIs migrated:</strong>
-                                <br/>&nbsp;&nbsp;• chrome.tabs.executeScript → chrome.scripting.executeScript<br/>&nbsp;&nbsp;• chrome.pageAction.show → chrome.action.show<br/>&nbsp;&nbsp;• chrome.pageAction → chrome.action<br/>&nbsp;&nbsp;• chrome.extension.onMessage.addListener → chrome.runtime.onMessage.addListener<br/>&nbsp;&nbsp;• chrome.extension.onMessage → chrome.runtime.onMessage
-                                <br/>&nbsp;&nbsp;... and 1 more
-                            </div>
-                        </div>
-                    
-                        <div class="extension-item" style="border-left: 4px solid #4caf50;">
-                            <div class="extension-name">EasyRetro template roller</div>
-                            <div class="extension-apis">
-                                <strong>6 APIs migrated:</strong>
-                                <br/>&nbsp;&nbsp;• chrome.pageAction.show → chrome.action.show<br/>&nbsp;&nbsp;• chrome.pageAction → chrome.action<br/>&nbsp;&nbsp;• chrome.extension.onMessage.addListener → chrome.runtime.onMessage.addListener<br/>&nbsp;&nbsp;• chrome.extension.onMessage → chrome.runtime.onMessage<br/>&nbsp;&nbsp;• chrome.extension → chrome.runtime
-                                <br/>&nbsp;&nbsp;... and 1 more
-                            </div>
-                        </div>
-                    
-                        <div class="extension-item" style="border-left: 4px solid #4caf50;">
-                            <div class="extension-name">Jira - Estimations sum for columns in boards</div>
-                            <div class="extension-apis">
-                                <strong>6 APIs migrated:</strong>
-                                <br/>&nbsp;&nbsp;• chrome.pageAction.show → chrome.action.show<br/>&nbsp;&nbsp;• chrome.pageAction → chrome.action<br/>&nbsp;&nbsp;• chrome.extension.onMessage.addListener → chrome.runtime.onMessage.addListener<br/>&nbsp;&nbsp;• chrome.extension.onMessage → chrome.runtime.onMessage<br/>&nbsp;&nbsp;• chrome.extension → chrome.runtime
-                                <br/>&nbsp;&nbsp;... and 1 more
-                            </div>
-                        </div>
-                    
-                        <div class="extension-item" style="border-left: 4px solid #4caf50;">
-                            <div class="extension-name">Google Automatic Lyric Extender</div>
-                            <div class="extension-apis">
-                                <strong>6 APIs migrated:</strong>
-                                <br/>&nbsp;&nbsp;• chrome.pageAction.show → chrome.action.show<br/>&nbsp;&nbsp;• chrome.pageAction → chrome.action<br/>&nbsp;&nbsp;• chrome.extension.onMessage.addListener → chrome.runtime.onMessage.addListener<br/>&nbsp;&nbsp;• chrome.extension.onMessage → chrome.runtime.onMessage<br/>&nbsp;&nbsp;• chrome.extension → chrome.runtime
-                                <br/>&nbsp;&nbsp;... and 1 more
-                            </div>
-                        </div>
-                    
-                        <div class="extension-item" style="border-left: 4px solid #4caf50;">
-                            <div class="extension-name">Dịch vụ SEO & Audit Website HUEVIBE</div>
-                            <div class="extension-apis">
-                                <strong>5 APIs migrated:</strong>
-                                <br/>&nbsp;&nbsp;• chrome.pageAction.show → chrome.action.show<br/>&nbsp;&nbsp;• chrome.pageAction → chrome.action<br/>&nbsp;&nbsp;• chrome.extension.onMessage.addListener → chrome.runtime.onMessage.addListener<br/>&nbsp;&nbsp;• chrome.extension.onMessage → chrome.runtime.onMessage<br/>&nbsp;&nbsp;• chrome.extension → chrome.runtime
-                                
-                            </div>
-                        </div>
-                    
-                        <div class="extension-item" style="border-left: 4px solid #4caf50;">
-                            <div class="extension-name">JAPON STORE</div>
-                            <div class="extension-apis">
-                                <strong>5 APIs migrated:</strong>
-                                <br/>&nbsp;&nbsp;• chrome.pageAction.show → chrome.action.show<br/>&nbsp;&nbsp;• chrome.pageAction → chrome.action<br/>&nbsp;&nbsp;• chrome.extension.onMessage.addListener → chrome.runtime.onMessage.addListener<br/>&nbsp;&nbsp;• chrome.extension.onMessage → chrome.runtime.onMessage<br/>&nbsp;&nbsp;• chrome.extension → chrome.runtime
-                                
-                            </div>
-                        </div>
-                    
-                        <div class="extension-item" style="border-left: 4px solid #4caf50;">
-                            <div class="extension-name">Mở Khóa Domain Bị Facebook Chặn</div>
-                            <div class="extension-apis">
-                                <strong>5 APIs migrated:</strong>
-                                <br/>&nbsp;&nbsp;• chrome.pageAction.show → chrome.action.show<br/>&nbsp;&nbsp;• chrome.pageAction → chrome.action<br/>&nbsp;&nbsp;• chrome.extension.onMessage.addListener → chrome.runtime.onMessage.addListener<br/>&nbsp;&nbsp;• chrome.extension.onMessage → chrome.runtime.onMessage<br/>&nbsp;&nbsp;• chrome.extension → chrome.runtime
-                                
-                            </div>
-                        </div>
-                    
-                </div>
-            
-            
-            
-                <h3>❌ Migrations Needing Attention</h3>
-                <p>Extensions with incomplete migrations:</p>
-                <div class="extension-list">
-                    
-                        <div class="extension-item" style="border-left: 4px solid #f44336;">
-                            <div class="extension-name">MydearNest Clipping</div>
-                            <div class="extension-apis" style="color: #c62828;">
-                                <strong>210 deprecated APIs remaining</strong>
-                                chrome.browserAction.onClicked.addListener, chrome.browserAction.onClicked, chrome.browserAction, chrome.extension.onConnect, chrome.extension.onConnectExternal
-                            </div>
-                        </div>
-                    
-                        <div class="extension-item" style="border-left: 4px solid #f44336;">
-                            <div class="extension-name">MydearNest Clipping</div>
-                            <div class="extension-apis" style="color: #c62828;">
-                                <strong>210 deprecated APIs remaining</strong>
-                                
-                            </div>
-                        </div>
-                    
-                        <div class="extension-item" style="border-left: 4px solid #f44336;">
-                            <div class="extension-name">Youhub Search</div>
-                            <div class="extension-apis" style="color: #c62828;">
-                                <strong>90 deprecated APIs remaining</strong>
-                                chrome.extension.getURL, chrome.tabs.getAllInWindow, chrome.tabs.getSelected, chrome.extension.sendRequest, chrome.extension.onRequestExternal.addListener
-                            </div>
-                        </div>
-                    
-                        <div class="extension-item" style="border-left: 4px solid #f44336;">
-                            <div class="extension-name">Youhub Search</div>
-                            <div class="extension-apis" style="color: #c62828;">
-                                <strong>90 deprecated APIs remaining</strong>
-                                
-                            </div>
-                        </div>
-                    
-                        <div class="extension-item" style="border-left: 4px solid #f44336;">
-                            <div class="extension-name">Prescrit</div>
-                            <div class="extension-apis" style="color: #c62828;">
-                                <strong>42 deprecated APIs remaining</strong>
-                                chrome.tabs.onSelectionChanged.addListener, chrome.tabs.onSelectionChanged, chrome.browserAction, chrome.pageAction, chrome.extension.onConnect.addListener
-                            </div>
-                        </div>
-                    
-                        <div class="extension-item" style="border-left: 4px solid #f44336;">
-                            <div class="extension-name">Alerta Ofertas Destacadas Privilegios Cyrana</div>
-                            <div class="extension-apis" style="color: #c62828;">
-                                <strong>42 deprecated APIs remaining</strong>
-                                chrome.browserAction, chrome.pageAction
-                            </div>
-                        </div>
-                    
-                        <div class="extension-item" style="border-left: 4px solid #f44336;">
-                            <div class="extension-name">Prescrit</div>
-                            <div class="extension-apis" style="color: #c62828;">
-                                <strong>42 deprecated APIs remaining</strong>
-                                
-                            </div>
-                        </div>
-                    
-                        <div class="extension-item" style="border-left: 4px solid #f44336;">
-                            <div class="extension-name">Alerta Ofertas Destacadas Privilegios Cyrana</div>
-                            <div class="extension-apis" style="color: #c62828;">
-                                <strong>42 deprecated APIs remaining</strong>
-                                
-                            </div>
-                        </div>
-                    
-                        <div class="extension-item" style="border-left: 4px solid #f44336;">
-                            <div class="extension-name">Session Manager</div>
-                            <div class="extension-apis" style="color: #c62828;">
-                                <strong>40 deprecated APIs remaining</strong>
-                                
-                            </div>
-                        </div>
-                    
-                        <div class="extension-item" style="border-left: 4px solid #f44336;">
-                            <div class="extension-name">Session Manager</div>
-                            <div class="extension-apis" style="color: #c62828;">
-                                <strong>40 deprecated APIs remaining</strong>
-                                
-                            </div>
-                        </div>
-                    
-                </div>
-            
-        </section>
-    
+            </section>
+        
         
         <section id="clusters">
             <h2>📦 Cluster Analysis</h2>
@@ -1190,23 +659,23 @@
                         <div class="cluster-stats">
                             <div class="cluster-stat">
                                 <div class="cluster-stat-label">Extensions</div>
-                                <div class="cluster-stat-value">5892</div>
+                                <div class="cluster-stat-value">1476</div>
                             </div>
                             <div class="cluster-stat">
                                 <div class="cluster-stat-label">Percentage</div>
-                                <div class="cluster-stat-value">65.9%</div>
+                                <div class="cluster-stat-value">49.2%</div>
                             </div>
                             <div class="cluster-stat">
                                 <div class="cluster-stat-label">Avg API Calls</div>
-                                <div class="cluster-stat-value">6</div>
+                                <div class="cluster-stat-value">12</div>
                             </div>
                             <div class="cluster-stat">
                                 <div class="cluster-stat-label">MV2</div>
-                                <div class="cluster-stat-value">1541</div>
+                                <div class="cluster-stat-value">1476</div>
                             </div>
                             <div class="cluster-stat">
                                 <div class="cluster-stat-label">MV3</div>
-                                <div class="cluster-stat-value">4351</div>
+                                <div class="cluster-stat-value">0</div>
                             </div>
                         </div>
                         
@@ -1227,23 +696,23 @@
                         <div class="cluster-stats">
                             <div class="cluster-stat">
                                 <div class="cluster-stat-label">Extensions</div>
-                                <div class="cluster-stat-value">659</div>
+                                <div class="cluster-stat-value">257</div>
                             </div>
                             <div class="cluster-stat">
                                 <div class="cluster-stat-label">Percentage</div>
-                                <div class="cluster-stat-value">7.4%</div>
+                                <div class="cluster-stat-value">8.6%</div>
                             </div>
                             <div class="cluster-stat">
                                 <div class="cluster-stat-label">Avg API Calls</div>
-                                <div class="cluster-stat-value">35</div>
+                                <div class="cluster-stat-value">37</div>
                             </div>
                             <div class="cluster-stat">
                                 <div class="cluster-stat-label">MV2</div>
-                                <div class="cluster-stat-value">226</div>
+                                <div class="cluster-stat-value">257</div>
                             </div>
                             <div class="cluster-stat">
                                 <div class="cluster-stat-label">MV3</div>
-                                <div class="cluster-stat-value">433</div>
+                                <div class="cluster-stat-value">0</div>
                             </div>
                         </div>
                         
@@ -1257,104 +726,30 @@
                 
                     <div class="cluster">
                         <div class="cluster-header">
-                            <span class="cluster-name">3. Tab & Window Managers with State Persistence</span>
-                            <span class="cluster-badge badge-moderate">MODERATE</span>
-                        </div>
-                        
-                        <div class="cluster-stats">
-                            <div class="cluster-stat">
-                                <div class="cluster-stat-label">Extensions</div>
-                                <div class="cluster-stat-value">587</div>
-                            </div>
-                            <div class="cluster-stat">
-                                <div class="cluster-stat-label">Percentage</div>
-                                <div class="cluster-stat-value">6.6%</div>
-                            </div>
-                            <div class="cluster-stat">
-                                <div class="cluster-stat-label">Avg API Calls</div>
-                                <div class="cluster-stat-value">114</div>
-                            </div>
-                            <div class="cluster-stat">
-                                <div class="cluster-stat-label">MV2</div>
-                                <div class="cluster-stat-value">277</div>
-                            </div>
-                            <div class="cluster-stat">
-                                <div class="cluster-stat-label">MV3</div>
-                                <div class="cluster-stat-value">310</div>
-                            </div>
-                        </div>
-                        
-                        <div>
-                            <strong>Common APIs:</strong>
-                            <div class="api-list">
-                                <span class="api-tag">chrome.storage</span><span class="api-tag">chrome.tabs</span><span class="api-tag">chrome.runtime</span>
-                            </div>
-                        </div>
-                    </div>
-                
-                    <div class="cluster">
-                        <div class="cluster-header">
-                            <span class="cluster-name">4. Core Runtime Extensions</span>
+                            <span class="cluster-name">3. Tab & Window Managers</span>
                             <span class="cluster-badge badge-simple">SIMPLE</span>
                         </div>
                         
                         <div class="cluster-stats">
                             <div class="cluster-stat">
                                 <div class="cluster-stat-label">Extensions</div>
-                                <div class="cluster-stat-value">482</div>
+                                <div class="cluster-stat-value">256</div>
                             </div>
                             <div class="cluster-stat">
                                 <div class="cluster-stat-label">Percentage</div>
-                                <div class="cluster-stat-value">5.4%</div>
+                                <div class="cluster-stat-value">8.5%</div>
                             </div>
                             <div class="cluster-stat">
                                 <div class="cluster-stat-label">Avg API Calls</div>
-                                <div class="cluster-stat-value">15</div>
+                                <div class="cluster-stat-value">16</div>
                             </div>
                             <div class="cluster-stat">
                                 <div class="cluster-stat-label">MV2</div>
-                                <div class="cluster-stat-value">167</div>
+                                <div class="cluster-stat-value">256</div>
                             </div>
                             <div class="cluster-stat">
                                 <div class="cluster-stat-label">MV3</div>
-                                <div class="cluster-stat-value">315</div>
-                            </div>
-                        </div>
-                        
-                        <div>
-                            <strong>Common APIs:</strong>
-                            <div class="api-list">
-                                <span class="api-tag">chrome.runtime</span>
-                            </div>
-                        </div>
-                    </div>
-                
-                    <div class="cluster">
-                        <div class="cluster-header">
-                            <span class="cluster-name">5. Tab & Window Managers</span>
-                            <span class="cluster-badge badge-simple">SIMPLE</span>
-                        </div>
-                        
-                        <div class="cluster-stats">
-                            <div class="cluster-stat">
-                                <div class="cluster-stat-label">Extensions</div>
-                                <div class="cluster-stat-value">322</div>
-                            </div>
-                            <div class="cluster-stat">
-                                <div class="cluster-stat-label">Percentage</div>
-                                <div class="cluster-stat-value">3.6%</div>
-                            </div>
-                            <div class="cluster-stat">
-                                <div class="cluster-stat-label">Avg API Calls</div>
-                                <div class="cluster-stat-value">15</div>
-                            </div>
-                            <div class="cluster-stat">
-                                <div class="cluster-stat-label">MV2</div>
-                                <div class="cluster-stat-value">254</div>
-                            </div>
-                            <div class="cluster-stat">
-                                <div class="cluster-stat-label">MV3</div>
-                                <div class="cluster-stat-value">68</div>
+                                <div class="cluster-stat-value">0</div>
                             </div>
                         </div>
                         
@@ -1368,37 +763,111 @@
                 
                     <div class="cluster">
                         <div class="cluster-header">
-                            <span class="cluster-name">6. Data Storage Extensions</span>
+                            <span class="cluster-name">4. Tab & Window Managers with State Persistence</span>
                             <span class="cluster-badge badge-simple">SIMPLE</span>
                         </div>
                         
                         <div class="cluster-stats">
                             <div class="cluster-stat">
                                 <div class="cluster-stat-label">Extensions</div>
-                                <div class="cluster-stat-value">310</div>
+                                <div class="cluster-stat-value">226</div>
                             </div>
                             <div class="cluster-stat">
                                 <div class="cluster-stat-label">Percentage</div>
-                                <div class="cluster-stat-value">3.5%</div>
+                                <div class="cluster-stat-value">7.5%</div>
                             </div>
                             <div class="cluster-stat">
                                 <div class="cluster-stat-label">Avg API Calls</div>
-                                <div class="cluster-stat-value">51</div>
+                                <div class="cluster-stat-value">98</div>
                             </div>
                             <div class="cluster-stat">
                                 <div class="cluster-stat-label">MV2</div>
-                                <div class="cluster-stat-value">95</div>
+                                <div class="cluster-stat-value">226</div>
                             </div>
                             <div class="cluster-stat">
                                 <div class="cluster-stat-label">MV3</div>
-                                <div class="cluster-stat-value">215</div>
+                                <div class="cluster-stat-value">0</div>
                             </div>
                         </div>
                         
                         <div>
                             <strong>Common APIs:</strong>
                             <div class="api-list">
-                                <span class="api-tag">chrome.runtime</span><span class="api-tag">chrome.storage</span>
+                                <span class="api-tag">chrome.runtime</span><span class="api-tag">chrome.storage</span><span class="api-tag">chrome.tabs</span>
+                            </div>
+                        </div>
+                    </div>
+                
+                    <div class="cluster">
+                        <div class="cluster-header">
+                            <span class="cluster-name">5. Toolbar Button Extensions with Persistent State</span>
+                            <span class="cluster-badge badge-moderate">MODERATE</span>
+                        </div>
+                        
+                        <div class="cluster-stats">
+                            <div class="cluster-stat">
+                                <div class="cluster-stat-label">Extensions</div>
+                                <div class="cluster-stat-value">184</div>
+                            </div>
+                            <div class="cluster-stat">
+                                <div class="cluster-stat-label">Percentage</div>
+                                <div class="cluster-stat-value">6.1%</div>
+                            </div>
+                            <div class="cluster-stat">
+                                <div class="cluster-stat-label">Avg API Calls</div>
+                                <div class="cluster-stat-value">102</div>
+                            </div>
+                            <div class="cluster-stat">
+                                <div class="cluster-stat-label">MV2</div>
+                                <div class="cluster-stat-value">184</div>
+                            </div>
+                            <div class="cluster-stat">
+                                <div class="cluster-stat-label">MV3</div>
+                                <div class="cluster-stat-value">0</div>
+                            </div>
+                        </div>
+                        
+                        <div>
+                            <strong>Common APIs:</strong>
+                            <div class="api-list">
+                                <span class="api-tag">chrome.storage</span><span class="api-tag">chrome.tabs</span><span class="api-tag">chrome.runtime</span><span class="api-tag">chrome.browserAction</span><span class="api-tag">chrome.extension</span>
+                            </div>
+                        </div>
+                    </div>
+                
+                    <div class="cluster">
+                        <div class="cluster-header">
+                            <span class="cluster-name">6. Core Runtime Extensions</span>
+                            <span class="cluster-badge badge-simple">SIMPLE</span>
+                        </div>
+                        
+                        <div class="cluster-stats">
+                            <div class="cluster-stat">
+                                <div class="cluster-stat-label">Extensions</div>
+                                <div class="cluster-stat-value">175</div>
+                            </div>
+                            <div class="cluster-stat">
+                                <div class="cluster-stat-label">Percentage</div>
+                                <div class="cluster-stat-value">5.8%</div>
+                            </div>
+                            <div class="cluster-stat">
+                                <div class="cluster-stat-label">Avg API Calls</div>
+                                <div class="cluster-stat-value">15</div>
+                            </div>
+                            <div class="cluster-stat">
+                                <div class="cluster-stat-label">MV2</div>
+                                <div class="cluster-stat-value">175</div>
+                            </div>
+                            <div class="cluster-stat">
+                                <div class="cluster-stat-label">MV3</div>
+                                <div class="cluster-stat-value">0</div>
+                            </div>
+                        </div>
+                        
+                        <div>
+                            <strong>Common APIs:</strong>
+                            <div class="api-list">
+                                <span class="api-tag">chrome.runtime</span>
                             </div>
                         </div>
                     </div>
@@ -1412,11 +881,11 @@
                         <div class="cluster-stats">
                             <div class="cluster-stat">
                                 <div class="cluster-stat-label">Extensions</div>
-                                <div class="cluster-stat-value">199</div>
+                                <div class="cluster-stat-value">156</div>
                             </div>
                             <div class="cluster-stat">
                                 <div class="cluster-stat-label">Percentage</div>
-                                <div class="cluster-stat-value">2.2%</div>
+                                <div class="cluster-stat-value">5.2%</div>
                             </div>
                             <div class="cluster-stat">
                                 <div class="cluster-stat-label">Avg API Calls</div>
@@ -1424,11 +893,11 @@
                             </div>
                             <div class="cluster-stat">
                                 <div class="cluster-stat-label">MV2</div>
-                                <div class="cluster-stat-value">187</div>
+                                <div class="cluster-stat-value">156</div>
                             </div>
                             <div class="cluster-stat">
                                 <div class="cluster-stat-label">MV3</div>
-                                <div class="cluster-stat-value">12</div>
+                                <div class="cluster-stat-value">0</div>
                             </div>
                         </div>
                         
@@ -1442,104 +911,30 @@
                 
                     <div class="cluster">
                         <div class="cluster-header">
-                            <span class="cluster-name">8. Core Runtime Extensions</span>
+                            <span class="cluster-name">8. Extension Extensions</span>
                             <span class="cluster-badge badge-simple">SIMPLE</span>
                         </div>
                         
                         <div class="cluster-stats">
                             <div class="cluster-stat">
                                 <div class="cluster-stat-label">Extensions</div>
-                                <div class="cluster-stat-value">193</div>
+                                <div class="cluster-stat-value">109</div>
                             </div>
                             <div class="cluster-stat">
                                 <div class="cluster-stat-label">Percentage</div>
-                                <div class="cluster-stat-value">2.2%</div>
+                                <div class="cluster-stat-value">3.6%</div>
                             </div>
                             <div class="cluster-stat">
                                 <div class="cluster-stat-label">Avg API Calls</div>
-                                <div class="cluster-stat-value">33</div>
+                                <div class="cluster-stat-value">14</div>
                             </div>
                             <div class="cluster-stat">
                                 <div class="cluster-stat-label">MV2</div>
-                                <div class="cluster-stat-value">99</div>
+                                <div class="cluster-stat-value">109</div>
                             </div>
                             <div class="cluster-stat">
                                 <div class="cluster-stat-label">MV3</div>
-                                <div class="cluster-stat-value">94</div>
-                            </div>
-                        </div>
-                        
-                        <div>
-                            <strong>Common APIs:</strong>
-                            <div class="api-list">
-                                <span class="api-tag">chrome.app</span><span class="api-tag">chrome.runtime</span>
-                            </div>
-                        </div>
-                    </div>
-                
-                    <div class="cluster">
-                        <div class="cluster-header">
-                            <span class="cluster-name">9. Tab & Window Managers</span>
-                            <span class="cluster-badge badge-moderate">MODERATE</span>
-                        </div>
-                        
-                        <div class="cluster-stats">
-                            <div class="cluster-stat">
-                                <div class="cluster-stat-label">Extensions</div>
-                                <div class="cluster-stat-value">163</div>
-                            </div>
-                            <div class="cluster-stat">
-                                <div class="cluster-stat-label">Percentage</div>
-                                <div class="cluster-stat-value">1.8%</div>
-                            </div>
-                            <div class="cluster-stat">
-                                <div class="cluster-stat-label">Avg API Calls</div>
-                                <div class="cluster-stat-value">114</div>
-                            </div>
-                            <div class="cluster-stat">
-                                <div class="cluster-stat-label">MV2</div>
-                                <div class="cluster-stat-value">83</div>
-                            </div>
-                            <div class="cluster-stat">
-                                <div class="cluster-stat-label">MV3</div>
-                                <div class="cluster-stat-value">80</div>
-                            </div>
-                        </div>
-                        
-                        <div>
-                            <strong>Common APIs:</strong>
-                            <div class="api-list">
-                                <span class="api-tag">chrome.i18n</span><span class="api-tag">chrome.runtime</span><span class="api-tag">chrome.tabs</span>
-                            </div>
-                        </div>
-                    </div>
-                
-                    <div class="cluster">
-                        <div class="cluster-header">
-                            <span class="cluster-name">10. Extension Extensions</span>
-                            <span class="cluster-badge badge-simple">SIMPLE</span>
-                        </div>
-                        
-                        <div class="cluster-stats">
-                            <div class="cluster-stat">
-                                <div class="cluster-stat-label">Extensions</div>
-                                <div class="cluster-stat-value">137</div>
-                            </div>
-                            <div class="cluster-stat">
-                                <div class="cluster-stat-label">Percentage</div>
-                                <div class="cluster-stat-value">1.5%</div>
-                            </div>
-                            <div class="cluster-stat">
-                                <div class="cluster-stat-label">Avg API Calls</div>
-                                <div class="cluster-stat-value">27</div>
-                            </div>
-                            <div class="cluster-stat">
-                                <div class="cluster-stat-label">MV2</div>
-                                <div class="cluster-stat-value">125</div>
-                            </div>
-                            <div class="cluster-stat">
-                                <div class="cluster-stat-label">MV3</div>
-                                <div class="cluster-stat-value">12</div>
+                                <div class="cluster-stat-value">0</div>
                             </div>
                         </div>
                         
@@ -1547,6 +942,80 @@
                             <strong>Common APIs:</strong>
                             <div class="api-list">
                                 <span class="api-tag">chrome.extension</span>
+                            </div>
+                        </div>
+                    </div>
+                
+                    <div class="cluster">
+                        <div class="cluster-header">
+                            <span class="cluster-name">9. App Extensions</span>
+                            <span class="cluster-badge badge-simple">SIMPLE</span>
+                        </div>
+                        
+                        <div class="cluster-stats">
+                            <div class="cluster-stat">
+                                <div class="cluster-stat-label">Extensions</div>
+                                <div class="cluster-stat-value">88</div>
+                            </div>
+                            <div class="cluster-stat">
+                                <div class="cluster-stat-label">Percentage</div>
+                                <div class="cluster-stat-value">2.9%</div>
+                            </div>
+                            <div class="cluster-stat">
+                                <div class="cluster-stat-label">Avg API Calls</div>
+                                <div class="cluster-stat-value">20</div>
+                            </div>
+                            <div class="cluster-stat">
+                                <div class="cluster-stat-label">MV2</div>
+                                <div class="cluster-stat-value">88</div>
+                            </div>
+                            <div class="cluster-stat">
+                                <div class="cluster-stat-label">MV3</div>
+                                <div class="cluster-stat-value">0</div>
+                            </div>
+                        </div>
+                        
+                        <div>
+                            <strong>Common APIs:</strong>
+                            <div class="api-list">
+                                <span class="api-tag">chrome.app</span>
+                            </div>
+                        </div>
+                    </div>
+                
+                    <div class="cluster">
+                        <div class="cluster-header">
+                            <span class="cluster-name">10. Tab & Window Managers</span>
+                            <span class="cluster-badge badge-moderate">MODERATE</span>
+                        </div>
+                        
+                        <div class="cluster-stats">
+                            <div class="cluster-stat">
+                                <div class="cluster-stat-label">Extensions</div>
+                                <div class="cluster-stat-value">73</div>
+                            </div>
+                            <div class="cluster-stat">
+                                <div class="cluster-stat-label">Percentage</div>
+                                <div class="cluster-stat-value">2.4%</div>
+                            </div>
+                            <div class="cluster-stat">
+                                <div class="cluster-stat-label">Avg API Calls</div>
+                                <div class="cluster-stat-value">104</div>
+                            </div>
+                            <div class="cluster-stat">
+                                <div class="cluster-stat-label">MV2</div>
+                                <div class="cluster-stat-value">73</div>
+                            </div>
+                            <div class="cluster-stat">
+                                <div class="cluster-stat-label">MV3</div>
+                                <div class="cluster-stat-value">0</div>
+                            </div>
+                        </div>
+                        
+                        <div>
+                            <strong>Common APIs:</strong>
+                            <div class="api-list">
+                                <span class="api-tag">chrome.i18n</span><span class="api-tag">chrome.tabs</span><span class="api-tag">chrome.runtime</span>
                             </div>
                         </div>
                     </div>
@@ -1564,11 +1033,11 @@
                         <span class="api-domain-name">1. chrome.tabs</span>
                         <span class="warning-icon">⚠️ 58 need migration</span>
                     </div>
-                    <p><strong>Extensions:</strong> 1953 | <strong>Total Calls:</strong> 23,058</p>
+                    <p><strong>Extensions:</strong> 970 | <strong>Total Calls:</strong> 11,850</p>
                     <div>
                         <strong>Top APIs:</strong>
                         <div class="api-list">
-                            <span class="api-tag deprecated">chrome.tabs (1953)</span><span class="api-tag deprecated">query (1014)</span><span class="api-tag deprecated">create (1011)</span><span class="api-tag deprecated">sendMessage (592)</span><span class="api-tag deprecated">onUpdated (404)</span>
+                            <span class="api-tag deprecated">chrome.tabs (970)</span><span class="api-tag deprecated">query (477)</span><span class="api-tag deprecated">create (440)</span><span class="api-tag deprecated">sendMessage (305)</span><span class="api-tag deprecated">executeScript (267)</span>
                         </div>
                     </div>
                 </div>
@@ -1578,11 +1047,11 @@
                         <span class="api-domain-name">2. chrome.app</span>
                         <span class="warning-icon">⚠️ 57 need migration</span>
                     </div>
-                    <p><strong>Extensions:</strong> 319 | <strong>Total Calls:</strong> 3,658</p>
+                    <p><strong>Extensions:</strong> 162 | <strong>Total Calls:</strong> 1,836</p>
                     <div>
                         <strong>Top APIs:</strong>
                         <div class="api-list">
-                            <span class="api-tag deprecated">chrome.app (319)</span><span class="api-tag deprecated">runtime (262)</span><span class="api-tag deprecated">runtime.onLaunched (254)</span><span class="api-tag deprecated">runtime.onLaunched.addListener (252)</span><span class="api-tag deprecated">window (236)</span>
+                            <span class="api-tag deprecated">chrome.app (162)</span><span class="api-tag deprecated">runtime (132)</span><span class="api-tag deprecated">runtime.onLaunched (127)</span><span class="api-tag deprecated">runtime.onLaunched.addListener (126)</span><span class="api-tag deprecated">window (118)</span>
                         </div>
                     </div>
                 </div>
@@ -1592,11 +1061,11 @@
                         <span class="api-domain-name">3. chrome.notifications</span>
                         <span class="warning-icon">⚠️ 38 need migration</span>
                     </div>
-                    <p><strong>Extensions:</strong> 262 | <strong>Total Calls:</strong> 2,391</p>
+                    <p><strong>Extensions:</strong> 135 | <strong>Total Calls:</strong> 1,236</p>
                     <div>
                         <strong>Top APIs:</strong>
                         <div class="api-list">
-                            <span class="api-tag deprecated">chrome.notifications (262)</span><span class="api-tag deprecated">create (260)</span><span class="api-tag deprecated">clear (147)</span><span class="api-tag deprecated">onClicked (137)</span><span class="api-tag deprecated">onClicked.addListener (135)</span>
+                            <span class="api-tag deprecated">chrome.notifications (135)</span><span class="api-tag deprecated">create (134)</span><span class="api-tag deprecated">clear (75)</span><span class="api-tag deprecated">onClicked (70)</span><span class="api-tag deprecated">onClicked.addListener (69)</span>
                         </div>
                     </div>
                 </div>
@@ -1606,11 +1075,11 @@
                         <span class="api-domain-name">4. chrome.webRequest</span>
                         <span class="warning-icon">⚠️ 37 need migration</span>
                     </div>
-                    <p><strong>Extensions:</strong> 190 | <strong>Total Calls:</strong> 1,116</p>
+                    <p><strong>Extensions:</strong> 122 | <strong>Total Calls:</strong> 719</p>
                     <div>
                         <strong>Top APIs:</strong>
                         <div class="api-list">
-                            <span class="api-tag deprecated">chrome.webRequest (190)</span><span class="api-tag deprecated">onBeforeRequest (75)</span><span class="api-tag deprecated">onBeforeRequest.addListener (73)</span><span class="api-tag deprecated">onBeforeSendHeaders (61)</span><span class="api-tag deprecated">onBeforeSendHeaders.addListener (59)</span>
+                            <span class="api-tag deprecated">chrome.webRequest (122)</span><span class="api-tag deprecated">onBeforeRequest (65)</span><span class="api-tag deprecated">onBeforeRequest.addListener (64)</span><span class="api-tag deprecated">onBeforeSendHeaders (34)</span><span class="api-tag deprecated">onBeforeSendHeaders.addListener (33)</span>
                         </div>
                     </div>
                 </div>
@@ -1620,11 +1089,11 @@
                         <span class="api-domain-name">5. chrome.storage</span>
                         <span class="warning-icon">⚠️ 28 need migration</span>
                     </div>
-                    <p><strong>Extensions:</strong> 1270 | <strong>Total Calls:</strong> 40,374</p>
+                    <p><strong>Extensions:</strong> 648 | <strong>Total Calls:</strong> 21,051</p>
                     <div>
                         <strong>Top APIs:</strong>
                         <div class="api-list">
-                            <span class="api-tag deprecated">chrome.storage (1270)</span><span class="api-tag deprecated">local (700)</span><span class="api-tag deprecated">sync (675)</span><span class="api-tag deprecated">sync.get (626)</span><span class="api-tag deprecated">sync.set (614)</span>
+                            <span class="api-tag deprecated">chrome.storage (648)</span><span class="api-tag deprecated">local (360)</span><span class="api-tag deprecated">sync (343)</span><span class="api-tag deprecated">sync.get (318)</span><span class="api-tag deprecated">sync.set (311)</span>
                         </div>
                     </div>
                 </div>
@@ -1634,11 +1103,11 @@
                         <span class="api-domain-name">6. chrome.extension</span>
                         <span class="warning-icon">⚠️ 28 need migration</span>
                     </div>
-                    <p><strong>Extensions:</strong> 624 | <strong>Total Calls:</strong> 5,590</p>
+                    <p><strong>Extensions:</strong> 470 | <strong>Total Calls:</strong> 4,534</p>
                     <div>
                         <strong>Top APIs:</strong>
                         <div class="api-list">
-                            <span class="api-tag deprecated">chrome.extension (624)</span><span class="api-tag deprecated">getURL (289)</span><span class="api-tag deprecated">getBackgroundPage (212)</span><span class="api-tag deprecated">onMessage (107)</span><span class="api-tag deprecated">onMessage.addListener (103)</span>
+                            <span class="api-tag deprecated">chrome.extension (470)</span><span class="api-tag deprecated">getURL (266)</span><span class="api-tag deprecated">getBackgroundPage (109)</span><span class="api-tag deprecated">onMessage (105)</span><span class="api-tag deprecated">onMessage.addListener (101)</span>
                         </div>
                     </div>
                 </div>
@@ -1648,11 +1117,11 @@
                         <span class="api-domain-name">7. chrome.bookmarks</span>
                         <span class="warning-icon">⚠️ 24 need migration</span>
                     </div>
-                    <p><strong>Extensions:</strong> 66 | <strong>Total Calls:</strong> 923</p>
+                    <p><strong>Extensions:</strong> 34 | <strong>Total Calls:</strong> 473</p>
                     <div>
                         <strong>Top APIs:</strong>
                         <div class="api-list">
-                            <span class="api-tag deprecated">chrome.bookmarks (66)</span><span class="api-tag deprecated">getTree (42)</span><span class="api-tag deprecated">create (30)</span><span class="api-tag deprecated">search (23)</span><span class="api-tag deprecated">remove (20)</span>
+                            <span class="api-tag deprecated">chrome.bookmarks (34)</span><span class="api-tag deprecated">getTree (22)</span><span class="api-tag deprecated">create (16)</span><span class="api-tag deprecated">search (12)</span><span class="api-tag deprecated">remove (10)</span>
                         </div>
                     </div>
                 </div>
@@ -1662,11 +1131,11 @@
                         <span class="api-domain-name">8. chrome.management</span>
                         <span class="warning-icon">⚠️ 21 need migration</span>
                     </div>
-                    <p><strong>Extensions:</strong> 55 | <strong>Total Calls:</strong> 532</p>
+                    <p><strong>Extensions:</strong> 28 | <strong>Total Calls:</strong> 267</p>
                     <div>
                         <strong>Top APIs:</strong>
                         <div class="api-list">
-                            <span class="api-tag deprecated">chrome.management (55)</span><span class="api-tag deprecated">getAll (24)</span><span class="api-tag deprecated">launchApp (18)</span><span class="api-tag deprecated">getSelf (15)</span><span class="api-tag deprecated">onEnabled (14)</span>
+                            <span class="api-tag deprecated">chrome.management (28)</span><span class="api-tag deprecated">getAll (12)</span><span class="api-tag deprecated">launchApp (9)</span><span class="api-tag deprecated">getSelf (8)</span><span class="api-tag deprecated">onEnabled (7)</span>
                         </div>
                     </div>
                 </div>
@@ -1676,11 +1145,11 @@
                         <span class="api-domain-name">9. chrome.downloads</span>
                         <span class="warning-icon">⚠️ 20 need migration</span>
                     </div>
-                    <p><strong>Extensions:</strong> 51 | <strong>Total Calls:</strong> 282</p>
+                    <p><strong>Extensions:</strong> 26 | <strong>Total Calls:</strong> 153</p>
                     <div>
                         <strong>Top APIs:</strong>
                         <div class="api-list">
-                            <span class="api-tag deprecated">chrome.downloads (51)</span><span class="api-tag deprecated">download (45)</span><span class="api-tag deprecated">onChanged.addListener (7)</span><span class="api-tag deprecated">onChanged (7)</span><span class="api-tag deprecated">search (7)</span>
+                            <span class="api-tag deprecated">chrome.downloads (26)</span><span class="api-tag deprecated">download (23)</span><span class="api-tag deprecated">onChanged.addListener (4)</span><span class="api-tag deprecated">onChanged (4)</span><span class="api-tag deprecated">search (4)</span>
                         </div>
                     </div>
                 </div>
@@ -1690,11 +1159,11 @@
                         <span class="api-domain-name">10. chrome.browserAction</span>
                         <span class="warning-icon">⚠️ 17 need migration</span>
                     </div>
-                    <p><strong>Extensions:</strong> 482 | <strong>Total Calls:</strong> 3,659</p>
+                    <p><strong>Extensions:</strong> 454 | <strong>Total Calls:</strong> 3,461</p>
                     <div>
                         <strong>Top APIs:</strong>
                         <div class="api-list">
-                            <span class="api-tag deprecated">chrome.browserAction (482)</span><span class="api-tag deprecated">onClicked.addListener (268)</span><span class="api-tag deprecated">onClicked (268)</span><span class="api-tag deprecated">setBadgeText (184)</span><span class="api-tag deprecated">setIcon (155)</span>
+                            <span class="api-tag deprecated">chrome.browserAction (454)</span><span class="api-tag deprecated">onClicked.addListener (257)</span><span class="api-tag deprecated">onClicked (257)</span><span class="api-tag deprecated">setBadgeText (171)</span><span class="api-tag deprecated">setIcon (148)</span>
                         </div>
                     </div>
                 </div>
@@ -1704,11 +1173,11 @@
                         <span class="api-domain-name">11. chrome.windows</span>
                         <span class="warning-icon">⚠️ 17 need migration</span>
                     </div>
-                    <p><strong>Extensions:</strong> 330 | <strong>Total Calls:</strong> 2,014</p>
+                    <p><strong>Extensions:</strong> 170 | <strong>Total Calls:</strong> 1,045</p>
                     <div>
                         <strong>Top APIs:</strong>
                         <div class="api-list">
-                            <span class="api-tag deprecated">chrome.windows (330)</span><span class="api-tag deprecated">create (151)</span><span class="api-tag deprecated">getAll (92)</span><span class="api-tag deprecated">update (85)</span><span class="api-tag deprecated">getCurrent (60)</span>
+                            <span class="api-tag deprecated">chrome.windows (170)</span><span class="api-tag deprecated">create (78)</span><span class="api-tag deprecated">getAll (47)</span><span class="api-tag deprecated">update (44)</span><span class="api-tag deprecated">getCurrent (31)</span>
                         </div>
                     </div>
                 </div>
@@ -1718,11 +1187,11 @@
                         <span class="api-domain-name">12. chrome.history</span>
                         <span class="warning-icon">⚠️ 11 need migration</span>
                     </div>
-                    <p><strong>Extensions:</strong> 30 | <strong>Total Calls:</strong> 292</p>
+                    <p><strong>Extensions:</strong> 16 | <strong>Total Calls:</strong> 150</p>
                     <div>
                         <strong>Top APIs:</strong>
                         <div class="api-list">
-                            <span class="api-tag deprecated">chrome.history (30)</span><span class="api-tag deprecated">search (24)</span><span class="api-tag deprecated">deleteUrl (11)</span><span class="api-tag deprecated">deleteAll (8)</span><span class="api-tag deprecated">getVisits (8)</span>
+                            <span class="api-tag deprecated">chrome.history (16)</span><span class="api-tag deprecated">search (13)</span><span class="api-tag deprecated">deleteUrl (6)</span><span class="api-tag deprecated">deleteAll (4)</span><span class="api-tag deprecated">getVisits (4)</span>
                         </div>
                     </div>
                 </div>
@@ -1732,11 +1201,11 @@
                         <span class="api-domain-name">13. chrome.contextMenus</span>
                         <span class="warning-icon">⚠️ 10 need migration</span>
                     </div>
-                    <p><strong>Extensions:</strong> 312 | <strong>Total Calls:</strong> 2,493</p>
+                    <p><strong>Extensions:</strong> 162 | <strong>Total Calls:</strong> 1,208</p>
                     <div>
                         <strong>Top APIs:</strong>
                         <div class="api-list">
-                            <span class="api-tag deprecated">chrome.contextMenus (312)</span><span class="api-tag deprecated">create (310)</span><span class="api-tag deprecated">onClicked (219)</span><span class="api-tag deprecated">onClicked.addListener (217)</span><span class="api-tag deprecated">removeAll (79)</span>
+                            <span class="api-tag deprecated">chrome.contextMenus (162)</span><span class="api-tag deprecated">create (161)</span><span class="api-tag deprecated">onClicked (78)</span><span class="api-tag deprecated">onClicked.addListener (77)</span><span class="api-tag deprecated">removeAll (41)</span>
                         </div>
                     </div>
                 </div>
@@ -1746,11 +1215,11 @@
                         <span class="api-domain-name">14. chrome.omnibox</span>
                         <span class="warning-icon">⚠️ 10 need migration</span>
                     </div>
-                    <p><strong>Extensions:</strong> 45 | <strong>Total Calls:</strong> 447</p>
+                    <p><strong>Extensions:</strong> 24 | <strong>Total Calls:</strong> 230</p>
                     <div>
                         <strong>Top APIs:</strong>
                         <div class="api-list">
-                            <span class="api-tag deprecated">chrome.omnibox (45)</span><span class="api-tag deprecated">onInputEntered (42)</span><span class="api-tag deprecated">onInputEntered.addListener (40)</span><span class="api-tag deprecated">onInputChanged (36)</span><span class="api-tag deprecated">onInputChanged.addListener (32)</span>
+                            <span class="api-tag deprecated">chrome.omnibox (24)</span><span class="api-tag deprecated">onInputEntered (22)</span><span class="api-tag deprecated">onInputEntered.addListener (21)</span><span class="api-tag deprecated">onInputChanged (19)</span><span class="api-tag deprecated">onInputChanged.addListener (17)</span>
                         </div>
                     </div>
                 </div>
@@ -1760,11 +1229,11 @@
                         <span class="api-domain-name">15. chrome.permissions</span>
                         <span class="warning-icon">⚠️ 10 need migration</span>
                     </div>
-                    <p><strong>Extensions:</strong> 45 | <strong>Total Calls:</strong> 277</p>
+                    <p><strong>Extensions:</strong> 24 | <strong>Total Calls:</strong> 150</p>
                     <div>
                         <strong>Top APIs:</strong>
                         <div class="api-list">
-                            <span class="api-tag deprecated">chrome.permissions (45)</span><span class="api-tag deprecated">request (35)</span><span class="api-tag deprecated">contains (33)</span><span class="api-tag deprecated">remove (11)</span><span class="api-tag deprecated">onAdded (10)</span>
+                            <span class="api-tag deprecated">chrome.permissions (24)</span><span class="api-tag deprecated">request (19)</span><span class="api-tag deprecated">contains (18)</span><span class="api-tag deprecated">remove (6)</span><span class="api-tag deprecated">onAdded (5)</span>
                         </div>
                     </div>
                 </div>
@@ -1775,84 +1244,84 @@
         <section id="migration">
             <h2>⚠️ Migration Recommendations</h2>
             <div class="migration-section">
-                <p><strong>2748</strong> extensions need MV2→MV3 migration (30.7% of total)</p>
+                <p><strong>1449</strong> extensions need MV2→MV3 migration (48.3% of total)</p>
             </div>
             
             <h3>Most Common Deprecated APIs</h3>
             
                     <div class="migration-api">
                         <div class="migration-api-name">chrome.tabs</div>
-                        <div class="migration-stats">Used in 1953 extensions (71.1%)</div>
+                        <div class="migration-stats">Used in 970 extensions (66.9%)</div>
                     </div>
                 
                     <div class="migration-api">
                         <div class="migration-api-name">chrome.storage</div>
-                        <div class="migration-stats">Used in 1270 extensions (46.2%)</div>
+                        <div class="migration-stats">Used in 648 extensions (44.7%)</div>
                     </div>
                 
                     <div class="migration-api">
                         <div class="migration-api-name">chrome.tabs.query</div>
-                        <div class="migration-stats">Used in 1014 extensions (36.9%)</div>
-                    </div>
-                
-                    <div class="migration-api">
-                        <div class="migration-api-name">chrome.tabs.create</div>
-                        <div class="migration-stats">Used in 1011 extensions (36.8%)</div>
-                    </div>
-                
-                    <div class="migration-api">
-                        <div class="migration-api-name">chrome.storage.local</div>
-                        <div class="migration-stats">Used in 700 extensions (25.5%)</div>
-                    </div>
-                
-                    <div class="migration-api">
-                        <div class="migration-api-name">chrome.storage.sync</div>
-                        <div class="migration-stats">Used in 675 extensions (24.6%)</div>
-                    </div>
-                
-                    <div class="migration-api">
-                        <div class="migration-api-name">chrome.storage.sync.get</div>
-                        <div class="migration-stats">Used in 626 extensions (22.8%)</div>
+                        <div class="migration-stats">Used in 477 extensions (32.9%)</div>
                     </div>
                 
                     <div class="migration-api">
                         <div class="migration-api-name">chrome.extension</div>
-                        <div class="migration-stats">Used in 624 extensions (22.7%)</div>
-                    </div>
-                
-                    <div class="migration-api">
-                        <div class="migration-api-name">chrome.storage.sync.set</div>
-                        <div class="migration-stats">Used in 614 extensions (22.3%)</div>
-                    </div>
-                
-                    <div class="migration-api">
-                        <div class="migration-api-name">chrome.tabs.sendMessage</div>
-                        <div class="migration-stats">Used in 592 extensions (21.5%)</div>
-                    </div>
-                
-                    <div class="migration-api">
-                        <div class="migration-api-name">chrome.storage.local.set</div>
-                        <div class="migration-stats">Used in 576 extensions (21.0%)</div>
-                    </div>
-                
-                    <div class="migration-api">
-                        <div class="migration-api-name">chrome.storage.local.get</div>
-                        <div class="migration-stats">Used in 565 extensions (20.6%)</div>
+                        <div class="migration-stats">Used in 470 extensions (32.4%)</div>
                     </div>
                 
                     <div class="migration-api">
                         <div class="migration-api-name">chrome.browserAction</div>
-                        <div class="migration-stats">Used in 482 extensions (17.5%)</div>
+                        <div class="migration-stats">Used in 454 extensions (31.3%)</div>
                     </div>
                 
                     <div class="migration-api">
-                        <div class="migration-api-name">chrome.tabs.onUpdated</div>
-                        <div class="migration-stats">Used in 404 extensions (14.7%)</div>
+                        <div class="migration-api-name">chrome.tabs.create</div>
+                        <div class="migration-stats">Used in 440 extensions (30.4%)</div>
                     </div>
                 
                     <div class="migration-api">
-                        <div class="migration-api-name">chrome.tabs.onUpdated.addListener</div>
-                        <div class="migration-stats">Used in 400 extensions (14.6%)</div>
+                        <div class="migration-api-name">chrome.storage.local</div>
+                        <div class="migration-stats">Used in 360 extensions (24.8%)</div>
+                    </div>
+                
+                    <div class="migration-api">
+                        <div class="migration-api-name">chrome.storage.sync</div>
+                        <div class="migration-stats">Used in 343 extensions (23.7%)</div>
+                    </div>
+                
+                    <div class="migration-api">
+                        <div class="migration-api-name">chrome.storage.sync.get</div>
+                        <div class="migration-stats">Used in 318 extensions (21.9%)</div>
+                    </div>
+                
+                    <div class="migration-api">
+                        <div class="migration-api-name">chrome.storage.sync.set</div>
+                        <div class="migration-stats">Used in 311 extensions (21.5%)</div>
+                    </div>
+                
+                    <div class="migration-api">
+                        <div class="migration-api-name">chrome.tabs.sendMessage</div>
+                        <div class="migration-stats">Used in 305 extensions (21.0%)</div>
+                    </div>
+                
+                    <div class="migration-api">
+                        <div class="migration-api-name">chrome.storage.local.set</div>
+                        <div class="migration-stats">Used in 296 extensions (20.4%)</div>
+                    </div>
+                
+                    <div class="migration-api">
+                        <div class="migration-api-name">chrome.storage.local.get</div>
+                        <div class="migration-stats">Used in 291 extensions (20.1%)</div>
+                    </div>
+                
+                    <div class="migration-api">
+                        <div class="migration-api-name">chrome.tabs.executeScript</div>
+                        <div class="migration-stats">Used in 267 extensions (18.4%)</div>
+                    </div>
+                
+                    <div class="migration-api">
+                        <div class="migration-api-name">chrome.extension.getURL</div>
+                        <div class="migration-stats">Used in 266 extensions (18.4%)</div>
                     </div>
                 
             
@@ -1866,18 +1335,8 @@
                     </div>
                 
                     <div class="extension-item">
-                        <div class="extension-name">MydearNest Clipping <span style="color: #c62828;">(210 deprecated APIs)</span></div>
-                        <div class="extension-apis">Uses: chrome.extension.getViews, chrome.extension, chrome.tabs.create, chrome.tabs, chrome.contextMenus.create ... +205 more</div>
-                    </div>
-                
-                    <div class="extension-item">
                         <div class="extension-name">Youhub Search <span style="color: #c62828;">(98 deprecated APIs)</span></div>
                         <div class="extension-apis">Uses: chrome.extension.getBackgroundPage, chrome.extension, chrome.extension.getURL, chrome.tabs.remove, chrome.tabs ... +93 more</div>
-                    </div>
-                
-                    <div class="extension-item">
-                        <div class="extension-name">Youhub Search <span style="color: #c62828;">(90 deprecated APIs)</span></div>
-                        <div class="extension-apis">Uses: chrome.extension.getBackgroundPage, chrome.extension, chrome.tabs.remove, chrome.tabs, chrome.tabs.getCurrent ... +85 more</div>
                     </div>
                 
                     <div class="extension-item">
@@ -1926,16 +1385,6 @@
                     </div>
                 
                     <div class="extension-item">
-                        <div class="extension-name">Prescrit <span style="color: #c62828;">(42 deprecated APIs)</span></div>
-                        <div class="extension-apis">Uses: chrome.tabs.create, chrome.tabs, chrome.tabs.update, chrome.tabs.query, chrome.windows.create ... +37 more</div>
-                    </div>
-                
-                    <div class="extension-item">
-                        <div class="extension-name">Alerta Ofertas Destacadas Privilegios Cyrana <span style="color: #c62828;">(42 deprecated APIs)</span></div>
-                        <div class="extension-apis">Uses: chrome.tabs.create, chrome.tabs, chrome.tabs.update, chrome.tabs.query, chrome.windows.create ... +37 more</div>
-                    </div>
-                
-                    <div class="extension-item">
                         <div class="extension-name">Arxiv Viewer <span style="color: #c62828;">(41 deprecated APIs)</span></div>
                         <div class="extension-apis">Uses: chrome.app, chrome.storage.local, chrome.storage, chrome.storage.sync, chrome.storage.managed.get ... +36 more</div>
                     </div>
@@ -1960,9 +1409,29 @@
                         <div class="extension-apis">Uses: chrome.windows.get, chrome.windows, chrome.tabs.create, chrome.tabs, chrome.tabs.remove ... +35 more</div>
                     </div>
                 
+                    <div class="extension-item">
+                        <div class="extension-name">Auto Login <span style="color: #c62828;">(40 deprecated APIs)</span></div>
+                        <div class="extension-apis">Uses: chrome.webRequest.onAuthRequired.addListener, chrome.webRequest.onAuthRequired, chrome.webRequest, chrome.windows.create, chrome.windows ... +35 more</div>
+                    </div>
+                
+                    <div class="extension-item">
+                        <div class="extension-name">SmartVault Browser Extension <span style="color: #c62828;">(40 deprecated APIs)</span></div>
+                        <div class="extension-apis">Uses: chrome.extension.getURL, chrome.extension, chrome.tabs.onActivated.addListener, chrome.tabs.onActivated, chrome.tabs ... +35 more</div>
+                    </div>
+                
+                    <div class="extension-item">
+                        <div class="extension-name">TYPO3 - BE/FE/Env Handy Switcher <span style="color: #c62828;">(40 deprecated APIs)</span></div>
+                        <div class="extension-apis">Uses: chrome.tabs.executeScript, chrome.tabs, chrome.tabs.create, chrome.tabs.sendMessage, chrome.tabs.query ... +35 more</div>
+                    </div>
+                
+                    <div class="extension-item">
+                        <div class="extension-name">Real-Time Tab Sync <span style="color: #c62828;">(39 deprecated APIs)</span></div>
+                        <div class="extension-apis">Uses: chrome.storage.local, chrome.storage, chrome.storage.sync, chrome.extension.getBackgroundPage, chrome.extension ... +34 more</div>
+                    </div>
+                
             </div>
             
-            <p><em>... and 2728 more extensions</em></p>
+            <p><em>... and 1429 more extensions</em></p>
         </section>
     
         
@@ -1979,7 +1448,7 @@
                             <span class="severity-badge severity-high">High</span>
                         </div>
                         <p>Persistent background page incompatible with service workers</p>
-                        <p style="color: #666; margin-top: 8px;">Affects <strong>212</strong> extension(s)</p>
+                        <p style="color: #666; margin-top: 8px;">Affects <strong>109</strong> extension(s)</p>
                     </div>
                 
                     <div class="edge-case">
@@ -1988,7 +1457,7 @@
                             <span class="severity-badge severity-high">High</span>
                         </div>
                         <p>Blocking webRequest requires complex migration to declarativeNetRequest</p>
-                        <p style="color: #666; margin-top: 8px;">Affects <strong>75</strong> extension(s)</p>
+                        <p style="color: #666; margin-top: 8px;">Affects <strong>65</strong> extension(s)</p>
                     </div>
                 
                     <div class="edge-case">
@@ -1997,7 +1466,7 @@
                             <span class="severity-badge severity-high">High</span>
                         </div>
                         <p>Blocking webRequest requires complex migration to declarativeNetRequest</p>
-                        <p style="color: #666; margin-top: 8px;">Affects <strong>61</strong> extension(s)</p>
+                        <p style="color: #666; margin-top: 8px;">Affects <strong>34</strong> extension(s)</p>
                     </div>
                 
                     <div class="edge-case">
@@ -2006,7 +1475,7 @@
                             <span class="severity-badge severity-high">High</span>
                         </div>
                         <p>Blocking webRequest requires complex migration to declarativeNetRequest</p>
-                        <p style="color: #666; margin-top: 8px;">Affects <strong>57</strong> extension(s)</p>
+                        <p style="color: #666; margin-top: 8px;">Affects <strong>31</strong> extension(s)</p>
                     </div>
                 
                     <div class="edge-case">
@@ -2015,7 +1484,7 @@
                             <span class="severity-badge severity-high">High</span>
                         </div>
                         <p>Persistent background page incompatible with service workers</p>
-                        <p style="color: #666; margin-top: 8px;">Affects <strong>41</strong> extension(s)</p>
+                        <p style="color: #666; margin-top: 8px;">Affects <strong>21</strong> extension(s)</p>
                     </div>
                 
                     <div class="edge-case">
@@ -2024,7 +1493,7 @@
                             <span class="severity-badge severity-high">High</span>
                         </div>
                         <p>Blocking webRequest requires complex migration to declarativeNetRequest</p>
-                        <p style="color: #666; margin-top: 8px;">Affects <strong>11</strong> extension(s)</p>
+                        <p style="color: #666; margin-top: 8px;">Affects <strong>6</strong> extension(s)</p>
                     </div>
                 
             
@@ -2038,7 +1507,7 @@
                             <span class="severity-badge severity-medium">Medium</span>
                         </div>
                         <p>Must migrate to chrome.action API</p>
-                        <p style="color: #666; margin-top: 8px;">Affects <strong>482</strong> extension(s)</p>
+                        <p style="color: #666; margin-top: 8px;">Affects <strong>454</strong> extension(s)</p>
                     </div>
                 
                     <div class="edge-case">
@@ -2047,7 +1516,7 @@
                             <span class="severity-badge severity-medium">Medium</span>
                         </div>
                         <p>Requires migration to chrome.scripting with host permissions</p>
-                        <p style="color: #666; margin-top: 8px;">Affects <strong>290</strong> extension(s)</p>
+                        <p style="color: #666; margin-top: 8px;">Affects <strong>267</strong> extension(s)</p>
                     </div>
                 
                     <div class="edge-case">
@@ -2056,7 +1525,7 @@
                             <span class="severity-badge severity-medium">Medium</span>
                         </div>
                         <p>Must migrate to chrome.action API</p>
-                        <p style="color: #666; margin-top: 8px;">Affects <strong>98</strong> extension(s)</p>
+                        <p style="color: #666; margin-top: 8px;">Affects <strong>92</strong> extension(s)</p>
                     </div>
                 
                     <div class="edge-case">
@@ -2065,7 +1534,7 @@
                             <span class="severity-badge severity-medium">Medium</span>
                         </div>
                         <p>Requires migration to chrome.scripting with host permissions</p>
-                        <p style="color: #666; margin-top: 8px;">Affects <strong>69</strong> extension(s)</p>
+                        <p style="color: #666; margin-top: 8px;">Affects <strong>35</strong> extension(s)</p>
                     </div>
                 
             
@@ -2079,7 +1548,7 @@
                             <span class="severity-badge severity-low">Low</span>
                         </div>
                         <p>Simple rename to chrome.runtime equivalent</p>
-                        <p style="color: #666; margin-top: 8px;">Affects <strong>289</strong> extension(s)</p>
+                        <p style="color: #666; margin-top: 8px;">Affects <strong>266</strong> extension(s)</p>
                     </div>
                 
                     <div class="edge-case">
@@ -2088,7 +1557,7 @@
                             <span class="severity-badge severity-low">Low</span>
                         </div>
                         <p>Simple rename to chrome.runtime equivalent</p>
-                        <p style="color: #666; margin-top: 8px;">Affects <strong>68</strong> extension(s)</p>
+                        <p style="color: #666; margin-top: 8px;">Affects <strong>61</strong> extension(s)</p>
                     </div>
                 
                     <div class="edge-case">
@@ -2097,7 +1566,7 @@
                             <span class="severity-badge severity-low">Low</span>
                         </div>
                         <p>Simple rename to chrome.runtime equivalent</p>
-                        <p style="color: #666; margin-top: 8px;">Affects <strong>26</strong> extension(s)</p>
+                        <p style="color: #666; margin-top: 8px;">Affects <strong>21</strong> extension(s)</p>
                     </div>
                 
             
@@ -2108,7 +1577,7 @@
             <h2>💡 Key Insights</h2>
             <div class="insight-box">
                 <ul>
-                    <li>Largest cluster: "General Extensions" with 5892 extensions (65.9%)</li><li>Most popular API: chrome.tabs used in 1953 extensions</li><li>30.7% of extensions need migration</li><li>Dataset includes 5890 MV3 extensions - useful for comparison</li>
+                    <li>Largest cluster: "General Extensions" with 1476 extensions (49.2%)</li><li>Most popular API: chrome.tabs used in 970 extensions</li><li>48.3% of extensions need migration</li>
                 </ul>
             </div>
         </section>

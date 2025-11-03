@@ -32,6 +32,7 @@ export function generateHTMLVisualization(
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Extension Clustering Analysis</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         * {
             margin: 0;
@@ -343,6 +344,38 @@ export function generateHTMLVisualization(
             margin: 8px 0;
         }
         
+        .chart-container {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .chart-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .chart-title {
+            font-size: 1.2em;
+            font-weight: bold;
+            color: #2c3e50;
+        }
+
+        .chart-canvas {
+            max-height: 400px;
+        }
+
+        .charts-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+            gap: 20px;
+            margin: 30px 0;
+        }
+
         @media print {
             body {
                 background: white;
@@ -350,6 +383,9 @@ export function generateHTMLVisualization(
             }
             .container {
                 box-shadow: none;
+            }
+            .chart-container {
+                page-break-inside: avoid;
             }
         }
     </style>
@@ -359,6 +395,7 @@ export function generateHTMLVisualization(
         <h1>🔬 Extension Clustering Analysis Report</h1>
         
         ${generateOverviewSection(overallStats)}
+        ${generateChartsSection(overallStats, clusterStats, apiDomains)}
         ${generateMigrationComparisonSection(extensions, idMappings)}
         ${generateClusterSection(clusters, clusterStats)}
         ${generateAPIDomainSection(apiDomains)}
@@ -371,6 +408,394 @@ export function generateHTMLVisualization(
 
     fs.writeFileSync(outputPath, html, 'utf-8');
     console.log(`\n✓ HTML visualization saved to: ${outputPath}\n`);
+}
+
+function generateChartsSection(
+    stats: OverallStats,
+    clusterStats: ClusterStats[],
+    apiDomains: APIDomainStats[]
+): string {
+    return `
+        <section id="charts">
+            <h2>📈 Visual Analytics</h2>
+
+            <div class="charts-grid">
+                ${generateManifestVersionChart(stats)}
+                ${generateSourceDistributionChart(stats)}
+                ${generateClusterSizeChart(clusterStats)}
+                ${generateTopAPIDomainsChart(apiDomains)}
+                ${generateMigrationStatusChart(stats)}
+            </div>
+        </section>
+    `;
+}
+
+function generateManifestVersionChart(stats: OverallStats): string {
+    const mv2Percent = ((stats.manifestVersions.mv2 / stats.totalExtensions) * 100).toFixed(1);
+    const mv3Percent = ((stats.manifestVersions.mv3 / stats.totalExtensions) * 100).toFixed(1);
+
+    return `
+        <div class="chart-container">
+            <div class="chart-header">
+                <span class="chart-title">📋 Manifest Version Distribution</span>
+            </div>
+            <canvas id="manifestChart" class="chart-canvas"></canvas>
+            <script>
+                new Chart(document.getElementById('manifestChart'), {
+                    type: 'doughnut',
+                    data: {
+                        labels: ['Manifest V2', 'Manifest V3'],
+                        datasets: [{
+                            data: [${stats.manifestVersions.mv2}, ${stats.manifestVersions.mv3}],
+                            backgroundColor: ['#ff9800', '#4caf50'],
+                            borderWidth: 2,
+                            borderColor: '#fff'
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                position: 'bottom',
+                                labels: {
+                                    padding: 20,
+                                    usePointStyle: true
+                                }
+                            },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                        const percentage = ((context.parsed / total) * 100).toFixed(1);
+                                        return context.label + ': ' + context.parsed + ' (' + percentage + '%)';
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+            </script>
+        </div>
+    `;
+}
+
+function generateSourceDistributionChart(stats: OverallStats): string {
+    const sources = [];
+    const labels = [];
+    const colors = ['#2196f3', '#ff9800', '#4caf50'];
+
+    if (stats.sources.filesystem > 0) {
+        sources.push(stats.sources.filesystem);
+        labels.push('Filesystem');
+    }
+    if (stats.sources.database > 0) {
+        sources.push(stats.sources.database);
+        labels.push('Database');
+    }
+    if (stats.sources.output > 0) {
+        sources.push(stats.sources.output);
+        labels.push('Output');
+    }
+
+    return `
+        <div class="chart-container">
+            <div class="chart-header">
+                <span class="chart-title">📁 Data Source Distribution</span>
+            </div>
+            <canvas id="sourceChart" class="chart-canvas"></canvas>
+            <script>
+                new Chart(document.getElementById('sourceChart'), {
+                    type: 'pie',
+                    data: {
+                        labels: ${JSON.stringify(labels)},
+                        datasets: [{
+                            data: ${JSON.stringify(sources)},
+                            backgroundColor: ${JSON.stringify(colors.slice(0, sources.length))},
+                            borderWidth: 2,
+                            borderColor: '#fff'
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                position: 'bottom',
+                                labels: {
+                                    padding: 20,
+                                    usePointStyle: true
+                                }
+                            }
+                        }
+                    }
+                });
+            </script>
+        </div>
+    `;
+}
+
+function generateClusterSizeChart(clusterStats: ClusterStats[]): string {
+    const sortedClusters = [...clusterStats].sort((a, b) => b.size - a.size).slice(0, 10);
+    const labels = sortedClusters.map((c) =>
+        c.name.length > 30 ? c.name.substring(0, 27) + '...' : c.name
+    );
+    const data = sortedClusters.map((c) => c.size);
+    const colors = [
+        '#ff6384',
+        '#36a2eb',
+        '#cc65fe',
+        '#ffce56',
+        '#ff9f40',
+        '#4bc0c0',
+        '#9966ff',
+        '#ff6384',
+        '#c9cbcf',
+        '#ff6384',
+    ];
+
+    return `
+        <div class="chart-container">
+            <div class="chart-header">
+                <span class="chart-title">📦 Cluster Size Distribution</span>
+            </div>
+            <canvas id="clusterChart" class="chart-canvas"></canvas>
+            <script>
+                new Chart(document.getElementById('clusterChart'), {
+                    type: 'bar',
+                    data: {
+                        labels: ${JSON.stringify(labels)},
+                        datasets: [{
+                            label: 'Extensions',
+                            data: ${JSON.stringify(data)},
+                            backgroundColor: ${JSON.stringify(colors.slice(0, data.length))},
+                            borderWidth: 1,
+                            borderColor: '#fff'
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                ticks: {
+                                    precision: 0
+                                }
+                            }
+                        },
+                        plugins: {
+                            legend: {
+                                display: false
+                            }
+                        }
+                    }
+                });
+            </script>
+        </div>
+    `;
+}
+
+function generateTopAPIDomainsChart(apiDomains: APIDomainStats[]): string {
+    const topDomains = apiDomains.slice(0, 10);
+    const labels = topDomains.map((d) => d.domain);
+    const data = topDomains.map((d) => d.totalExtensions);
+
+    return `
+        <div class="chart-container">
+            <div class="chart-header">
+                <span class="chart-title">🔌 Top API Domains Usage</span>
+            </div>
+            <canvas id="apiDomainChart" class="chart-canvas"></canvas>
+            <script>
+                new Chart(document.getElementById('apiDomainChart'), {
+                    type: 'horizontalBar',
+                    data: {
+                        labels: ${JSON.stringify(labels)},
+                        datasets: [{
+                            label: 'Extensions Using Domain',
+                            data: ${JSON.stringify(data)},
+                            backgroundColor: '#36a2eb',
+                            borderWidth: 1,
+                            borderColor: '#fff'
+                        }]
+                    },
+                    options: {
+                        indexAxis: 'y',
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            x: {
+                                beginAtZero: true,
+                                ticks: {
+                                    precision: 0
+                                }
+                            }
+                        },
+                        plugins: {
+                            legend: {
+                                display: false
+                            }
+                        }
+                    }
+                });
+            </script>
+        </div>
+    `;
+}
+
+function generateMigrationStatusChart(stats: OverallStats): string {
+    const needsMigration = stats.migrationNeeded;
+    const noMigration = stats.totalExtensions - stats.migrationNeeded;
+    const migrationPercent = stats.migrationPercentage.toFixed(1);
+    const noMigrationPercent = (100 - stats.migrationPercentage).toFixed(1);
+
+    return `
+        <div class="chart-container">
+            <div class="chart-header">
+                <span class="chart-title">⚠️ Migration Status</span>
+            </div>
+            <canvas id="migrationChart" class="chart-canvas"></canvas>
+            <script>
+                new Chart(document.getElementById('migrationChart'), {
+                    type: 'doughnut',
+                    data: {
+                        labels: ['Needs Migration', 'MV3 Compatible'],
+                        datasets: [{
+                            data: [${needsMigration}, ${noMigration}],
+                            backgroundColor: ['#f44336', '#4caf50'],
+                            borderWidth: 2,
+                            borderColor: '#fff'
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                position: 'bottom',
+                                labels: {
+                                    padding: 20,
+                                    usePointStyle: true
+                                }
+                            },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                        const percentage = ((context.parsed / total) * 100).toFixed(1);
+                                        return context.label + ': ' + context.parsed + ' (' + percentage + '%)';
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+            </script>
+        </div>
+    `;
+}
+
+function generateMigrationQualityChart(stats: any): string {
+    return `
+        <div class="chart-container">
+            <div class="chart-header">
+                <span class="chart-title">📊 Migration Quality Distribution</span>
+            </div>
+            <canvas id="migrationQualityChart" class="chart-canvas"></canvas>
+            <script>
+                new Chart(document.getElementById('migrationQualityChart'), {
+                    type: 'bar',
+                    data: {
+                        labels: ['Excellent', 'Good', 'Poor', 'Failed'],
+                        datasets: [{
+                            label: 'Migrations',
+                            data: [${stats.excellent}, ${stats.good}, ${stats.poor}, ${stats.failed}],
+                            backgroundColor: ['#4caf50', '#8bc34a', '#ff9800', '#f44336'],
+                            borderWidth: 1,
+                            borderColor: '#fff'
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                ticks: {
+                                    precision: 0
+                                }
+                            }
+                        },
+                        plugins: {
+                            legend: {
+                                display: false
+                            },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                        const percentage = ((context.parsed / total) * 100).toFixed(1);
+                                        return context.label + ': ' + context.parsed + ' (' + percentage + '%)';
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+            </script>
+        </div>
+    `;
+}
+
+function generateTopAPIMigrationsChart(stats: any): string {
+    const topMigrations = stats.mostMigratedAPIs.slice(0, 8);
+    const labels = topMigrations.map(
+        (m: any) => m.from.split('.').pop() + ' → ' + m.to.split('.').pop()
+    );
+    const data = topMigrations.map((m: any) => m.count);
+
+    return `
+        <div class="chart-container">
+            <div class="chart-header">
+                <span class="chart-title">🔄 Top API Migration Patterns</span>
+            </div>
+            <canvas id="apiMigrationsChart" class="chart-canvas"></canvas>
+            <script>
+                new Chart(document.getElementById('apiMigrationsChart'), {
+                    type: 'horizontalBar',
+                    data: {
+                        labels: ${JSON.stringify(labels)},
+                        datasets: [{
+                            label: 'Extensions',
+                            data: ${JSON.stringify(data)},
+                            backgroundColor: '#9c27b0',
+                            borderWidth: 1,
+                            borderColor: '#fff'
+                        }]
+                    },
+                    options: {
+                        indexAxis: 'y',
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            x: {
+                                beginAtZero: true,
+                                ticks: {
+                                    precision: 0
+                                }
+                            }
+                        },
+                        plugins: {
+                            legend: {
+                                display: false
+                            }
+                        }
+                    }
+                });
+            </script>
+        </div>
+    `;
 }
 
 function generateMigrationComparisonSection(
@@ -418,7 +843,12 @@ function generateMigrationComparisonSection(
         <section id="migration-comparison">
             <h2>🔄 Migration Comparison Analysis</h2>
             <p>Comparing ${pairs.length} matched MV2/MV3 extension pairs</p>
-            
+
+            <div class="charts-grid">
+                ${generateMigrationQualityChart(stats)}
+                ${generateTopAPIMigrationsChart(stats)}
+            </div>
+
             <div class="stats-grid">
                 <div class="stat-card green">
                     <div class="stat-label">Successful Migrations</div>
