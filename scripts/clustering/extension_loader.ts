@@ -3,6 +3,7 @@
  */
 
 import * as fs from 'fs';
+import * as path from 'path';
 import chalk from 'chalk';
 import { find_extensions } from '../../migrator/utils/find_extensions';
 import { Extension } from '../../migrator/types/extension';
@@ -44,6 +45,51 @@ export async function loadExtensionsFromFilesystem(inputPath: string): Promise<E
 
     console.log(chalk.green(`✓ Loaded ${extensionData.length} extensions from filesystem`));
     return extensionData;
+}
+
+/**
+ * Load MV2→MV3 ID mappings from database
+ */
+export async function loadIDMappings(): Promise<Map<string, string>> {
+    const mappings = new Map<string, string>();
+
+    try {
+        console.log(chalk.blue('Loading MV2→MV3 ID mappings from database...'));
+
+        const db = Database.shared;
+
+        if (!db.database) {
+            console.log(chalk.gray('  Initializing database connection...'));
+            await db.init();
+        }
+
+        const collection = db.database!.collection(Collections.EXTENSIONS);
+
+        console.log(chalk.gray('  Querying for extensions with mv3_extension_id...'));
+        const extensions = await collection
+            .find({
+                mv3_extension_id: { $exists: true, $ne: null },
+            })
+            .toArray();
+
+        console.log(chalk.gray(`  Found ${extensions.length} extensions with MV3 mappings`));
+
+        for (const ext of extensions) {
+            if (ext.id && ext.mv3_extension_id) {
+                mappings.set(ext.id, ext.mv3_extension_id);
+                // Log first few for debugging
+                if (mappings.size <= 3) {
+                    console.log(chalk.gray(`    ${ext.id} → ${ext.mv3_extension_id}`));
+                }
+            }
+        }
+
+        console.log(chalk.green(`✓ Loaded ${mappings.size} MV2→MV3 ID mappings from database\n`));
+    } catch (error) {
+        console.log(chalk.red(`✗ Could not load ID mappings: ${error}\n`));
+    }
+
+    return mappings;
 }
 
 /**
@@ -112,6 +158,7 @@ export async function loadExtensionsFromDatabase(): Promise<ExtensionData[]> {
 
 /**
  * Load extensions from output directory
+ * For migration comparison, use loadExtensionsFromOutputWithMapping() instead
  */
 export async function loadExtensionsFromOutput(outputPath: string): Promise<ExtensionData[]> {
     console.log(chalk.blue(`Loading migrated extensions from ${outputPath}...`));
@@ -143,6 +190,90 @@ export async function loadExtensionsFromOutput(outputPath: string): Promise<Exte
 
     console.log(chalk.green(`✓ Loaded ${extensionData.length} extensions from output`));
     return extensionData;
+}
+
+/**
+ * Load MV3 extensions from output directory using database mappings for correct IDs
+ * This resolves the issue where filesystem path generates different IDs than database
+ */
+export async function loadExtensionsFromOutputWithMapping(
+    outputPath: string
+): Promise<ExtensionData[]> {
+    console.log(chalk.blue(`Loading MV3 extensions with database ID mapping...`));
+
+    try {
+        const db = Database.shared;
+
+        if (!db.database) {
+            console.log(chalk.gray('  Initializing database connection...'));
+            await db.init();
+        }
+
+        const collection = db.database!.collection(Collections.EXTENSIONS);
+
+        // Get all extensions with MV3 paths
+        const dbExtensions = await collection
+            .find({
+                manifest_v3_path: { $exists: true, $ne: null },
+                mv3_extension_id: { $exists: true, $ne: null },
+            })
+            .toArray();
+
+        console.log(chalk.gray(`  Found ${dbExtensions.length} extensions with MV3 output`));
+
+        const extensionData: ExtensionData[] = [];
+
+        for (const dbExt of dbExtensions) {
+            try {
+                // Extract directory from manifest_v3_path
+                const mv3ManifestPath = dbExt.manifest_v3_path;
+                const mv3Dir = path.dirname(path.resolve(mv3ManifestPath));
+
+                // Check if this MV3 directory exists
+                if (!fs.existsSync(mv3Dir)) {
+                    continue;
+                }
+
+                // Load the extension from filesystem
+                const extensions = find_extensions(mv3Dir, true);
+                if (extensions.length === 0) {
+                    continue;
+                }
+
+                const ext = extensions[0];
+
+                // Extract APIs
+                const { baseApiUsage, fullApiUsage } = extractAllAPIUsage(ext);
+                const totalApiCalls = Object.values(fullApiUsage).reduce(
+                    (sum, count) => sum + count,
+                    0
+                );
+
+                // Use the MV3 ID from database, not the filesystem-generated one!
+                extensionData.push({
+                    id: dbExt.mv3_extension_id, // ← Use database ID!
+                    name: ext.name,
+                    source: 'output',
+                    manifestVersion: ext.manifest?.manifest_version || 3,
+                    baseApiUsage,
+                    fullApiUsage,
+                    totalApiCalls,
+                });
+
+                ext.files.forEach((f) => f.close());
+            } catch (error) {
+                console.log(chalk.gray(`  Skipping extension: ${error}`));
+            }
+        }
+
+        console.log(
+            chalk.green(`✓ Loaded ${extensionData.length} MV3 extensions with correct IDs\n`)
+        );
+        return extensionData;
+    } catch (error) {
+        console.log(chalk.red(`✗ Could not load MV3 extensions: ${error}\n`));
+        return [];
+    }
 }
 
 /**

@@ -331,7 +331,7 @@ export function clusterExtensions(
 }
 
 /**
- * Generate cluster name based on common APIs
+ * Generate cluster name based on common APIs with more granular categorization
  */
 export function generateClusterName(commonAPIs: string[], _extensions: ExtensionData[]): string {
     if (commonAPIs.length === 0) {
@@ -347,61 +347,119 @@ export function generateClusterName(commonAPIs: string[], _extensions: Extension
         {
             apis: ['chrome.webRequest', 'chrome.declarativeNetRequest'],
             name: 'Network Request Interceptors',
-            priority: 10,
+            priority: 20,
             qualifiers: [
-                { apis: ['chrome.proxy'], suffix: ' with Proxy' },
+                { apis: ['chrome.proxy'], suffix: ' with Proxy Control' },
                 { apis: ['chrome.storage'], suffix: ' with Filtering Rules' },
+                { apis: ['chrome.webNavigation'], suffix: ' with Navigation Tracking' },
             ],
         },
         {
-            apis: ['chrome.debugger', 'chrome.devtools'],
-            name: 'Developer & Debugging Tools',
-            priority: 9,
+            apis: ['chrome.debugger'],
+            name: 'Chrome Debugger Extensions',
+            priority: 19,
+        },
+        {
+            apis: ['chrome.devtools'],
+            name: 'DevTools Panel Extensions',
+            priority: 18,
         },
         {
             apis: ['chrome.downloads'],
-            name: 'Download Management',
-            priority: 8,
+            name: 'Download Managers',
+            priority: 17,
+            qualifiers: [{ apis: ['chrome.notifications'], suffix: ' with Notifications' }],
         },
         {
             apis: ['chrome.proxy'],
-            name: 'Proxy & Network Control',
-            priority: 8,
+            name: 'Proxy Controllers',
+            priority: 16,
         },
         {
             apis: ['chrome.scripting', 'chrome.tabs.executeScript'],
             name: 'Content Script Injectors',
-            priority: 7,
+            priority: 15,
+            qualifiers: [{ apis: ['chrome.tabs'], suffix: ' with Tab Management' }],
         },
         {
             apis: ['chrome.contextMenus'],
-            name: 'Context Menu Extensions',
-            priority: 7,
+            name: 'Context Menu Enhancers',
+            priority: 14,
+            qualifiers: [
+                { apis: ['chrome.tabs'], suffix: ' with Tab Actions' },
+                { apis: ['chrome.storage'], suffix: ' with Settings' },
+            ],
         },
         {
-            apis: ['chrome.action', 'chrome.browserAction', 'chrome.pageAction'],
-            name: 'Browser Toolbar Actions',
-            priority: 6,
+            apis: ['chrome.action', 'chrome.browserAction'],
+            name: 'Toolbar Button Extensions',
+            priority: 13,
+            qualifiers: [
+                { apis: ['chrome.notifications'], suffix: ' with Notifications' },
+                { apis: ['chrome.storage'], suffix: ' with Persistent State' },
+            ],
         },
         {
-            apis: ['chrome.bookmarks', 'chrome.history'],
-            name: 'Bookmarks & History',
-            priority: 6,
+            apis: ['chrome.pageAction'],
+            name: 'Page-Specific Actions',
+            priority: 12,
+        },
+        {
+            apis: ['chrome.bookmarks'],
+            name: 'Bookmark Managers',
+            priority: 11,
+            qualifiers: [{ apis: ['chrome.tabs'], suffix: ' with Tab Integration' }],
+        },
+        {
+            apis: ['chrome.history'],
+            name: 'History Analyzers',
+            priority: 10,
         },
         {
             apis: ['chrome.tabs', 'chrome.windows'],
-            name: 'Tab & Window Management',
-            priority: 5,
+            name: 'Tab & Window Managers',
+            priority: 9,
+            qualifiers: [
+                { apis: ['chrome.sessions'], suffix: ' with Session Restore' },
+                { apis: ['chrome.storage'], suffix: ' with State Persistence' },
+            ],
+        },
+        {
+            apis: ['chrome.cookies'],
+            name: 'Cookie Managers',
+            priority: 8,
         },
         {
             apis: ['chrome.storage'],
-            name: 'Data Storage & Sync',
+            name: 'Data Storage Extensions',
+            priority: 7,
+            qualifiers: [{ apis: ['chrome.identity'], suffix: ' with Cloud Sync' }],
+        },
+        {
+            apis: ['chrome.notifications'],
+            name: 'Notification Systems',
+            priority: 6,
+            qualifiers: [{ apis: ['chrome.alarms'], suffix: ' with Scheduled Alerts' }],
+        },
+        {
+            apis: ['chrome.alarms'],
+            name: 'Background Task Schedulers',
+            priority: 5,
+        },
+        {
+            apis: ['chrome.identity'],
+            name: 'Authentication & Identity',
             priority: 4,
         },
         {
-            apis: ['chrome.notifications', 'chrome.alarms'],
-            name: 'Notifications & Timers',
-            priority: 4,
+            apis: ['chrome.runtime'],
+            name: 'Core Runtime Extensions',
+            priority: 3,
+        },
+        {
+            apis: ['chrome.permissions'],
+            name: 'Dynamic Permission Managers',
+            priority: 2,
         },
     ];
 
@@ -516,4 +574,122 @@ export function needsMigration(api: string): boolean {
     }
 
     return false;
+}
+
+/**
+ * Identify edge case / problematic APIs that may cause migration issues
+ */
+export function identifyEdgeCaseAPIs(extensions: any[]): Array<{
+    api: string;
+    reason: string;
+    extensionCount: number;
+    severity: 'high' | 'medium' | 'low';
+}> {
+    const apiUsageCount = new Map<string, number>();
+
+    // Count API usage across extensions
+    for (const ext of extensions) {
+        for (const api of Object.keys(ext.fullApiUsage || {})) {
+            if (ext.fullApiUsage[api] > 0) {
+                apiUsageCount.set(api, (apiUsageCount.get(api) || 0) + 1);
+            }
+        }
+    }
+
+    const edgeCases: Array<{
+        api: string;
+        reason: string;
+        extensionCount: number;
+        severity: 'high' | 'medium' | 'low';
+    }> = [];
+
+    // High severity: Blocking webRequest (difficult migration)
+    const blockingWebRequest = [
+        'chrome.webRequest.onBeforeRequest',
+        'chrome.webRequest.onBeforeSendHeaders',
+        'chrome.webRequest.onHeadersReceived',
+        'chrome.webRequest.onAuthRequired',
+    ];
+    for (const api of blockingWebRequest) {
+        const count = apiUsageCount.get(api) || 0;
+        if (count > 0) {
+            edgeCases.push({
+                api,
+                reason: 'Blocking webRequest requires complex migration to declarativeNetRequest',
+                extensionCount: count,
+                severity: 'high',
+            });
+        }
+    }
+
+    // High severity: Background page dependencies
+    const backgroundPageAPIs = ['chrome.extension.getBackgroundPage', 'chrome.extension.getViews'];
+    for (const api of backgroundPageAPIs) {
+        const count = apiUsageCount.get(api) || 0;
+        if (count > 0) {
+            edgeCases.push({
+                api,
+                reason: 'Persistent background page incompatible with service workers',
+                extensionCount: count,
+                severity: 'high',
+            });
+        }
+    }
+
+    // Medium severity: executeScript requires permission changes
+    const executeScriptAPIs = ['chrome.tabs.executeScript', 'chrome.tabs.insertCSS'];
+    for (const api of executeScriptAPIs) {
+        const count = apiUsageCount.get(api) || 0;
+        if (count > 0) {
+            edgeCases.push({
+                api,
+                reason: 'Requires migration to chrome.scripting with host permissions',
+                extensionCount: count,
+                severity: 'medium',
+            });
+        }
+    }
+
+    // Medium severity: Browser/Page action consolidation
+    const actionAPIs = ['chrome.browserAction', 'chrome.pageAction'];
+    for (const api of actionAPIs) {
+        const count = apiUsageCount.get(api) || 0;
+        if (count > 0) {
+            edgeCases.push({
+                api,
+                reason: 'Must migrate to chrome.action API',
+                extensionCount: count,
+                severity: 'medium',
+            });
+        }
+    }
+
+    // Low severity: Simple renames
+    const simpleRenames = [
+        'chrome.extension.getURL',
+        'chrome.extension.sendMessage',
+        'chrome.extension.connect',
+    ];
+    for (const api of simpleRenames) {
+        const count = apiUsageCount.get(api) || 0;
+        if (count > 0) {
+            edgeCases.push({
+                api,
+                reason: 'Simple rename to chrome.runtime equivalent',
+                extensionCount: count,
+                severity: 'low',
+            });
+        }
+    }
+
+    // Sort by severity and extension count
+    edgeCases.sort((a, b) => {
+        const severityOrder = { high: 0, medium: 1, low: 2 };
+        if (severityOrder[a.severity] !== severityOrder[b.severity]) {
+            return severityOrder[a.severity] - severityOrder[b.severity];
+        }
+        return b.extensionCount - a.extensionCount;
+    });
+
+    return edgeCases;
 }

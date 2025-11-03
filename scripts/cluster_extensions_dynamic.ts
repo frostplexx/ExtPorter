@@ -17,15 +17,28 @@ import {
     buildVocabulary,
     findOptimalClusters,
     clusterExtensions,
-    needsMigration,
 } from './clustering/clustering_utils';
 import {
     loadExtensionsFromFilesystem,
     loadExtensionsFromDatabase,
     loadExtensionsFromOutput,
+    loadExtensionsFromOutputWithMapping,
     groupAPIsByDomain,
+    loadIDMappings,
 } from './clustering/extension_loader';
 import { ExtensionData } from './clustering/types';
+import {
+    calculateOverallStats,
+    calculateClusterStats,
+    printOverallStats,
+    printClusterAnalysis,
+    printAPIDomainAnalysis,
+    printMigrationRecommendations,
+    printEdgeCaseAPIs,
+    printMigrationComparison,
+    printInsights,
+} from './clustering/output_formatter';
+import { generateHTMLVisualization } from './clustering/html_generator';
 
 dotenv.config();
 
@@ -89,7 +102,10 @@ Examples:
     }
 
     if (outputPath) {
-        const outputExtensions = await loadExtensionsFromOutput(outputPath);
+        // Use database mapping if available for correct MV3 IDs
+        const outputExtensions = useDatabase
+            ? await loadExtensionsFromOutputWithMapping(outputPath)
+            : await loadExtensionsFromOutput(outputPath);
         allExtensions.push(...outputExtensions);
     }
 
@@ -116,63 +132,44 @@ Examples:
     // Group APIs by domain
     const apiDomains = groupAPIsByDomain(allExtensions);
 
-    // Print summary
-    console.log(chalk.bold.cyan('\n📊 Clustering Summary:\n'));
-    clusters.forEach((cluster) => {
-        console.log(chalk.bold(`${cluster.clusterName} (Cluster ${cluster.clusterId}):`));
-        console.log(`  Extensions: ${cluster.extensions.length}`);
-        console.log(`  Common APIs: ${cluster.commonAPIs.slice(0, 3).join(', ')}`);
-        console.log('');
-    });
+    // Calculate statistics
+    const overallStats = calculateOverallStats(allExtensions);
+    const clusterStats = calculateClusterStats(clusters, allExtensions.length);
 
-    console.log(chalk.bold.cyan('\n📊 API Domain Usage:\n'));
-    apiDomains.slice(0, 10).forEach((domain) => {
-        const needsMigrationTag =
-            domain.unmigrated > 0 ? chalk.red(` [${domain.unmigrated} APIs need migration]`) : '';
-        console.log(chalk.bold(`${domain.domain}:`) + needsMigrationTag);
-        console.log(`  Extensions: ${domain.totalExtensions}`);
-        console.log(`  Total calls: ${domain.totalCalls}`);
+    // Print enhanced output
+    printOverallStats(overallStats);
 
-        // Show top 5 APIs with migration status
-        console.log(`  APIs:`);
-        domain.apis.slice(0, 5).forEach((api) => {
-            const migrationTag = api.needsMigration ? chalk.red(' ⚠️  MV2') : '';
-            const shortName = api.api.replace(domain.domain + '.', '');
-            console.log(
-                chalk.gray(`    - ${shortName} (${api.extensionCount} ext)${migrationTag}`)
-            );
-        });
-        console.log('');
-    });
-
-    // Show extensions that need migration
-    const extensionsNeedingMigration = allExtensions.filter((ext) => {
-        return Object.keys(ext.fullApiUsage).some((api) => needsMigration(api));
-    });
-
-    if (extensionsNeedingMigration.length > 0) {
-        console.log(
-            chalk.bold.red(
-                `\n⚠️  ${extensionsNeedingMigration.length} extensions need MV2→MV3 migration:\n`
-            )
-        );
-        extensionsNeedingMigration.slice(0, 10).forEach((ext) => {
-            const deprecatedApis = Object.keys(ext.fullApiUsage).filter((api) =>
-                needsMigration(api)
-            );
-            console.log(chalk.yellow(`  ${ext.name}:`));
-            console.log(chalk.gray(`    Uses: ${deprecatedApis.slice(0, 3).join(', ')}`));
-        });
-        if (extensionsNeedingMigration.length > 10) {
-            console.log(chalk.gray(`    ... and ${extensionsNeedingMigration.length - 10} more`));
+    // If we have both MV2 and MV3 extensions, show migration comparison
+    const mv2Extensions = allExtensions.filter(
+        (e) => e.source === 'filesystem' || e.source === 'database'
+    );
+    const mv3Extensions = allExtensions.filter((e) => e.source === 'output');
+    let idMappings: Map<string, string> | undefined;
+    if (mv2Extensions.length > 0 && mv3Extensions.length > 0) {
+        // Load ID mappings from database (only if database was used)
+        if (useDatabase) {
+            idMappings = await loadIDMappings();
         }
-    } else {
-        console.log(chalk.green('\n✓ All extensions use MV3-compatible APIs!'));
+        printMigrationComparison(mv2Extensions, mv3Extensions, idMappings);
     }
 
-    // TODO: Generate visualization
-    console.log(chalk.yellow('\n⚠️  Visualization generation not yet implemented'));
-    console.log(chalk.gray('(HTML generation code needs to be added)'));
+    printClusterAnalysis(clusters, clusterStats);
+    printAPIDomainAnalysis(apiDomains, 15);
+    printEdgeCaseAPIs(allExtensions);
+    printMigrationRecommendations(allExtensions, apiDomains);
+    printInsights(overallStats, clusterStats, apiDomains);
+
+    // Generate HTML visualization
+    const htmlOutputPath = visualizationFile || './cluster_visualization.html';
+    generateHTMLVisualization(
+        htmlOutputPath,
+        allExtensions,
+        clusters,
+        apiDomains,
+        overallStats,
+        clusterStats,
+        idMappings
+    );
 
     if (useDatabase) {
         await Database.shared.close();
