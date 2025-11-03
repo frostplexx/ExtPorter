@@ -1,0 +1,519 @@
+/**
+ * Shared clustering utilities
+ */
+
+import { Extension } from '../../migrator/types/extension';
+import { APIUsage, ExtensionData, ClusterResult, MigrationInfo } from './types';
+import { kmeans } from 'ml-kmeans';
+import chalk from 'chalk';
+
+/**
+ * Extract ALL Chrome API usage dynamically (no hardcoded patterns)
+ */
+export function extractAllAPIUsage(extension: Extension): {
+    baseApiUsage: APIUsage;
+    fullApiUsage: APIUsage;
+} {
+    const baseApiUsage: APIUsage = {};
+    const fullApiUsage: APIUsage = {};
+
+    const bump = (map: APIUsage, key: string, inc = 1) => {
+        map[key] = (map[key] || 0) + inc;
+    };
+
+    const espree = require('espree');
+
+    for (const file of extension.files) {
+        let content = '';
+        try {
+            content = file.getContent();
+        } catch (e) {
+            continue;
+        }
+
+        try {
+            // AST-based extraction
+            const ast = espree.parse(content, {
+                ecmaVersion: 'latest',
+                sourceType: 'script',
+                ecmaFeatures: { jsx: true },
+                range: false,
+                loc: false,
+            });
+
+            const stack: any[] = [ast];
+            while (stack.length) {
+                const node: any = stack.pop();
+                if (!node || typeof node !== 'object') continue;
+
+                for (const key of Object.keys(node)) {
+                    const val: any = (node as any)[key];
+                    if (val && typeof val === 'object') {
+                        if (Array.isArray(val)) {
+                            for (let i = val.length - 1; i >= 0; i--) stack.push(val[i]);
+                        } else {
+                            stack.push(val);
+                        }
+                    }
+                }
+
+                if (node.type === 'MemberExpression') {
+                    const parts: string[] = [];
+                    let cur: any = node;
+                    let valid = true;
+                    while (cur && cur.type === 'MemberExpression') {
+                        const prop = cur.property;
+                        const obj = cur.object;
+                        if (cur.computed) {
+                            valid = false;
+                            break;
+                        }
+                        if (prop && prop.type === 'Identifier') {
+                            parts.unshift(prop.name);
+                        } else {
+                            valid = false;
+                            break;
+                        }
+                        cur = obj;
+                    }
+                    if (valid && cur && cur.type === 'Identifier' && cur.name === 'chrome') {
+                        const full = 'chrome.' + parts.join('.');
+                        bump(fullApiUsage, full);
+                        const segs = full.split('.');
+                        if (segs.length >= 2) {
+                            const base = segs.slice(0, 2).join('.');
+                            bump(baseApiUsage, base);
+                        }
+                    }
+                }
+            }
+        } catch (_parseErr) {
+            // Fallback: regex scan
+            const matches = content.match(/chrome(?:\.[A-Za-z_$][\w$])+/g) || [];
+            for (const m of matches) {
+                bump(fullApiUsage, m);
+                const segs = m.split('.');
+                if (segs.length >= 2) {
+                    const base = segs.slice(0, 2).join('.');
+                    bump(baseApiUsage, base);
+                }
+            }
+        }
+    }
+
+    return { baseApiUsage, fullApiUsage };
+}
+
+/**
+ * Build vocabulary from all extensions
+ */
+export function buildVocabulary(allExtensions: ExtensionData[]): string[] {
+    const set = new Set<string>();
+    for (const ext of allExtensions) {
+        for (const api of Object.keys(ext.baseApiUsage)) {
+            set.add(api);
+        }
+    }
+    return Array.from(set).sort();
+}
+
+/**
+ * Convert API usage to feature vector
+ */
+export function apiUsageToVector(apiUsage: APIUsage, vocabulary: string[]): number[] {
+    const vector: number[] = [];
+    for (const api of vocabulary) {
+        const count = apiUsage[api] || 0;
+        vector.push(Math.log(count + 1));
+    }
+    return vector;
+}
+
+/**
+ * Normalize vector
+ */
+export function normalizeVector(vector: number[]): number[] {
+    const magnitude = Math.sqrt(vector.reduce((sum, val) => sum + val * val, 0));
+    if (magnitude === 0) return vector;
+    return vector.map((val) => val / magnitude);
+}
+
+/**
+ * Calculate Euclidean distance between two vectors
+ */
+export function euclideanDistance(a: number[], b: number[]): number {
+    let sum = 0;
+    for (let i = 0; i < a.length; i++) {
+        sum += (a[i] - b[i]) ** 2;
+    }
+    return Math.sqrt(sum);
+}
+
+/**
+ * Calculate silhouette score for clustering quality
+ */
+export function calculateSilhouetteScore(vectors: number[][], clusters: number[]): number {
+    const n = vectors.length;
+    if (n === 0) return 0;
+
+    const k = Math.max(...clusters) + 1;
+    const clusterGroups: number[][] = Array.from({ length: k }, () => []);
+
+    clusters.forEach((c, i) => clusterGroups[c].push(i));
+
+    let totalScore = 0;
+
+    for (let i = 0; i < n; i++) {
+        const myCluster = clusters[i];
+        const myGroup = clusterGroups[myCluster];
+
+        if (myGroup.length === 1) {
+            // Silhouette is 0 for singleton clusters
+            continue;
+        }
+
+        // Average distance to points in same cluster
+        let a = 0;
+        for (const j of myGroup) {
+            if (i !== j) {
+                a += euclideanDistance(vectors[i], vectors[j]);
+            }
+        }
+        a /= myGroup.length - 1;
+
+        // Minimum average distance to points in other clusters
+        let b = Infinity;
+        for (let c = 0; c < k; c++) {
+            if (c === myCluster) continue;
+            const otherGroup = clusterGroups[c];
+            if (otherGroup.length === 0) continue;
+
+            let avgDist = 0;
+            for (const j of otherGroup) {
+                avgDist += euclideanDistance(vectors[i], vectors[j]);
+            }
+            avgDist /= otherGroup.length;
+            b = Math.min(b, avgDist);
+        }
+
+        if (b === Infinity) b = 0;
+
+        const s = (b - a) / Math.max(a, b);
+        totalScore += s;
+    }
+
+    return totalScore / n;
+}
+
+/**
+ * Find optimal number of clusters using silhouette analysis
+ */
+export function findOptimalClusters(
+    extensions: ExtensionData[],
+    vocabulary: string[],
+    minClusters: number = 2,
+    maxClusters: number = 10
+): number {
+    if (extensions.length < minClusters) {
+        return Math.max(1, extensions.length);
+    }
+
+    // For very large datasets (>1000), use heuristic instead of exhaustive search
+    if (extensions.length > 1000) {
+        console.log(chalk.blue('Large dataset detected, using heuristic for cluster count...'));
+        // Rule of thumb: sqrt(n/2) clusters
+        const heuristicK = Math.floor(Math.sqrt(extensions.length / 2));
+        const clampedK = Math.max(minClusters, Math.min(maxClusters, heuristicK));
+        console.log(
+            chalk.green(
+                `✓ Using ${clampedK} clusters (heuristic for ${extensions.length} extensions)`
+            )
+        );
+        return clampedK;
+    }
+
+    const vectors = extensions.map((ext) => {
+        const vector = apiUsageToVector(ext.baseApiUsage, vocabulary);
+        return normalizeVector(vector);
+    });
+
+    const actualMax = Math.min(maxClusters, Math.floor(extensions.length / 2));
+
+    let bestK = minClusters;
+    let bestScore = -1;
+
+    console.log(chalk.blue('Finding optimal cluster count...'));
+
+    for (let k = minClusters; k <= actualMax; k++) {
+        const result = kmeans(vectors, k, {
+            initialization: 'kmeans++',
+            maxIterations: 100,
+        });
+
+        const score = calculateSilhouetteScore(vectors, result.clusters);
+        console.log(chalk.gray(`  k=${k}: silhouette=${score.toFixed(3)}`));
+
+        if (score > bestScore) {
+            bestScore = score;
+            bestK = k;
+        }
+    }
+
+    console.log(chalk.green(`✓ Optimal clusters: ${bestK} (silhouette=${bestScore.toFixed(3)})`));
+    return bestK;
+}
+
+/**
+ * Perform K-means clustering
+ */
+export function clusterExtensions(
+    extensions: ExtensionData[],
+    numClusters: number,
+    vocabulary: string[]
+): ClusterResult[] {
+    console.log(
+        chalk.blue(`Clustering ${extensions.length} extensions into ${numClusters} groups...`)
+    );
+
+    if (extensions.length === 0) {
+        return [];
+    }
+
+    const vectors = extensions.map((ext) => {
+        const vector = apiUsageToVector(ext.baseApiUsage, vocabulary);
+        return normalizeVector(vector);
+    });
+
+    const result = kmeans(vectors, numClusters, {
+        initialization: 'kmeans++',
+        maxIterations: 100,
+    });
+
+    const clusters: Map<number, ExtensionData[]> = new Map();
+    for (let i = 0; i < extensions.length; i++) {
+        const clusterId = result.clusters[i];
+        if (!clusters.has(clusterId)) {
+            clusters.set(clusterId, []);
+        }
+        clusters.get(clusterId)!.push(extensions[i]);
+    }
+
+    const clusterResults: ClusterResult[] = [];
+    for (const [clusterId, exts] of clusters.entries()) {
+        const apiCounts: Map<string, number> = new Map();
+        for (const ext of exts) {
+            for (const api of vocabulary) {
+                if ((ext.baseApiUsage[api] || 0) > 0) {
+                    apiCounts.set(api, (apiCounts.get(api) || 0) + 1);
+                }
+            }
+        }
+
+        const threshold = exts.length * 0.5;
+        const commonAPIs = Array.from(apiCounts.entries())
+            .filter(([_, count]) => count >= threshold)
+            .sort((a, b) => b[1] - a[1])
+            .map(([api, _]) => api);
+
+        const clusterName = generateClusterName(commonAPIs, exts);
+
+        clusterResults.push({
+            clusterId,
+            clusterName,
+            extensions: exts,
+            centroid: result.centroids[clusterId],
+            commonAPIs,
+        });
+    }
+
+    console.log(chalk.green(`✓ Clustering complete`));
+    return clusterResults;
+}
+
+/**
+ * Generate cluster name based on common APIs
+ */
+export function generateClusterName(commonAPIs: string[], _extensions: ExtensionData[]): string {
+    if (commonAPIs.length === 0) {
+        return 'General Extensions';
+    }
+
+    const categories: Array<{
+        apis: string[];
+        name: string;
+        priority: number;
+        qualifiers?: Array<{ apis: string[]; suffix: string }>;
+    }> = [
+        {
+            apis: ['chrome.webRequest', 'chrome.declarativeNetRequest'],
+            name: 'Network Request Interceptors',
+            priority: 10,
+            qualifiers: [
+                { apis: ['chrome.proxy'], suffix: ' with Proxy' },
+                { apis: ['chrome.storage'], suffix: ' with Filtering Rules' },
+            ],
+        },
+        {
+            apis: ['chrome.debugger', 'chrome.devtools'],
+            name: 'Developer & Debugging Tools',
+            priority: 9,
+        },
+        {
+            apis: ['chrome.downloads'],
+            name: 'Download Management',
+            priority: 8,
+        },
+        {
+            apis: ['chrome.proxy'],
+            name: 'Proxy & Network Control',
+            priority: 8,
+        },
+        {
+            apis: ['chrome.scripting', 'chrome.tabs.executeScript'],
+            name: 'Content Script Injectors',
+            priority: 7,
+        },
+        {
+            apis: ['chrome.contextMenus'],
+            name: 'Context Menu Extensions',
+            priority: 7,
+        },
+        {
+            apis: ['chrome.action', 'chrome.browserAction', 'chrome.pageAction'],
+            name: 'Browser Toolbar Actions',
+            priority: 6,
+        },
+        {
+            apis: ['chrome.bookmarks', 'chrome.history'],
+            name: 'Bookmarks & History',
+            priority: 6,
+        },
+        {
+            apis: ['chrome.tabs', 'chrome.windows'],
+            name: 'Tab & Window Management',
+            priority: 5,
+        },
+        {
+            apis: ['chrome.storage'],
+            name: 'Data Storage & Sync',
+            priority: 4,
+        },
+        {
+            apis: ['chrome.notifications', 'chrome.alarms'],
+            name: 'Notifications & Timers',
+            priority: 4,
+        },
+    ];
+
+    const matches = categories
+        .map((category) => {
+            const matchCount = category.apis.filter((api) => commonAPIs.includes(api)).length;
+            return {
+                category,
+                matchCount,
+                score: matchCount * category.priority,
+            };
+        })
+        .filter((m) => m.matchCount > 0)
+        .sort((a, b) => b.score - a.score);
+
+    if (matches.length > 0) {
+        let name = matches[0].category.name;
+
+        if (matches[0].category.qualifiers) {
+            for (const qualifier of matches[0].category.qualifiers) {
+                if (qualifier.apis.some((api) => commonAPIs.includes(api))) {
+                    name += qualifier.suffix;
+                    break;
+                }
+            }
+        }
+
+        return name;
+    }
+
+    const topAPIs = commonAPIs.slice(0, 2).map((api) => {
+        const shortName = api.replace('chrome.', '');
+        return shortName
+            .replace(/([A-Z])/g, ' $1')
+            .trim()
+            .split(' ')
+            .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+            .join(' ');
+    });
+
+    return topAPIs.join(' + ') + ' Extensions';
+}
+
+/**
+ * MV2 to MV3 API migration map
+ */
+export const MV2_TO_MV3_MAP: { [key: string]: MigrationInfo } = {
+    'chrome.browserAction': {
+        mv2API: 'chrome.browserAction',
+        mv3API: 'chrome.action',
+        status: 'deprecated',
+        autoMigratable: true,
+    },
+    'chrome.pageAction': {
+        mv2API: 'chrome.pageAction',
+        mv3API: 'chrome.action',
+        status: 'deprecated',
+        autoMigratable: true,
+    },
+    'chrome.webRequest': {
+        mv2API: 'chrome.webRequest',
+        mv3API: 'chrome.declarativeNetRequest',
+        status: 'limited',
+        autoMigratable: false,
+    },
+    'chrome.tabs.executeScript': {
+        mv2API: 'chrome.tabs.executeScript',
+        mv3API: 'chrome.scripting.executeScript',
+        status: 'deprecated',
+        autoMigratable: true,
+    },
+    'chrome.tabs.insertCSS': {
+        mv2API: 'chrome.tabs.insertCSS',
+        mv3API: 'chrome.scripting.insertCSS',
+        status: 'deprecated',
+        autoMigratable: true,
+    },
+    'chrome.extension.getBackgroundPage': {
+        mv2API: 'chrome.extension.getBackgroundPage',
+        mv3API: 'chrome.runtime.getBackgroundPage',
+        status: 'deprecated',
+        autoMigratable: true,
+    },
+    'chrome.extension.getURL': {
+        mv2API: 'chrome.extension.getURL',
+        mv3API: 'chrome.runtime.getURL',
+        status: 'deprecated',
+        autoMigratable: true,
+    },
+    'chrome.extension.sendMessage': {
+        mv2API: 'chrome.extension.sendMessage',
+        mv3API: 'chrome.runtime.sendMessage',
+        status: 'deprecated',
+        autoMigratable: true,
+    },
+};
+
+/**
+ * Check if an API needs migration
+ */
+export function needsMigration(api: string): boolean {
+    // Check if exact API match
+    if (MV2_TO_MV3_MAP[api]) {
+        return true;
+    }
+
+    // Check if API starts with deprecated domain
+    for (const deprecatedApi of Object.keys(MV2_TO_MV3_MAP)) {
+        if (api.startsWith(deprecatedApi + '.')) {
+            return true;
+        }
+    }
+
+    return false;
+}

@@ -169,3 +169,46 @@ export interface APICooccurrence {
     cooccurrenceCount: number;
     percentage: number;
 }
+
+// Additional types for clustering scripts
+export interface APIUsage {
+    [api: string]: number;
+}
+
+export interface ExtensionData {
+    id: string;
+    name: string;
+    source: 'filesystem' | 'database' | 'output';
+    manifestVersion: number;
+    baseApiUsage: APIUsage; // e.g., chrome.tabs
+    fullApiUsage: APIUsage; // e.g., chrome.tabs.query
+    totalApiCalls: number;
+}
+
+export interface ClusterResult {
+    clusterId: number;
+    clusterName: string;
+    extensions: ExtensionData[];
+    centroid: number[];
+    commonAPIs: string[];
+}
+
+export interface APIDomainStats {
+    domain: string;
+    apis: Array<{
+        api: string;
+        extensionCount: number;
+        totalCalls: number;
+        needsMigration: boolean;
+    }>;
+    totalExtensions: number;
+    totalCalls: number;
+    unmigrated: number;
+}
+
+export interface MigrationInfo {
+    mv2API: string;
+    mv3API: string;
+    status: 'deprecated' | 'limited' | 'removed';
+    autoMigratable: boolean;
+}
