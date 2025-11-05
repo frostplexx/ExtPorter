@@ -10,13 +10,25 @@ export enum Collections {
     TESTS_MV3 = 'tests_mv3',
 }
 
+type QueuedOperation = {
+    operation: () => Promise<any>;
+    resolve: (value: any) => void;
+    reject: (error: any) => void;
+};
+
 export class Database {
     client: MongoClient | null = null;
     database: Db | null = null;
     private isShuttingDown: boolean = false;
     public static shared = new Database();
+    private operationQueue: QueuedOperation[] = [];
+    private pendingOperations: number = 0;
+    private isProcessingQueue: boolean = false;
+    private readonly maxConcurrentOperations: number = 10;
 
-    private constructor() {}
+    private constructor() {
+        // Queue processor will be started after database initialization
+    }
 
     async init() {
         if (!process.env.MONGODB_URI) {
@@ -31,10 +43,96 @@ export class Database {
             }
             this.database = this.client.db(process.env.DB_NAME);
             logger.debug(null, 'Successfully connected to Mongo DB');
+            
+            // Start queue processor after database is initialized
+            this.startQueueProcessor();
         } catch (error) {
             logger.error(null, 'Failed to connect to MongoDB:', error);
             throw error;
         }
+    }
+
+    /**
+     * Starts the background queue processor
+     */
+    private startQueueProcessor() {
+        if (this.isProcessingQueue) return;
+        this.isProcessingQueue = true;
+        this.processQueue();
+    }
+
+    /**
+     * Processes queued operations with concurrency control
+     */
+    private async processQueue() {
+        while (this.isProcessingQueue) {
+            // Collect promises for operations we're starting
+            const activePromises: Promise<void>[] = [];
+            
+            // Process operations up to max concurrency
+            while (
+                this.operationQueue.length > 0 &&
+                this.pendingOperations < this.maxConcurrentOperations
+            ) {
+                const item = this.operationQueue.shift();
+                if (!item) continue;
+
+                this.pendingOperations++;
+                const promise = item.operation()
+                    .then((result) => {
+                        item.resolve(result);
+                    })
+                    .catch((error) => {
+                        item.reject(error);
+                    })
+                    .finally(() => {
+                        this.pendingOperations--;
+                    });
+                    
+                activePromises.push(promise);
+            }
+
+            // Wait for at least one operation to complete or a short timeout
+            if (activePromises.length > 0) {
+                await Promise.race([
+                    Promise.all(activePromises),
+                    new Promise((resolve) => setTimeout(resolve, 10))
+                ]);
+            } else {
+                // No operations to process, wait a bit before checking again
+                await new Promise((resolve) => setTimeout(resolve, 10));
+            }
+        }
+    }
+
+    /**
+     * Enqueues a database operation to be executed
+     */
+    private enqueueOperation<T>(operation: () => Promise<T>): Promise<T> {
+        return new Promise<T>((resolve, reject) => {
+            if (this.isShuttingDown) {
+                reject(new Error('Database is shutting down'));
+                return;
+            }
+            this.operationQueue.push({ operation, resolve, reject });
+        });
+    }
+
+    /**
+     * Waits for all pending operations to complete
+     */
+    private async waitForQueueCompletion(): Promise<void> {
+        logger.debug(
+            null,
+            `Waiting for queue completion: ${this.operationQueue.length} queued, ${this.pendingOperations} pending`
+        );
+
+        // Wait for queue to be empty and all pending operations to complete
+        while (this.operationQueue.length > 0 || this.pendingOperations > 0) {
+            await new Promise((resolve) => setTimeout(resolve, 50));
+        }
+
+        logger.debug(null, 'All database operations completed');
     }
 
     private async upsertOne(
@@ -42,22 +140,18 @@ export class Database {
         document: any,
         uniqueField: string = 'id'
     ) {
-        if (this.isShuttingDown) {
-            console.error(
-                `[SHUTDOWN VIOLATION] Attempted upsertOne to ${collectionName} after shutdown`
-            );
-            console.error(`[SHUTDOWN VIOLATION] Stack trace:`, new Error().stack);
-            return;
-        }
-        if (!this.database) throw new Error('Database not initialized');
-        const filter = { [uniqueField]: document[uniqueField] };
-        return await this.database
-            .collection(collectionName)
-            .replaceOne(filter, document, { upsert: true });
+        return this.enqueueOperation(async () => {
+            if (!this.database) throw new Error('Database not initialized');
+            const filter = { [uniqueField]: document[uniqueField] };
+            return await this.database
+                .collection(collectionName)
+                .replaceOne(filter, document, { upsert: true });
+        });
     }
 
     /**
      * Check and truncate document if it's too large for MongoDB
+     * Enhanced to better handle BSON size limits and prevent buffer overflow errors
      */
     private sanitizeDocumentSize(doc: any): any {
         const MAX_BSON_SIZE = 15 * 1024 * 1024; // 15MB to be safe (MongoDB limit is 16MB)
@@ -70,42 +164,78 @@ export class Database {
                 return doc;
             }
 
-            logger.warn(null, `Document too large (${byteSize} bytes), truncating...`);
+            logger.warn(
+                null,
+                `Document too large (${(byteSize / 1024 / 1024).toFixed(2)}MB), truncating...`
+            );
 
-            // If it's an Extension object, truncate file contents
+            // If it's an Extension object, aggressively truncate file contents
             if (doc.files && Array.isArray(doc.files)) {
                 const truncatedDoc = { ...doc };
-                truncatedDoc.files = doc.files.map((file: any, index: number) => {
-                    // Keep first 10 files, truncate the rest
-                    if (index < 10) {
-                        if (file.content && typeof file.content === 'string') {
-                            const maxContentSize = Math.floor(MAX_BSON_SIZE / 20); // Rough estimate
-                            if (file.content.length > maxContentSize) {
-                                return {
-                                    ...file,
-                                    content:
-                                        file.content.substring(0, maxContentSize) +
-                                        '... [TRUNCATED]',
-                                    _truncated: true,
-                                    _originalSize: file.content.length,
-                                };
+
+                // For extremely large documents (>50MB), remove all file content
+                if (byteSize > 50 * 1024 * 1024) {
+                    logger.warn(
+                        null,
+                        `Document extremely large (${(byteSize / 1024 / 1024).toFixed(2)}MB), removing all file content`
+                    );
+                    truncatedDoc.files = doc.files.map((file: any, index: number) => ({
+                        path: file.path || `file_${index}`,
+                        filetype: file.filetype,
+                        _contentRemoved: true,
+                        _reason: 'Document too large for MongoDB',
+                        _originalSize: file.content ? file.content.length : 0,
+                    }));
+                } else {
+                    // Keep first 5 files with limited content, summarize the rest
+                    truncatedDoc.files = doc.files.map((file: any, index: number) => {
+                        if (index < 5) {
+                            if (file.content && typeof file.content === 'string') {
+                                const maxContentSize = Math.floor(MAX_BSON_SIZE / 50); // Very conservative
+                                if (file.content.length > maxContentSize) {
+                                    return {
+                                        ...file,
+                                        content:
+                                            file.content.substring(0, maxContentSize) +
+                                            '... [TRUNCATED]',
+                                        _truncated: true,
+                                        _originalSize: file.content.length,
+                                    };
+                                }
                             }
+                            return file;
+                        } else {
+                            // Replace with summary for files beyond the first 5
+                            return {
+                                path: file.path || `file_${index}`,
+                                filetype: file.filetype,
+                                _truncated: true,
+                                _reason: 'File removed to reduce document size',
+                                _originalSize: file.content ? file.content.length : 0,
+                            };
                         }
-                        return file;
-                    } else {
-                        // Replace with summary for files beyond the first 10
-                        return {
-                            path: file.path || `file_${index}`,
-                            _truncated: true,
-                            _reason: 'File removed to reduce document size',
-                            _originalSize: file.content ? file.content.length : 0,
-                        };
-                    }
-                });
+                    });
+                }
 
                 truncatedDoc._documentTruncated = true;
                 truncatedDoc._originalFileCount = doc.files.length;
                 truncatedDoc._originalSize = byteSize;
+
+                // Verify truncated size
+                const newSize = Buffer.byteLength(JSON.stringify(truncatedDoc), 'utf8');
+                logger.debug(
+                    null,
+                    `Document truncated from ${(byteSize / 1024 / 1024).toFixed(2)}MB to ${(newSize / 1024 / 1024).toFixed(2)}MB`
+                );
+
+                if (newSize > MAX_BSON_SIZE) {
+                    // Still too large, remove all files
+                    logger.warn(
+                        null,
+                        'Document still too large after truncation, removing all files'
+                    );
+                    truncatedDoc.files = [];
+                }
 
                 return truncatedDoc;
             }
@@ -119,10 +249,13 @@ export class Database {
             };
         } catch (error) {
             logger.error(null, 'Error sanitizing document size:', error);
+            // Return a minimal safe document
             return {
                 _sanitizationError: true,
                 _error: String(error),
                 _timestamp: Date.now(),
+                id: doc.id || 'unknown',
+                name: doc.name || 'unknown',
             };
         }
     }
@@ -132,23 +265,21 @@ export class Database {
         documents: any[],
         uniqueField: string = 'id'
     ) {
-        // Silently discard during shutdown to avoid cascading errors
-        if (this.isShuttingDown) {
-            return [];
-        }
-        if (!this.database) throw new Error('Database not initialized');
-        if (documents.length === 0) return [];
+        if (documents.length === 0) return;
 
-        // Upsert documents one by one with size validation
+        // Upsert documents one by one with size validation, using the queue for each operation
         const results = [];
 
         for (let i = 0; i < documents.length; i++) {
             try {
                 const sanitizedDoc = this.sanitizeDocumentSize(documents[i]);
-                const filter = { [uniqueField]: sanitizedDoc[uniqueField] };
-                const result = await this.database
-                    .collection(collectionName)
-                    .replaceOne(filter, sanitizedDoc, { upsert: true });
+                const result = await this.enqueueOperation(async () => {
+                    if (!this.database) throw new Error('Database not initialized');
+                    const filter = { [uniqueField]: sanitizedDoc[uniqueField] };
+                    return await this.database
+                        .collection(collectionName)
+                        .replaceOne(filter, sanitizedDoc, { upsert: true });
+                });
                 results.push(result);
             } catch (error) {
                 // Don't log during shutdown to avoid cascading error loops
@@ -169,23 +300,33 @@ export class Database {
         return this.findOne(Collections.EXTENSIONS, filter);
     }
     private async findOne(collectionName: Collections, filter: any) {
-        if (!this.database) throw new Error('Database not initialized');
-        return await this.database.collection(collectionName).findOne(filter);
+        return this.enqueueOperation(async () => {
+            if (!this.database) throw new Error('Database not initialized');
+            return await this.database.collection(collectionName).findOne(filter);
+        });
     }
 
     private async find(collectionName: Collections, filter: any = {}) {
-        if (!this.database) throw new Error('Database not initialized');
-        return await this.database.collection(collectionName).find(filter).toArray();
+        return this.enqueueOperation(async () => {
+            if (!this.database) throw new Error('Database not initialized');
+            return await this.database.collection(collectionName).find(filter).toArray();
+        });
     }
 
     private async updateOne(collectionName: Collections, filter: any, update: any) {
-        if (!this.database) throw new Error('Database not initialized');
-        return await this.database.collection(collectionName).updateOne(filter, { $set: update });
+        return this.enqueueOperation(async () => {
+            if (!this.database) throw new Error('Database not initialized');
+            return await this.database
+                .collection(collectionName)
+                .updateOne(filter, { $set: update });
+        });
     }
 
     private async deleteOne(collectionName: Collections, filter: any) {
-        if (!this.database) throw new Error('Database not initialized');
-        return await this.database.collection(collectionName).deleteOne(filter);
+        return this.enqueueOperation(async () => {
+            if (!this.database) throw new Error('Database not initialized');
+            return await this.database.collection(collectionName).deleteOne(filter);
+        });
     }
 
     async close() {
@@ -196,12 +337,22 @@ export class Database {
             // Set shutdown flag to prevent new operations
             this.isShuttingDown = true;
 
-            // Give a moment for any queued operations to see the shutdown flag
-            await new Promise((resolve) => setTimeout(resolve, 100));
+            logger.debug(
+                null,
+                `Closing database: ${this.operationQueue.length} operations queued, ${this.pendingOperations} pending`
+            );
+
+            // Wait for all queued and pending operations to complete
+            await this.waitForQueueCompletion();
+
+            // Stop the queue processor
+            this.isProcessingQueue = false;
 
             await this.client.close(false);
             this.client = null;
             this.database = null;
+
+            logger.debug(null, 'Database connection closed');
         }
     }
 
@@ -233,33 +384,38 @@ export class Database {
      * @returns The update result or null if extension not found
      */
     async extensionAppendTag(extension: Extension, tag: string) {
-        if (!this.database) throw new Error('Database not initialized');
+        return this.enqueueOperation(async () => {
+            if (!this.database) throw new Error('Database not initialized');
 
-        try {
-            // Use $addToSet to add the tag only if it doesn't already exist
-            const result = await this.database
-                .collection(Collections.EXTENSIONS)
-                .updateOne({ id: extension.id }, { $addToSet: { tags: tag } });
+            try {
+                // Use $addToSet to add the tag only if it doesn't already exist
+                const result = await this.database
+                    .collection(Collections.EXTENSIONS)
+                    .updateOne({ id: extension.id }, { $addToSet: { tags: tag } });
 
-            if (result.matchedCount === 0) {
-                logger.error(
-                    extension,
-                    `Couldn't find extension with id ${extension.id} for tag insertion`
-                );
-                return null;
+                if (result.matchedCount === 0) {
+                    logger.error(
+                        extension,
+                        `Couldn't find extension with id ${extension.id} for tag insertion`
+                    );
+                    return null;
+                }
+
+                if (result.modifiedCount > 0) {
+                    logger.debug(extension, `Added tag ${tag} to extension ${extension.name}`);
+                } else {
+                    logger.debug(
+                        extension,
+                        `Tag ${tag} already exists on extension ${extension.name}`
+                    );
+                }
+
+                return result;
+            } catch (error) {
+                logger.error(extension, `Failed to append tag to extension:`, error);
+                throw error;
             }
-
-            if (result.modifiedCount > 0) {
-                logger.debug(extension, `Added tag ${tag} to extension ${extension.name}`);
-            } else {
-                logger.debug(extension, `Tag ${tag} already exists on extension ${extension.name}`);
-            }
-
-            return result;
-        } catch (error) {
-            logger.error(extension, `Failed to append tag to extension:`, error);
-            throw error;
-        }
+        });
     }
 
     /**
@@ -269,36 +425,38 @@ export class Database {
      * @returns The update result or null if extension not found
      */
     async extensionRemoveTag(extension: Extension, tag: string) {
-        if (!this.database) throw new Error('Database not initialized');
+        return this.enqueueOperation(async () => {
+            if (!this.database) throw new Error('Database not initialized');
 
-        try {
-            // Use $pull to remove the tag from the array
-            const result = await this.database
-                .collection(Collections.EXTENSIONS)
-                .updateOne({ id: extension.id }, { $pull: { tags: tag } } as any);
+            try {
+                // Use $pull to remove the tag from the array
+                const result = await this.database
+                    .collection(Collections.EXTENSIONS)
+                    .updateOne({ id: extension.id }, { $pull: { tags: tag } } as any);
 
-            if (result.matchedCount === 0) {
-                logger.error(
-                    extension,
-                    `Couldn't find extension with id ${extension.id} for tag removal`
-                );
-                return null;
+                if (result.matchedCount === 0) {
+                    logger.error(
+                        extension,
+                        `Couldn't find extension with id ${extension.id} for tag removal`
+                    );
+                    return null;
+                }
+
+                if (result.modifiedCount > 0) {
+                    logger.debug(extension, `Removed tag ${tag} from extension ${extension.name}`);
+                } else {
+                    logger.debug(
+                        extension,
+                        `Tag ${tag} was not present on extension ${extension.name}`
+                    );
+                }
+
+                return result;
+            } catch (error) {
+                logger.error(extension, `Failed to remove tag from extension:`, error);
+                throw error;
             }
-
-            if (result.modifiedCount > 0) {
-                logger.debug(extension, `Removed tag ${tag} from extension ${extension.name}`);
-            } else {
-                logger.debug(
-                    extension,
-                    `Tag ${tag} was not present on extension ${extension.name}`
-                );
-            }
-
-            return result;
-        } catch (error) {
-            logger.error(extension, `Failed to remove tag from extension:`, error);
-            throw error;
-        }
+        });
     }
 
     async insertFoundExtensions(extensions: Extension[]) {
@@ -310,13 +468,6 @@ export class Database {
     }
 
     async insertLog(log: { loglevel: LogLevel; message: string; meta: any; time: number }) {
-        if (this.isShuttingDown) {
-            console.error(
-                `[SHUTDOWN VIOLATION] Attempted insertLog after shutdown: "${log.message.substring(0, 100)}..."`
-            );
-            console.error(`[SHUTDOWN VIOLATION] Stack trace:`, new Error().stack);
-            return;
-        }
         return this.upsertOne(Collections.LOGS, log, 'time');
     }
 
@@ -328,13 +479,6 @@ export class Database {
             time: number;
         }[]
     ) {
-        if (this.isShuttingDown) {
-            console.error(
-                `[SHUTDOWN VIOLATION] Attempted insertManyLogs after shutdown (${logs.length} logs)`
-            );
-            console.error(`[SHUTDOWN VIOLATION] Stack trace:`, new Error().stack);
-            return;
-        }
         if (logs.length === 0) return;
         return this.upsertMany(Collections.LOGS, logs, 'time');
     }
