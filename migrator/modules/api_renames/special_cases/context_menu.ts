@@ -70,7 +70,6 @@ export class ContextMenuTransform implements SpecialTransform {
                 onclickProperty = prop.value;
             } else if (keyName === 'id') {
                 idProperty = prop.value;
-                // idPropertyNode = prop; // Removed unused assignment
                 remainingProperties.push(prop); // Keep id in the object
             } else {
                 remainingProperties.push(prop);
