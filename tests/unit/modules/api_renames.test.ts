@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
 import * as fs from 'fs-extra';
 import * as path from 'path';
-import { RenameAPIS } from '../../../migrator/modules/api_renames';
+import { RenameAPIS } from '../../../migrator/modules/api_renames/api_renames';
 import { Extension } from '../../../migrator/types/extension';
 import { LazyFile } from '../../../migrator/types/abstract_file';
 import { ExtFileType } from '../../../migrator/types/ext_file_types';
@@ -1376,6 +1376,385 @@ chrome.pageAction.setIcon({
                 // Since this will be blacklisted, we mainly want to verify no crashes occur
                 const result = await RenameAPIS.migrate(extension);
                 expect(result).not.toBeInstanceOf(MigrationError);
+
+                extension.files.forEach((file) => file.close());
+                if (!(result instanceof MigrationError)) {
+                    result.files.forEach((file) => file.close());
+                }
+            });
+        });
+
+        describe('context menu onclick transformation', () => {
+            it('should transform contextMenus.create onclick to onClicked listener', async () => {
+                const extension = createTestExtension('context-menu-onclick', [
+                    {
+                        name: 'background.js',
+                        content: `
+chrome.contextMenus.create({
+    title: 'Save Link',
+    contexts: ['link'],
+    onclick: function(info, tab) {
+        console.log('clicked', info.linkUrl);
+    }
+});
+                        `,
+                    },
+                ]);
+
+                const result = await RenameAPIS.migrate(extension);
+
+                expect(result).not.toBeInstanceOf(MigrationError);
+                if (!(result instanceof MigrationError)) {
+                    const backgroundFile = result.files.find((f) => f.path === 'background.js');
+                    expect(backgroundFile).toBeDefined();
+
+                    if (backgroundFile) {
+                        const content = backgroundFile.getContent();
+
+                        // Should remove onclick from create call
+                        expect(content).toContain('chrome.contextMenus.create');
+                        expect(content).not.toContain('onclick:');
+
+                        // Should add id to create call
+                        expect(content).toContain("id: 'context-menu-save-link'");
+
+                        // Should add onClicked listener
+                        expect(content).toContain('chrome.contextMenus.onClicked.addListener');
+                        expect(content).toContain("info.menuItemId === 'context-menu-save-link'");
+                    }
+                }
+
+                extension.files.forEach((file) => file.close());
+                if (!(result instanceof MigrationError)) {
+                    result.files.forEach((file) => file.close());
+                }
+            });
+
+            it('should preserve existing id when transforming onclick', async () => {
+                const extension = createTestExtension('context-menu-with-id', [
+                    {
+                        name: 'background.js',
+                        content: `
+chrome.contextMenus.create({
+    id: 'my-custom-id',
+    title: 'Copy Text',
+    contexts: ['selection'],
+    onclick: handleCopyText
+});
+
+function handleCopyText(info, tab) {
+    console.log('copy', info.selectionText);
+}
+                        `,
+                    },
+                ]);
+
+                const result = await RenameAPIS.migrate(extension);
+
+                expect(result).not.toBeInstanceOf(MigrationError);
+                if (!(result instanceof MigrationError)) {
+                    const backgroundFile = result.files.find((f) => f.path === 'background.js');
+                    expect(backgroundFile).toBeDefined();
+
+                    if (backgroundFile) {
+                        const content = backgroundFile.getContent();
+
+                        // Should preserve the existing id
+                        expect(content).toContain("id: 'my-custom-id'");
+
+                        // Should not add onclick
+                        expect(content).not.toContain('onclick:');
+
+                        // Should add onClicked listener with correct id check
+                        expect(content).toContain('chrome.contextMenus.onClicked.addListener');
+                        expect(content).toContain("info.menuItemId === 'my-custom-id'");
+                        expect(content).toContain('handleCopyText(info, tab)');
+                    }
+                }
+
+                extension.files.forEach((file) => file.close());
+                if (!(result instanceof MigrationError)) {
+                    result.files.forEach((file) => file.close());
+                }
+            });
+
+            it('should handle multiple context menus with onclick', async () => {
+                const extension = createTestExtension('multiple-context-menus', [
+                    {
+                        name: 'background.js',
+                        content: `
+chrome.contextMenus.create({
+    title: 'Menu 1',
+    onclick: function(info, tab) { console.log('menu1'); }
+});
+
+chrome.contextMenus.create({
+    title: 'Menu 2',
+    onclick: function(info, tab) { console.log('menu2'); }
+});
+                        `,
+                    },
+                ]);
+
+                const result = await RenameAPIS.migrate(extension);
+
+                expect(result).not.toBeInstanceOf(MigrationError);
+                if (!(result instanceof MigrationError)) {
+                    const backgroundFile = result.files.find((f) => f.path === 'background.js');
+                    expect(backgroundFile).toBeDefined();
+
+                    if (backgroundFile) {
+                        const content = backgroundFile.getContent();
+
+                        // Should add ids for both menus
+                        expect(content).toContain("id: 'context-menu-menu-1'");
+                        expect(content).toContain("id: 'context-menu-menu-2'");
+
+                        // Should add single onClicked listener
+                        expect(content).toContain('chrome.contextMenus.onClicked.addListener');
+
+                        // Should have if statements for both menus
+                        expect(content).toContain("info.menuItemId === 'context-menu-menu-1'");
+                        expect(content).toContain("info.menuItemId === 'context-menu-menu-2'");
+                    }
+                }
+
+                extension.files.forEach((file) => file.close());
+                if (!(result instanceof MigrationError)) {
+                    result.files.forEach((file) => file.close());
+                }
+            });
+
+            it('should not modify context menus without onclick', async () => {
+                const extension = createTestExtension('context-menu-no-onclick', [
+                    {
+                        name: 'background.js',
+                        content: `
+chrome.contextMenus.create({
+    id: 'simple-menu',
+    title: 'Simple Menu',
+    contexts: ['page']
+});
+
+chrome.contextMenus.onClicked.addListener(function(info, tab) {
+    if (info.menuItemId === 'simple-menu') {
+        console.log('clicked');
+    }
+});
+                        `,
+                    },
+                ]);
+
+                const result = await RenameAPIS.migrate(extension);
+
+                expect(result).not.toBeInstanceOf(MigrationError);
+                if (!(result instanceof MigrationError)) {
+                    const backgroundFile = result.files.find((f) => f.path === 'background.js');
+                    expect(backgroundFile).toBeDefined();
+
+                    if (backgroundFile) {
+                        const content = backgroundFile.getContent();
+
+                        // Should remain unchanged
+                        expect(content).toContain("id: 'simple-menu'");
+                        expect(content).toContain('chrome.contextMenus.onClicked.addListener');
+                    }
+                }
+
+                extension.files.forEach((file) => file.close());
+                if (!(result instanceof MigrationError)) {
+                    result.files.forEach((file) => file.close());
+                }
+            });
+        });
+
+        describe('window.open() transformation', () => {
+            it('should transform window.open() to chrome.tabs.create()', async () => {
+                const extension = createTestExtension('window-open-simple', [
+                    {
+                        name: 'background.js',
+                        content: `
+chrome.runtime.onInstalled.addListener(function(details) {
+    if (details.reason === 'install') {
+        window.open('https://example.com/welcome');
+    }
+});
+                        `,
+                    },
+                ]);
+
+                const result = await RenameAPIS.migrate(extension);
+
+                expect(result).not.toBeInstanceOf(MigrationError);
+                if (!(result instanceof MigrationError)) {
+                    const backgroundFile = result.files.find((f) => f.path === 'background.js');
+                    expect(backgroundFile).toBeDefined();
+
+                    if (backgroundFile) {
+                        const content = backgroundFile.getContent();
+
+                        // Should replace window.open with chrome.tabs.create
+                        expect(content).toContain('chrome.tabs.create');
+                        expect(content).not.toContain('window.open');
+
+                        // Should have url property in object
+                        expect(content).toContain("url: 'https://example.com/welcome'");
+                    }
+                }
+
+                extension.files.forEach((file) => file.close());
+                if (!(result instanceof MigrationError)) {
+                    result.files.forEach((file) => file.close());
+                }
+            });
+
+            it('should transform window.open() with variable URL', async () => {
+                const extension = createTestExtension('window-open-variable', [
+                    {
+                        name: 'background.js',
+                        content: `
+function openWelcomePage() {
+    const url = 'https://example.com/help';
+    window.open(url);
+}
+                        `,
+                    },
+                ]);
+
+                const result = await RenameAPIS.migrate(extension);
+
+                expect(result).not.toBeInstanceOf(MigrationError);
+                if (!(result instanceof MigrationError)) {
+                    const backgroundFile = result.files.find((f) => f.path === 'background.js');
+                    expect(backgroundFile).toBeDefined();
+
+                    if (backgroundFile) {
+                        const content = backgroundFile.getContent();
+
+                        expect(content).toContain('chrome.tabs.create');
+                        expect(content).toContain('url: url');
+                        expect(content).not.toContain('window.open');
+                    }
+                }
+
+                extension.files.forEach((file) => file.close());
+                if (!(result instanceof MigrationError)) {
+                    result.files.forEach((file) => file.close());
+                }
+            });
+
+            it('should transform window.open() with template literal', async () => {
+                const extension = createTestExtension('window-open-template', [
+                    {
+                        name: 'background.js',
+                        content: `
+chrome.browserAction.onClicked.addListener(function() {
+    const userId = '12345';
+    window.open(\`https://example.com/user/\${userId}\`);
+});
+                        `,
+                    },
+                ]);
+
+                const result = await RenameAPIS.migrate(extension);
+
+                expect(result).not.toBeInstanceOf(MigrationError);
+                if (!(result instanceof MigrationError)) {
+                    const backgroundFile = result.files.find((f) => f.path === 'background.js');
+                    expect(backgroundFile).toBeDefined();
+
+                    if (backgroundFile) {
+                        const content = backgroundFile.getContent();
+
+                        expect(content).toContain('chrome.tabs.create');
+                        expect(content).not.toContain('window.open');
+                        // Template literal should be preserved (with possible whitespace around expression)
+                        expect(content).toMatch(
+                            /url:\s*`https:\/\/example\.com\/user\/\$\{\s*userId\s*\}`/
+                        );
+                    }
+                }
+
+                extension.files.forEach((file) => file.close());
+                if (!(result instanceof MigrationError)) {
+                    result.files.forEach((file) => file.close());
+                }
+            });
+
+            it('should handle multiple window.open() calls', async () => {
+                const extension = createTestExtension('window-open-multiple', [
+                    {
+                        name: 'background.js',
+                        content: `
+function openHelp() {
+    window.open('https://example.com/help');
+}
+
+function openAbout() {
+    window.open('https://example.com/about');
+}
+                        `,
+                    },
+                ]);
+
+                const result = await RenameAPIS.migrate(extension);
+
+                expect(result).not.toBeInstanceOf(MigrationError);
+                if (!(result instanceof MigrationError)) {
+                    const backgroundFile = result.files.find((f) => f.path === 'background.js');
+                    expect(backgroundFile).toBeDefined();
+
+                    if (backgroundFile) {
+                        const content = backgroundFile.getContent();
+
+                        // Should transform both calls
+                        const tabsCreateCount = (content.match(/chrome\.tabs\.create/g) || [])
+                            .length;
+                        expect(tabsCreateCount).toBe(2);
+                        expect(content).not.toContain('window.open');
+                    }
+                }
+
+                extension.files.forEach((file) => file.close());
+                if (!(result instanceof MigrationError)) {
+                    result.files.forEach((file) => file.close());
+                }
+            });
+
+            it('should handle window.open() with additional parameters', async () => {
+                const extension = createTestExtension('window-open-params', [
+                    {
+                        name: 'background.js',
+                        content: `
+function openInNewWindow() {
+    window.open('https://example.com/dashboard', '_blank', 'width=800,height=600');
+}
+                        `,
+                    },
+                ]);
+
+                const result = await RenameAPIS.migrate(extension);
+
+                expect(result).not.toBeInstanceOf(MigrationError);
+                if (!(result instanceof MigrationError)) {
+                    const backgroundFile = result.files.find((f) => f.path === 'background.js');
+                    expect(backgroundFile).toBeDefined();
+
+                    if (backgroundFile) {
+                        const content = backgroundFile.getContent();
+
+                        // Should transform to chrome.tabs.create with only url
+                        // (target and features parameters are removed, only URL is kept)
+                        expect(content).toContain('chrome.tabs.create');
+                        expect(content).toContain("url: 'https://example.com/dashboard'");
+
+                        // The active code should not have window.open call
+                        // (may still appear in comments from code generation)
+                        const lines = content.split('\n').filter((l) => !l.trim().startsWith('//'));
+                        const activeCode = lines.join('\n');
+                        expect(activeCode).toMatch(/chrome\.tabs\.create\(\s*\{\s*url:/);
+                    }
+                }
 
                 extension.files.forEach((file) => file.close());
                 if (!(result instanceof MigrationError)) {
