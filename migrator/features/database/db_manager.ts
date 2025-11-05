@@ -266,7 +266,14 @@ export class Database {
                 });
                 results.push(result);
             } catch (error) {
-                logger.error(null, `Failed to upsert document ${i} into ${collectionName}:`, error);
+                // Don't log during shutdown to avoid cascading error loops
+                if (!this.isShuttingDown) {
+                    // Use console.error to avoid circular dependency with logger
+                    console.error(
+                        `[DB] Failed to upsert document ${i} into ${collectionName}:`,
+                        error
+                    );
+                }
             }
         }
 
