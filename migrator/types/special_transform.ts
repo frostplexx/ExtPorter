@@ -23,6 +23,6 @@ export abstract class SpecialTransform {
      * @static
      */
     public static try_transform(node: ESTree.Node): boolean {
-        throw new Error('Method try_transform must be implemented by subclass');
+        throw new Error(`Method try_transform must be implemented by subclass ${node}`);
     }
 }
