@@ -135,6 +135,7 @@ export class Database {
 
     /**
      * Check and truncate document if it's too large for MongoDB
+     * Enhanced to better handle BSON size limits and prevent buffer overflow errors
      */
     private sanitizeDocumentSize(doc: any): any {
         const MAX_BSON_SIZE = 15 * 1024 * 1024; // 15MB to be safe (MongoDB limit is 16MB)
@@ -147,42 +148,78 @@ export class Database {
                 return doc;
             }
 
-            logger.warn(null, `Document too large (${byteSize} bytes), truncating...`);
+            logger.warn(
+                null,
+                `Document too large (${(byteSize / 1024 / 1024).toFixed(2)}MB), truncating...`
+            );
 
-            // If it's an Extension object, truncate file contents
+            // If it's an Extension object, aggressively truncate file contents
             if (doc.files && Array.isArray(doc.files)) {
                 const truncatedDoc = { ...doc };
-                truncatedDoc.files = doc.files.map((file: any, index: number) => {
-                    // Keep first 10 files, truncate the rest
-                    if (index < 10) {
-                        if (file.content && typeof file.content === 'string') {
-                            const maxContentSize = Math.floor(MAX_BSON_SIZE / 20); // Rough estimate
-                            if (file.content.length > maxContentSize) {
-                                return {
-                                    ...file,
-                                    content:
-                                        file.content.substring(0, maxContentSize) +
-                                        '... [TRUNCATED]',
-                                    _truncated: true,
-                                    _originalSize: file.content.length,
-                                };
+
+                // For extremely large documents (>50MB), remove all file content
+                if (byteSize > 50 * 1024 * 1024) {
+                    logger.warn(
+                        null,
+                        `Document extremely large (${(byteSize / 1024 / 1024).toFixed(2)}MB), removing all file content`
+                    );
+                    truncatedDoc.files = doc.files.map((file: any, index: number) => ({
+                        path: file.path || `file_${index}`,
+                        filetype: file.filetype,
+                        _contentRemoved: true,
+                        _reason: 'Document too large for MongoDB',
+                        _originalSize: file.content ? file.content.length : 0,
+                    }));
+                } else {
+                    // Keep first 5 files with limited content, summarize the rest
+                    truncatedDoc.files = doc.files.map((file: any, index: number) => {
+                        if (index < 5) {
+                            if (file.content && typeof file.content === 'string') {
+                                const maxContentSize = Math.floor(MAX_BSON_SIZE / 50); // Very conservative
+                                if (file.content.length > maxContentSize) {
+                                    return {
+                                        ...file,
+                                        content:
+                                            file.content.substring(0, maxContentSize) +
+                                            '... [TRUNCATED]',
+                                        _truncated: true,
+                                        _originalSize: file.content.length,
+                                    };
+                                }
                             }
+                            return file;
+                        } else {
+                            // Replace with summary for files beyond the first 5
+                            return {
+                                path: file.path || `file_${index}`,
+                                filetype: file.filetype,
+                                _truncated: true,
+                                _reason: 'File removed to reduce document size',
+                                _originalSize: file.content ? file.content.length : 0,
+                            };
                         }
-                        return file;
-                    } else {
-                        // Replace with summary for files beyond the first 10
-                        return {
-                            path: file.path || `file_${index}`,
-                            _truncated: true,
-                            _reason: 'File removed to reduce document size',
-                            _originalSize: file.content ? file.content.length : 0,
-                        };
-                    }
-                });
+                    });
+                }
 
                 truncatedDoc._documentTruncated = true;
                 truncatedDoc._originalFileCount = doc.files.length;
                 truncatedDoc._originalSize = byteSize;
+
+                // Verify truncated size
+                const newSize = Buffer.byteLength(JSON.stringify(truncatedDoc), 'utf8');
+                logger.debug(
+                    null,
+                    `Document truncated from ${(byteSize / 1024 / 1024).toFixed(2)}MB to ${(newSize / 1024 / 1024).toFixed(2)}MB`
+                );
+
+                if (newSize > MAX_BSON_SIZE) {
+                    // Still too large, remove all files
+                    logger.warn(
+                        null,
+                        'Document still too large after truncation, removing all files'
+                    );
+                    truncatedDoc.files = [];
+                }
 
                 return truncatedDoc;
             }
@@ -196,10 +233,13 @@ export class Database {
             };
         } catch (error) {
             logger.error(null, 'Error sanitizing document size:', error);
+            // Return a minimal safe document
             return {
                 _sanitizationError: true,
                 _error: String(error),
                 _timestamp: Date.now(),
+                id: doc.id || 'unknown',
+                name: doc.name || 'unknown',
             };
         }
     }
