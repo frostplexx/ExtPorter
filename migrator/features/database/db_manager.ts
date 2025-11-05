@@ -132,15 +132,12 @@ export class Database {
         documents: any[],
         uniqueField: string = 'id'
     ) {
+        // Silently discard during shutdown to avoid cascading errors
         if (this.isShuttingDown) {
-            console.error(
-                `[SHUTDOWN VIOLATION] Attempted upsertMany to ${collectionName} (${documents.length} docs) after shutdown`
-            );
-            console.error(`[SHUTDOWN VIOLATION] Stack trace:`, new Error().stack);
-            return;
+            return [];
         }
         if (!this.database) throw new Error('Database not initialized');
-        if (documents.length === 0) return;
+        if (documents.length === 0) return [];
 
         // Upsert documents one by one with size validation
         const results = [];
@@ -154,7 +151,14 @@ export class Database {
                     .replaceOne(filter, sanitizedDoc, { upsert: true });
                 results.push(result);
             } catch (error) {
-                logger.error(null, `Failed to upsert document ${i} into ${collectionName}:`, error);
+                // Don't log during shutdown to avoid cascading error loops
+                if (!this.isShuttingDown) {
+                    // Use console.error to avoid circular dependency with logger
+                    console.error(
+                        `[DB] Failed to upsert document ${i} into ${collectionName}:`,
+                        error
+                    );
+                }
             }
         }
 
