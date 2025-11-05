@@ -27,7 +27,7 @@ export class Database {
     private readonly maxConcurrentOperations: number = 10;
 
     private constructor() {
-        this.startQueueProcessor();
+        // Queue processor will be started after database initialization
     }
 
     async init() {
@@ -43,6 +43,9 @@ export class Database {
             }
             this.database = this.client.db(process.env.DB_NAME);
             logger.debug(null, 'Successfully connected to Mongo DB');
+            
+            // Start queue processor after database is initialized
+            this.startQueueProcessor();
         } catch (error) {
             logger.error(null, 'Failed to connect to MongoDB:', error);
             throw error;
@@ -63,6 +66,9 @@ export class Database {
      */
     private async processQueue() {
         while (this.isProcessingQueue) {
+            // Collect promises for operations we're starting
+            const activePromises: Promise<void>[] = [];
+            
             // Process operations up to max concurrency
             while (
                 this.operationQueue.length > 0 &&
@@ -72,7 +78,7 @@ export class Database {
                 if (!item) continue;
 
                 this.pendingOperations++;
-                item.operation()
+                const promise = item.operation()
                     .then((result) => {
                         item.resolve(result);
                     })
@@ -82,10 +88,20 @@ export class Database {
                     .finally(() => {
                         this.pendingOperations--;
                     });
+                    
+                activePromises.push(promise);
             }
 
-            // Wait a bit before checking again
-            await new Promise((resolve) => setTimeout(resolve, 10));
+            // Wait for at least one operation to complete or a short timeout
+            if (activePromises.length > 0) {
+                await Promise.race([
+                    Promise.all(activePromises),
+                    new Promise((resolve) => setTimeout(resolve, 10))
+                ]);
+            } else {
+                // No operations to process, wait a bit before checking again
+                await new Promise((resolve) => setTimeout(resolve, 10));
+            }
         }
     }
 
@@ -95,7 +111,7 @@ export class Database {
     private enqueueOperation<T>(operation: () => Promise<T>): Promise<T> {
         return new Promise<T>((resolve, reject) => {
             if (this.isShuttingDown) {
-                reject(new Error('Database is shutting down, operation rejected'));
+                reject(new Error('Database is shutting down'));
                 return;
             }
             this.operationQueue.push({ operation, resolve, reject });
