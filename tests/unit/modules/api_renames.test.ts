@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
 import * as fs from 'fs-extra';
 import * as path from 'path';
-import { RenameAPIS } from '../../../migrator/modules/api_renames';
+import { RenameAPIS } from '../../../migrator/modules/api_renames/api_renames';
 import { Extension } from '../../../migrator/types/extension';
 import { LazyFile } from '../../../migrator/types/abstract_file';
 import { ExtFileType } from '../../../migrator/types/ext_file_types';
@@ -1410,14 +1410,14 @@ chrome.contextMenus.create({
 
                     if (backgroundFile) {
                         const content = backgroundFile.getContent();
-                        
+
                         // Should remove onclick from create call
                         expect(content).toContain('chrome.contextMenus.create');
                         expect(content).not.toContain('onclick:');
-                        
+
                         // Should add id to create call
                         expect(content).toContain("id: 'context-menu-save-link'");
-                        
+
                         // Should add onClicked listener
                         expect(content).toContain('chrome.contextMenus.onClicked.addListener');
                         expect(content).toContain("info.menuItemId === 'context-menu-save-link'");
@@ -1458,13 +1458,13 @@ function handleCopyText(info, tab) {
 
                     if (backgroundFile) {
                         const content = backgroundFile.getContent();
-                        
+
                         // Should preserve the existing id
                         expect(content).toContain("id: 'my-custom-id'");
-                        
+
                         // Should not add onclick
                         expect(content).not.toContain('onclick:');
-                        
+
                         // Should add onClicked listener with correct id check
                         expect(content).toContain('chrome.contextMenus.onClicked.addListener');
                         expect(content).toContain("info.menuItemId === 'my-custom-id'");
@@ -1505,14 +1505,14 @@ chrome.contextMenus.create({
 
                     if (backgroundFile) {
                         const content = backgroundFile.getContent();
-                        
+
                         // Should add ids for both menus
                         expect(content).toContain("id: 'context-menu-menu-1'");
                         expect(content).toContain("id: 'context-menu-menu-2'");
-                        
+
                         // Should add single onClicked listener
                         expect(content).toContain('chrome.contextMenus.onClicked.addListener');
-                        
+
                         // Should have if statements for both menus
                         expect(content).toContain("info.menuItemId === 'context-menu-menu-1'");
                         expect(content).toContain("info.menuItemId === 'context-menu-menu-2'");
@@ -1554,7 +1554,7 @@ chrome.contextMenus.onClicked.addListener(function(info, tab) {
 
                     if (backgroundFile) {
                         const content = backgroundFile.getContent();
-                        
+
                         // Should remain unchanged
                         expect(content).toContain("id: 'simple-menu'");
                         expect(content).toContain('chrome.contextMenus.onClicked.addListener');
@@ -1592,11 +1592,11 @@ chrome.runtime.onInstalled.addListener(function(details) {
 
                     if (backgroundFile) {
                         const content = backgroundFile.getContent();
-                        
+
                         // Should replace window.open with chrome.tabs.create
                         expect(content).toContain('chrome.tabs.create');
                         expect(content).not.toContain('window.open');
-                        
+
                         // Should have url property in object
                         expect(content).toContain("url: 'https://example.com/welcome'");
                     }
@@ -1630,7 +1630,7 @@ function openWelcomePage() {
 
                     if (backgroundFile) {
                         const content = backgroundFile.getContent();
-                        
+
                         expect(content).toContain('chrome.tabs.create');
                         expect(content).toContain('url: url');
                         expect(content).not.toContain('window.open');
@@ -1665,11 +1665,13 @@ chrome.browserAction.onClicked.addListener(function() {
 
                     if (backgroundFile) {
                         const content = backgroundFile.getContent();
-                        
+
                         expect(content).toContain('chrome.tabs.create');
                         expect(content).not.toContain('window.open');
                         // Template literal should be preserved (with possible whitespace around expression)
-                        expect(content).toMatch(/url:\s*`https:\/\/example\.com\/user\/\$\{\s*userId\s*\}`/);
+                        expect(content).toMatch(
+                            /url:\s*`https:\/\/example\.com\/user\/\$\{\s*userId\s*\}`/
+                        );
                     }
                 }
 
@@ -1704,9 +1706,10 @@ function openAbout() {
 
                     if (backgroundFile) {
                         const content = backgroundFile.getContent();
-                        
+
                         // Should transform both calls
-                        const tabsCreateCount = (content.match(/chrome\.tabs\.create/g) || []).length;
+                        const tabsCreateCount = (content.match(/chrome\.tabs\.create/g) || [])
+                            .length;
                         expect(tabsCreateCount).toBe(2);
                         expect(content).not.toContain('window.open');
                     }
@@ -1739,15 +1742,15 @@ function openInNewWindow() {
 
                     if (backgroundFile) {
                         const content = backgroundFile.getContent();
-                        
+
                         // Should transform to chrome.tabs.create with only url
                         // (target and features parameters are removed, only URL is kept)
                         expect(content).toContain('chrome.tabs.create');
                         expect(content).toContain("url: 'https://example.com/dashboard'");
-                        
+
                         // The active code should not have window.open call
                         // (may still appear in comments from code generation)
-                        const lines = content.split('\n').filter(l => !l.trim().startsWith('//'));
+                        const lines = content.split('\n').filter((l) => !l.trim().startsWith('//'));
                         const activeCode = lines.join('\n');
                         expect(activeCode).toMatch(/chrome\.tabs\.create\(\s*\{\s*url:/);
                     }
