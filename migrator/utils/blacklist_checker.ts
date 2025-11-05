@@ -175,7 +175,7 @@ export class BlacklistChecker {
      * @param content File content to analyze
      * @returns True if webpack signatures are detected
      */
-    private isWebpackBundle(content: string): boolean {
+    public isWebpackBundle(content: string): boolean {
         // Performance optimization: only check first 10KB for signatures
         const contentToCheck = content.substring(0, BlacklistChecker.MAX_FILE_SIZE);
 
