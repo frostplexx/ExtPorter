@@ -10,13 +10,25 @@ export enum Collections {
     TESTS_MV3 = 'tests_mv3',
 }
 
+type QueuedOperation = {
+    operation: () => Promise<any>;
+    resolve: (value: any) => void;
+    reject: (error: any) => void;
+};
+
 export class Database {
     client: MongoClient | null = null;
     database: Db | null = null;
     private isShuttingDown: boolean = false;
     public static shared = new Database();
+    private operationQueue: QueuedOperation[] = [];
+    private pendingOperations: number = 0;
+    private isProcessingQueue: boolean = false;
+    private readonly maxConcurrentOperations: number = 10;
 
-    private constructor() {}
+    private constructor() {
+        this.startQueueProcessor();
+    }
 
     async init() {
         if (!process.env.MONGODB_URI) {
@@ -37,23 +49,88 @@ export class Database {
         }
     }
 
+    /**
+     * Starts the background queue processor
+     */
+    private startQueueProcessor() {
+        if (this.isProcessingQueue) return;
+        this.isProcessingQueue = true;
+        this.processQueue();
+    }
+
+    /**
+     * Processes queued operations with concurrency control
+     */
+    private async processQueue() {
+        while (this.isProcessingQueue) {
+            // Process operations up to max concurrency
+            while (
+                this.operationQueue.length > 0 &&
+                this.pendingOperations < this.maxConcurrentOperations
+            ) {
+                const item = this.operationQueue.shift();
+                if (!item) continue;
+
+                this.pendingOperations++;
+                item.operation()
+                    .then((result) => {
+                        item.resolve(result);
+                    })
+                    .catch((error) => {
+                        item.reject(error);
+                    })
+                    .finally(() => {
+                        this.pendingOperations--;
+                    });
+            }
+
+            // Wait a bit before checking again
+            await new Promise((resolve) => setTimeout(resolve, 10));
+        }
+    }
+
+    /**
+     * Enqueues a database operation to be executed
+     */
+    private enqueueOperation<T>(operation: () => Promise<T>): Promise<T> {
+        return new Promise<T>((resolve, reject) => {
+            if (this.isShuttingDown) {
+                reject(new Error('Database is shutting down, operation rejected'));
+                return;
+            }
+            this.operationQueue.push({ operation, resolve, reject });
+        });
+    }
+
+    /**
+     * Waits for all pending operations to complete
+     */
+    private async waitForQueueCompletion(): Promise<void> {
+        logger.debug(
+            null,
+            `Waiting for queue completion: ${this.operationQueue.length} queued, ${this.pendingOperations} pending`
+        );
+
+        // Wait for queue to be empty and all pending operations to complete
+        while (this.operationQueue.length > 0 || this.pendingOperations > 0) {
+            await new Promise((resolve) => setTimeout(resolve, 50));
+        }
+
+        logger.debug(null, 'All database operations completed');
+    }
+
     private async upsertOne(
         collectionName: Collections,
         document: any,
         uniqueField: string = 'id'
     ) {
-        if (this.isShuttingDown) {
-            console.error(
-                `[SHUTDOWN VIOLATION] Attempted upsertOne to ${collectionName} after shutdown`
-            );
-            console.error(`[SHUTDOWN VIOLATION] Stack trace:`, new Error().stack);
-            return;
-        }
-        if (!this.database) throw new Error('Database not initialized');
-        const filter = { [uniqueField]: document[uniqueField] };
-        return await this.database
-            .collection(collectionName)
-            .replaceOne(filter, document, { upsert: true });
+        return this.enqueueOperation(async () => {
+            if (!this.database) throw new Error('Database not initialized');
+            const filter = { [uniqueField]: document[uniqueField] };
+            return await this.database
+                .collection(collectionName)
+                .replaceOne(filter, document, { upsert: true });
+        });
     }
 
     /**
@@ -132,26 +209,21 @@ export class Database {
         documents: any[],
         uniqueField: string = 'id'
     ) {
-        if (this.isShuttingDown) {
-            console.error(
-                `[SHUTDOWN VIOLATION] Attempted upsertMany to ${collectionName} (${documents.length} docs) after shutdown`
-            );
-            console.error(`[SHUTDOWN VIOLATION] Stack trace:`, new Error().stack);
-            return;
-        }
-        if (!this.database) throw new Error('Database not initialized');
         if (documents.length === 0) return;
 
-        // Upsert documents one by one with size validation
+        // Upsert documents one by one with size validation, using the queue for each operation
         const results = [];
 
         for (let i = 0; i < documents.length; i++) {
             try {
                 const sanitizedDoc = this.sanitizeDocumentSize(documents[i]);
-                const filter = { [uniqueField]: sanitizedDoc[uniqueField] };
-                const result = await this.database
-                    .collection(collectionName)
-                    .replaceOne(filter, sanitizedDoc, { upsert: true });
+                const result = await this.enqueueOperation(async () => {
+                    if (!this.database) throw new Error('Database not initialized');
+                    const filter = { [uniqueField]: sanitizedDoc[uniqueField] };
+                    return await this.database
+                        .collection(collectionName)
+                        .replaceOne(filter, sanitizedDoc, { upsert: true });
+                });
                 results.push(result);
             } catch (error) {
                 logger.error(null, `Failed to upsert document ${i} into ${collectionName}:`, error);
@@ -165,23 +237,33 @@ export class Database {
         return this.findOne(Collections.EXTENSIONS, filter);
     }
     private async findOne(collectionName: Collections, filter: any) {
-        if (!this.database) throw new Error('Database not initialized');
-        return await this.database.collection(collectionName).findOne(filter);
+        return this.enqueueOperation(async () => {
+            if (!this.database) throw new Error('Database not initialized');
+            return await this.database.collection(collectionName).findOne(filter);
+        });
     }
 
     private async find(collectionName: Collections, filter: any = {}) {
-        if (!this.database) throw new Error('Database not initialized');
-        return await this.database.collection(collectionName).find(filter).toArray();
+        return this.enqueueOperation(async () => {
+            if (!this.database) throw new Error('Database not initialized');
+            return await this.database.collection(collectionName).find(filter).toArray();
+        });
     }
 
     private async updateOne(collectionName: Collections, filter: any, update: any) {
-        if (!this.database) throw new Error('Database not initialized');
-        return await this.database.collection(collectionName).updateOne(filter, { $set: update });
+        return this.enqueueOperation(async () => {
+            if (!this.database) throw new Error('Database not initialized');
+            return await this.database
+                .collection(collectionName)
+                .updateOne(filter, { $set: update });
+        });
     }
 
     private async deleteOne(collectionName: Collections, filter: any) {
-        if (!this.database) throw new Error('Database not initialized');
-        return await this.database.collection(collectionName).deleteOne(filter);
+        return this.enqueueOperation(async () => {
+            if (!this.database) throw new Error('Database not initialized');
+            return await this.database.collection(collectionName).deleteOne(filter);
+        });
     }
 
     async close() {
@@ -192,12 +274,22 @@ export class Database {
             // Set shutdown flag to prevent new operations
             this.isShuttingDown = true;
 
-            // Give a moment for any queued operations to see the shutdown flag
-            await new Promise((resolve) => setTimeout(resolve, 100));
+            logger.debug(
+                null,
+                `Closing database: ${this.operationQueue.length} operations queued, ${this.pendingOperations} pending`
+            );
+
+            // Wait for all queued and pending operations to complete
+            await this.waitForQueueCompletion();
+
+            // Stop the queue processor
+            this.isProcessingQueue = false;
 
             await this.client.close(false);
             this.client = null;
             this.database = null;
+
+            logger.debug(null, 'Database connection closed');
         }
     }
 
@@ -229,33 +321,38 @@ export class Database {
      * @returns The update result or null if extension not found
      */
     async extensionAppendTag(extension: Extension, tag: string) {
-        if (!this.database) throw new Error('Database not initialized');
+        return this.enqueueOperation(async () => {
+            if (!this.database) throw new Error('Database not initialized');
 
-        try {
-            // Use $addToSet to add the tag only if it doesn't already exist
-            const result = await this.database
-                .collection(Collections.EXTENSIONS)
-                .updateOne({ id: extension.id }, { $addToSet: { tags: tag } });
+            try {
+                // Use $addToSet to add the tag only if it doesn't already exist
+                const result = await this.database
+                    .collection(Collections.EXTENSIONS)
+                    .updateOne({ id: extension.id }, { $addToSet: { tags: tag } });
 
-            if (result.matchedCount === 0) {
-                logger.error(
-                    extension,
-                    `Couldn't find extension with id ${extension.id} for tag insertion`
-                );
-                return null;
+                if (result.matchedCount === 0) {
+                    logger.error(
+                        extension,
+                        `Couldn't find extension with id ${extension.id} for tag insertion`
+                    );
+                    return null;
+                }
+
+                if (result.modifiedCount > 0) {
+                    logger.debug(extension, `Added tag ${tag} to extension ${extension.name}`);
+                } else {
+                    logger.debug(
+                        extension,
+                        `Tag ${tag} already exists on extension ${extension.name}`
+                    );
+                }
+
+                return result;
+            } catch (error) {
+                logger.error(extension, `Failed to append tag to extension:`, error);
+                throw error;
             }
-
-            if (result.modifiedCount > 0) {
-                logger.debug(extension, `Added tag ${tag} to extension ${extension.name}`);
-            } else {
-                logger.debug(extension, `Tag ${tag} already exists on extension ${extension.name}`);
-            }
-
-            return result;
-        } catch (error) {
-            logger.error(extension, `Failed to append tag to extension:`, error);
-            throw error;
-        }
+        });
     }
 
     /**
@@ -265,36 +362,38 @@ export class Database {
      * @returns The update result or null if extension not found
      */
     async extensionRemoveTag(extension: Extension, tag: string) {
-        if (!this.database) throw new Error('Database not initialized');
+        return this.enqueueOperation(async () => {
+            if (!this.database) throw new Error('Database not initialized');
 
-        try {
-            // Use $pull to remove the tag from the array
-            const result = await this.database
-                .collection(Collections.EXTENSIONS)
-                .updateOne({ id: extension.id }, { $pull: { tags: tag } } as any);
+            try {
+                // Use $pull to remove the tag from the array
+                const result = await this.database
+                    .collection(Collections.EXTENSIONS)
+                    .updateOne({ id: extension.id }, { $pull: { tags: tag } } as any);
 
-            if (result.matchedCount === 0) {
-                logger.error(
-                    extension,
-                    `Couldn't find extension with id ${extension.id} for tag removal`
-                );
-                return null;
+                if (result.matchedCount === 0) {
+                    logger.error(
+                        extension,
+                        `Couldn't find extension with id ${extension.id} for tag removal`
+                    );
+                    return null;
+                }
+
+                if (result.modifiedCount > 0) {
+                    logger.debug(extension, `Removed tag ${tag} from extension ${extension.name}`);
+                } else {
+                    logger.debug(
+                        extension,
+                        `Tag ${tag} was not present on extension ${extension.name}`
+                    );
+                }
+
+                return result;
+            } catch (error) {
+                logger.error(extension, `Failed to remove tag from extension:`, error);
+                throw error;
             }
-
-            if (result.modifiedCount > 0) {
-                logger.debug(extension, `Removed tag ${tag} from extension ${extension.name}`);
-            } else {
-                logger.debug(
-                    extension,
-                    `Tag ${tag} was not present on extension ${extension.name}`
-                );
-            }
-
-            return result;
-        } catch (error) {
-            logger.error(extension, `Failed to remove tag from extension:`, error);
-            throw error;
-        }
+        });
     }
 
     async insertFoundExtensions(extensions: Extension[]) {
@@ -306,13 +405,6 @@ export class Database {
     }
 
     async insertLog(log: { loglevel: LogLevel; message: string; meta: any; time: number }) {
-        if (this.isShuttingDown) {
-            console.error(
-                `[SHUTDOWN VIOLATION] Attempted insertLog after shutdown: "${log.message.substring(0, 100)}..."`
-            );
-            console.error(`[SHUTDOWN VIOLATION] Stack trace:`, new Error().stack);
-            return;
-        }
         return this.upsertOne(Collections.LOGS, log, 'time');
     }
 
@@ -324,13 +416,6 @@ export class Database {
             time: number;
         }[]
     ) {
-        if (this.isShuttingDown) {
-            console.error(
-                `[SHUTDOWN VIOLATION] Attempted insertManyLogs after shutdown (${logs.length} logs)`
-            );
-            console.error(`[SHUTDOWN VIOLATION] Stack trace:`, new Error().stack);
-            return;
-        }
         if (logs.length === 0) return;
         return this.upsertMany(Collections.LOGS, logs, 'time');
     }
