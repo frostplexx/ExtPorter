@@ -1,7 +1,7 @@
 import dotenv from 'dotenv';
 import * as path from 'path';
 import { RenameAPIS } from './modules/api_renames';
-import { MigrateManifest } from './modules/manifest';
+import { migrateManifest } from './modules/manifest';
 import { MigrateCSP } from './modules/csp';
 import { WriteMigrated } from './modules/write_migrated';
 import { MigrationWriter } from './modules/migration_writer';
@@ -15,7 +15,12 @@ import { MigrationError } from './types/migration_module';
 // import { ResourceDownloader } from './modules/resource_downloader';
 import { BridgeInjector } from './modules/bridge_injector';
 import { WebRequestMigrator } from './modules/web_request_migrator';
-import { checkMemoryThreshold, clearExtensionMemory, forceGarbageCollection, logMemoryUsage } from './utils/garbage';
+import {
+    checkMemoryThreshold,
+    clearExtensionMemory,
+    forceGarbageCollection,
+    logMemoryUsage,
+} from './utils/garbage';
 import { extensionUtils } from './utils/extension_utils';
 
 // Load environment variables once at application startup
@@ -86,7 +91,7 @@ async function main() {
     // Migration modules (WriteMigrated should be last to queue completed migrations)
     const migrationModules = [
         WebRequestMigrator.migrate,
-        MigrateManifest.migrate,
+        migrateManifest,
         MigrateCSP.migrate,
         // ResourceDownloader.migrate,
         RenameAPIS.migrate,
