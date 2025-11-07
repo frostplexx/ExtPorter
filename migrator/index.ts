@@ -5,7 +5,7 @@ import { MigrateManifest } from './modules/manifest';
 import { MigrateCSP } from './modules/csp';
 import { WriteMigrated } from './modules/write_migrated';
 import { MigrationWriter } from './modules/migration_writer';
-import { InterestingnessScorer } from './modules/interestingness_scorer';
+import { InterestingnessScorer } from './modules/interestingenss_scorer';
 import { Extension } from './types/extension';
 import { find_extensions } from './utils/find_extensions';
 import { logger } from './utils/logger';
