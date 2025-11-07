@@ -7,6 +7,8 @@ import { createBridgeFile, loadBridgeContent } from './bridge_file_creator';
 import { injectBridgeIntoManifest } from './manifest_injector';
 import { ServiceWorkerInjector } from './service_worker_injector';
 import { HtmlInjector } from './html_injector';
+import { extensionUtils } from '../../utils/extension_utils';
+import { up } from 'inquirer/lib/utils/readline';
 
 /**
  * This module injects the ext_bridge.js compatibility layer into Chrome extensions
@@ -57,21 +59,13 @@ export class BridgeInjector implements MigrationModule {
             const updatedFiles = [...extension.files, bridgeFile];
 
             // Create updated extension
-            const updatedExtension = {
+            let updatedExtension = {
                 ...extension,
                 manifest: updatedManifest,
                 files: updatedFiles,
             };
 
-            // Add BRIDGE_INJECTED tag to extension object
-            if (!updatedExtension.tags) {
-                updatedExtension.tags = [];
-            }
-
-            const bridgeTag = Tags[Tags.BRIDGE_INJECTED];
-            if (!updatedExtension.tags.includes(bridgeTag)) {
-                updatedExtension.tags.push(bridgeTag);
-            }
+            updatedExtension = extensionUtils.addTag(extension,Tags.BRIDGE_INJECTED);
 
             return updatedExtension;
         } catch (error) {
