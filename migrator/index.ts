@@ -6,7 +6,7 @@ import { MigrateCSP } from './modules/csp';
 import { WriteMigrated } from './modules/write_migrated';
 import { MigrationWriter } from './modules/migration_writer';
 import { InterestingnessScorer } from './modules/interestingness_scorer';
-import { Extension, closeExtensionFiles } from './types/extension';
+import { Extension } from './types/extension';
 import { find_extensions } from './utils/find_extensions';
 import { logger } from './utils/logger';
 import { Globals } from './types/globals';
@@ -16,6 +16,7 @@ import { MigrationError } from './types/migration_module';
 import { BridgeInjector } from './modules/bridge_injector';
 import { WebRequestMigrator } from './modules/web_request_migrator';
 import { checkMemoryThreshold, clearExtensionMemory, forceGarbageCollection, logMemoryUsage } from './utils/garbage';
+import { extensionUtils } from './utils/extension_utils';
 
 // Load environment variables once at application startup
 dotenv.config();
@@ -73,7 +74,7 @@ async function main() {
 
     // Close all file descriptors immediately after discovery to prevent FD leak
     extensions.forEach((extension) => {
-        closeExtensionFiles(extension);
+        extensionUtils.closeExtensionFiles(extension);
     });
 
     logger.info(null, `Found ${extensions.length} extensions in ${globals.extensionsPath}`);

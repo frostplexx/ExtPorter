@@ -8,7 +8,6 @@ import { injectBridgeIntoManifest } from './manifest_injector';
 import { ServiceWorkerInjector } from './service_worker_injector';
 import { HtmlInjector } from './html_injector';
 import { extensionUtils } from '../../utils/extension_utils';
-import { up } from 'inquirer/lib/utils/readline';
 
 /**
  * This module injects the ext_bridge.js compatibility layer into Chrome extensions
@@ -21,7 +20,6 @@ export class BridgeInjector implements MigrationModule {
      * Main migration method that injects the bridge into extensions that need it.
      */
     public static async migrate(extension: Extension): Promise<Extension | MigrationError> {
-
         try {
             // Validate extension input
             if (!extension || !extension.id || !extension.files || !extension.manifest) {
@@ -65,7 +63,7 @@ export class BridgeInjector implements MigrationModule {
                 files: updatedFiles,
             };
 
-            updatedExtension = extensionUtils.addTag(extension,Tags.BRIDGE_INJECTED);
+            updatedExtension = extensionUtils.addTag(updatedExtension, Tags.BRIDGE_INJECTED);
 
             return updatedExtension;
         } catch (error) {
@@ -100,18 +98,16 @@ export class BridgeInjector implements MigrationModule {
     public static testHelpers = {
         needsBridge: BridgeDetector.needsBridge,
         injectBridgeIntoManifest: (manifest: any, extension?: Extension) =>
-            injectBridgeIntoManifest(
-                manifest,
-                BridgeInjector.BRIDGE_FILENAME,
-                extension
-            ).updatedManifest,
+            injectBridgeIntoManifest(manifest, BridgeInjector.BRIDGE_FILENAME, extension)
+                .updatedManifest,
         injectBridgeIntoServiceWorker: (extension: Extension, serviceWorkerPath: string) =>
             ServiceWorkerInjector.injectBridgeIntoServiceWorker(
                 extension,
                 serviceWorkerPath,
                 BridgeInjector.BRIDGE_FILENAME
             ),
-        injectBridgeIntoHTML: (extension: Extension, htmlPath: string) => HtmlInjector.injectBridgeIntoHTML(extension, htmlPath, BridgeInjector.BRIDGE_FILENAME),
+        injectBridgeIntoHTML: (extension: Extension, htmlPath: string) =>
+            HtmlInjector.injectBridgeIntoHTML(extension, htmlPath, BridgeInjector.BRIDGE_FILENAME),
         createBridgeFile: () => createBridgeFile(BridgeInjector.BRIDGE_FILENAME),
         loadBridgeContent: loadBridgeContent,
         hasBridgeInManifest: BridgeInjector.hasBridgeInManifest,
