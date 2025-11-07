@@ -2,9 +2,9 @@ import { Extension } from '../../types/extension';
 import { MigrationError, MigrationModule } from '../../types/migration_module';
 import { logger } from '../../utils/logger';
 import { Tags } from '../../types/tags';
-import { cspValidator, isCSPStringCompliant } from './csp-validator';
-import { CSPTransformer, makeCSPStringCompliant } from './csp-transformer';
-
+import { cspValidator } from './csp-validator';
+import { extensionUtils } from '../../utils/extension_utils';
+import { makeCSPStringCompliant } from './csp-transformer';
 
 /**
  * Default CSP values for Manifest V3
@@ -41,7 +41,7 @@ export class MigrateCSP implements MigrationModule {
             }
 
             // MV2 CSP is a string - check if it's compliant
-            if (isCSPStringCompliant(csp)) {
+            if (cspValidator.isCSPStringCompliant(csp)) {
                 // Compliant - just convert to MV3 object format
                 extension.manifest['content_security_policy'] = {
                     extension_pages: csp,
@@ -49,8 +49,8 @@ export class MigrateCSP implements MigrationModule {
                 };
                 logger.info(extension, 'Transformed compliant MV2 CSP to MV3 format');
                 return extension;
-
-            } else { // Non-compliant - transform to make it compliant
+            } else {
+                // Non-compliant - transform to make it compliant
                 const compliantCSP = makeCSPStringCompliant(csp);
                 extension.manifest['content_security_policy'] = {
                     extension_pages: compliantCSP,
@@ -62,13 +62,7 @@ export class MigrateCSP implements MigrationModule {
                 );
 
                 // Add CSP_VALUE_MODIFIED tag to extension object
-                if (!extension.tags) {
-                    extension.tags = [];
-                }
-                const cspTag = Tags[Tags.CSP_VALUE_MODIFIED];
-                if (!extension.tags.includes(cspTag)) {
-                    extension.tags.push(cspTag);
-                }
+                extension = extensionUtils.addTag(extension, Tags.CSP_VALUE_MODIFIED);
 
                 return extension;
             }

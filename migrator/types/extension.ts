@@ -1,4 +1,3 @@
-import { logger } from '../utils/logger';
 import { LazyFile } from './abstract_file';
 
 export interface Extension {
@@ -41,20 +40,4 @@ export interface Extension {
         validation_errors: string[];
         duration_ms: number;
     };
-}
-
-export function closeExtensionFiles(extension: Extension): void {
-    // Close all file descriptors for LazyFile objects
-    extension.files.forEach((file) => {
-        try {
-            file.close();
-        } catch (error) {
-            logger.warn(extension, `Error closing file ${file.path}:`, error);
-        }
-    });
-}
-
-export function isNewTabExtension(extension: Extension): boolean {
-    const newtab = extension.manifest?.chrome_url_overrides?.newtab;
-    return newtab != null && newtab !== '';
 }
