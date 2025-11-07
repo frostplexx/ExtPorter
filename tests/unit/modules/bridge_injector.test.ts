@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
-import { BridgeInjector } from '../../../migrator/modules/bridge_injector';
+import { BridgeInjector } from '../../../migrator/modules/bridge_injector/index';
 import { Extension } from '../../../migrator/types/extension';
 import { MigrationError } from '../../../migrator/types/migration_module';
 import { LazyFile } from '../../../migrator/types/abstract_file';

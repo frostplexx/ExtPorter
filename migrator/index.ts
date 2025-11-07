@@ -1,6 +1,6 @@
 import dotenv from 'dotenv';
 import * as path from 'path';
-import { RenameAPIS } from './modules/api_renames/api_renames';
+import { RenameAPIS } from './modules/api_renames';
 import { MigrateManifest } from './modules/manifest';
 import { MigrateCSP } from './modules/csp';
 import { WriteMigrated } from './modules/write_migrated';
