@@ -1,9 +1,9 @@
 import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals';
-import { MigrationWriter } from '../../../migrator/modules/write_extension/migration_writer';
 import { Extension } from '../../../migrator/types/extension';
 import { AbstractFile } from '../../../migrator/types/abstract_file';
 import { ExtFileType } from '../../../migrator/types/ext_file_types';
 import * as fs from 'fs/promises';
+import { WriteQueue } from '../../../migrator/modules/write_extension/write-queue';
 
 // Mock dependencies
 jest.mock('../../../migrator/utils/logger');
@@ -14,7 +14,7 @@ jest.mock('../../../migrator/index', () => ({
     },
 }));
 
-describe('MigrationWriter', () => {
+describe('WriteQueue', () => {
     let mockExtension: Extension;
     let mockFile: jest.Mocked<AbstractFile>;
 
@@ -45,29 +45,29 @@ describe('MigrationWriter', () => {
         (fs.access as any).mockResolvedValue(void 0);
 
         // Disable auto-processing for tests so we can check queue length
-        MigrationWriter.shared.setAutoProcess(false);
+       WriteQueue.shared.setAutoProcess(false);
     });
 
     afterEach(() => {
         // Re-enable auto-processing
-        MigrationWriter.shared.setAutoProcess(true);
+        WriteQueue.shared.setAutoProcess(true);
         // Reset singleton instance for each test
-        (MigrationWriter as any).instance = null;
+        (WriteQueue as any).instance = null;
     });
 
     describe('shared', () => {
         it('should return singleton instance', () => {
-            const instance1 = MigrationWriter.shared;
-            const instance2 = MigrationWriter.shared;
+            const instance1 = WriteQueue.shared;
+            const instance2 = WriteQueue.shared;
 
             expect(instance1).toBe(instance2);
-            expect(instance1).toBeInstanceOf(MigrationWriter);
+            expect(instance1).toBeInstanceOf(WriteQueue);
         });
     });
 
     describe('queueExtension', () => {
         it('should queue extension for writing', async () => {
-            const writer = MigrationWriter.shared;
+            const writer = WriteQueue.shared;
 
             await expect(writer.queueExtension(mockExtension)).resolves.toBeUndefined();
 
@@ -76,7 +76,7 @@ describe('MigrationWriter', () => {
         });
 
         it('should respect priority ordering', async () => {
-            const writer = MigrationWriter.shared;
+            const writer = WriteQueue.shared;
             const highPriorityExt = { ...mockExtension, id: 'high-priority' };
             const lowPriorityExt = { ...mockExtension, id: 'low-priority' };
 
@@ -90,7 +90,7 @@ describe('MigrationWriter', () => {
 
     describe('getQueueStatus', () => {
         it('should return correct queue status', () => {
-            const writer = MigrationWriter.shared;
+            const writer = WriteQueue.shared;
             const status = writer.getQueueStatus();
 
             expect(status).toHaveProperty('queueLength');
@@ -102,7 +102,7 @@ describe('MigrationWriter', () => {
 
     describe('writeExtensionSync', () => {
         it('should write extension files synchronously', async () => {
-            const writer = MigrationWriter.shared;
+            const writer = WriteQueue.shared;
             const outputPath = '/test/output/test-extension';
 
             await expect(
@@ -114,7 +114,7 @@ describe('MigrationWriter', () => {
         });
 
         it('should handle file writing errors', async () => {
-            const writer = MigrationWriter.shared;
+            const writer = WriteQueue.shared;
             const outputPath = '/test/output/test-extension';
             const error = new Error('Write failed');
 
@@ -126,7 +126,7 @@ describe('MigrationWriter', () => {
         });
 
         it('should create output directory if it does not exist', async () => {
-            const writer = MigrationWriter.shared;
+            const writer = WriteQueue.shared;
             const outputPath = '/test/output/test-extension';
 
             await writer.writeExtensionSync(mockExtension, outputPath);
@@ -138,7 +138,7 @@ describe('MigrationWriter', () => {
         });
 
         it('should write manifest.json file', async () => {
-            const writer = MigrationWriter.shared;
+            const writer = WriteQueue.shared;
             const outputPath = '/test/output/test-extension';
 
             await writer.writeExtensionSync(mockExtension, outputPath);
@@ -153,7 +153,7 @@ describe('MigrationWriter', () => {
 
     describe('flush', () => {
         it('should wait for all queued extensions to be written', async () => {
-            const writer = MigrationWriter.shared;
+            const writer = WriteQueue.shared;
 
             await writer.queueExtension(mockExtension);
             await expect(writer.flush()).resolves.toBeUndefined();
@@ -164,7 +164,7 @@ describe('MigrationWriter', () => {
         });
 
         it('should handle multiple extensions in queue', async () => {
-            const writer = MigrationWriter.shared;
+            const writer = WriteQueue.shared;
             const ext1 = { ...mockExtension, id: 'ext1' };
             const ext2 = { ...mockExtension, id: 'ext2' };
 
@@ -178,13 +178,13 @@ describe('MigrationWriter', () => {
         });
 
         it('should return immediately when queue is empty', async () => {
-            const writer = MigrationWriter.shared;
+            const writer = WriteQueue.shared;
 
             await expect(writer.flush()).resolves.toBeUndefined();
         });
 
         it('should handle flush timeout', async () => {
-            const writer = MigrationWriter.shared;
+            const writer = WriteQueue.shared;
 
             await writer.queueExtension(mockExtension);
 
@@ -206,7 +206,7 @@ describe('MigrationWriter', () => {
 
     describe('auto-process', () => {
         it('should enable auto-processing', () => {
-            const writer = MigrationWriter.shared;
+            const writer = WriteQueue.shared;
 
             writer.setAutoProcess(true);
 
@@ -214,7 +214,7 @@ describe('MigrationWriter', () => {
         });
 
         it('should queue without auto-processing when disabled', async () => {
-            const writer = MigrationWriter.shared;
+            const writer = WriteQueue.shared;
             writer.setAutoProcess(false);
 
             await writer.queueExtension(mockExtension);
@@ -226,7 +226,7 @@ describe('MigrationWriter', () => {
 
     describe('file type handling', () => {
         it('should write CSS files as text', async () => {
-            const writer = MigrationWriter.shared;
+            const writer = WriteQueue.shared;
             const cssFile = {
                 path: 'style.css',
                 filetype: ExtFileType.CSS,
@@ -249,7 +249,7 @@ describe('MigrationWriter', () => {
         });
 
         it('should write HTML files as text', async () => {
-            const writer = MigrationWriter.shared;
+            const writer = WriteQueue.shared;
             const htmlFile = {
                 path: 'page.html',
                 filetype: ExtFileType.HTML,
@@ -272,7 +272,7 @@ describe('MigrationWriter', () => {
         });
 
         it('should write other files as binary', async () => {
-            const writer = MigrationWriter.shared;
+            const writer = WriteQueue.shared;
             const imageFile = {
                 path: 'icon.png',
                 filetype: ExtFileType.OTHER,
@@ -299,7 +299,7 @@ describe('MigrationWriter', () => {
             const originalEnv = process.env.NEW_TAB_SUBFOLDER;
             process.env.NEW_TAB_SUBFOLDER = 'true';
 
-            const writer = MigrationWriter.shared;
+            const writer = WriteQueue.shared;
             const newTabExt = {
                 ...mockExtension,
                 isNewTabExtension: true,
@@ -322,7 +322,7 @@ describe('MigrationWriter', () => {
         });
 
         it('should use mv3_extension_id when available', async () => {
-            const writer = MigrationWriter.shared;
+            const writer = WriteQueue.shared;
             const ext = {
                 ...mockExtension,
                 mv3_extension_id: 'mv3-id-12345',
@@ -343,7 +343,7 @@ describe('MigrationWriter', () => {
 
     describe('error handling', () => {
         it('should handle directory creation errors', async () => {
-            const writer = MigrationWriter.shared;
+            const writer = WriteQueue.shared;
             (fs.mkdir as any).mockRejectedValue(new Error('Directory creation failed'));
 
             await expect(
@@ -352,7 +352,7 @@ describe('MigrationWriter', () => {
         });
 
         it('should handle manifest write errors', async () => {
-            const writer = MigrationWriter.shared;
+            const writer = WriteQueue.shared;
             (fs.writeFile as any).mockRejectedValueOnce(new Error('Manifest write failed'));
 
             await expect(
@@ -361,7 +361,7 @@ describe('MigrationWriter', () => {
         });
 
         it('should handle file write errors in queue', async () => {
-            const writer = MigrationWriter.shared;
+            const writer = WriteQueue.shared;
             writer.setAutoProcess(false);
 
             (fs.writeFile as any).mockRejectedValue(new Error('File write failed'));
@@ -379,7 +379,7 @@ describe('MigrationWriter', () => {
 
     describe('concurrent writes', () => {
         it('should handle concurrent write requests', async () => {
-            const writer = MigrationWriter.shared;
+            const writer = WriteQueue.shared;
             const extensions = Array.from({ length: 5 }, (_, i) => ({
                 ...mockExtension,
                 id: `ext-${i}`,
@@ -403,7 +403,7 @@ describe('MigrationWriter', () => {
         it('should be constructed with signal handlers', () => {
             // The constructor sets up signal handlers
             // We can verify the instance exists
-            const instance = MigrationWriter.shared;
+            const instance = WriteQueue.shared;
             expect(instance).toBeDefined();
         });
     });
