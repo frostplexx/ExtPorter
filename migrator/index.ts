@@ -3,7 +3,6 @@ import * as path from 'path';
 import { RenameAPIS } from './modules/api_renames';
 import { migrateManifest } from './modules/manifest';
 import { MigrateCSP } from './modules/csp';
-import { WriteMigrated, MigrationWriter } from './modules/write_extension/migration_writer';
 import { InterestingnessScorer } from './modules/interestingenss_scorer';
 import { Extension } from './types/extension';
 import { find_extensions } from './utils/find_extensions';
@@ -21,6 +20,8 @@ import {
     logMemoryUsage,
 } from './utils/garbage';
 import { extensionUtils } from './utils/extension_utils';
+import { WriteMigrated } from './modules/write_extension';
+import { WriteQueue } from './modules/write_extension/write-queue';
 
 // Load environment variables once at application startup
 dotenv.config();
@@ -166,7 +167,7 @@ async function main() {
                     }
 
                     // Write extension synchronously to ensure it completes before memory cleanup
-                    await MigrationWriter.shared.writeExtensionSync(extension, outputPath);
+                    await WriteQueue.shared.writeExtensionSync(extension, outputPath);
 
                     // Insert migrated extension to database immediately after successful migration
                     try {
@@ -234,7 +235,7 @@ async function main() {
         }
 
         // Flush the migration writer queue after each batch to prevent memory buildup
-        await MigrationWriter.shared.flush();
+        await WriteQueue.shared.flush();
 
         logger.info(
             null,
@@ -255,7 +256,7 @@ async function main() {
     forceGarbageCollection();
 
     // Flush the migration writer queue before finishing
-    await MigrationWriter.shared.flush();
+    await WriteQueue.shared.flush();
 
     // Note: Extensions are now inserted individually during migration to protect against crashes
     // This bulk insertion is kept as a safety net for any extensions that might have been missed

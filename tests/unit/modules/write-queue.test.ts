@@ -1,9 +1,9 @@
 import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals';
-import { WriteQueue } from '../../../migrator/modules/write_extension';
 import { Extension } from '../../../migrator/types/extension';
 import { AbstractFile } from '../../../migrator/types/abstract_file';
 import { ExtFileType } from '../../../migrator/types/ext_file_types';
 import * as fs from 'fs/promises';
+import { WriteQueue } from '../../../migrator/modules/write_extension/write-queue';
 
 // Mock dependencies
 jest.mock('../../../migrator/utils/logger');
