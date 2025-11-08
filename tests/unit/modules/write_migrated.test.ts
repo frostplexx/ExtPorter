@@ -1,12 +1,12 @@
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
-import { WriteMigrated } from '../../../migrator/modules/write_migrated';
-import { MigrationWriter } from '../../../migrator/modules/migration_writer';
+import { WriteMigrated } from '../../../migrator/modules/write_extension/migration_writer';
+import { MigrationWriter } from '../../../migrator/modules/write_extension/migration_writer';
 import { logger } from '../../../migrator/utils/logger';
 import { Extension } from '../../../migrator/types/extension';
 import { MigrationError } from '../../../migrator/types/migration_module';
 
 // Mock dependencies
-jest.mock('../../../migrator/modules/migration_writer');
+jest.mock('../../../migrator/modules/write_extension/migration_writer');
 jest.mock('../../../migrator/utils/logger');
 
 describe('WriteMigrated', () => {
