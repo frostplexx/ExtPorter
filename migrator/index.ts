@@ -1,7 +1,7 @@
 import dotenv from 'dotenv';
 import * as path from 'path';
 import { RenameAPIS } from './modules/api_renames';
-import { migrateManifest } from './modules/manifest';
+import { MigrateManifest, migrateManifest } from './modules/manifest';
 import { MigrateCSP } from './modules/csp';
 import { InterestingnessScorer } from './modules/interestingenss_scorer';
 import { Extension } from './types/extension';
@@ -12,7 +12,7 @@ import { Database } from './features/database/db_manager';
 import { MigrationError } from './types/migration_module';
 // import { ResourceDownloader } from './modules/resource_downloader';
 import { BridgeInjector } from './modules/bridge_injector';
-import { WebRequestMigrator } from './modules/web_request_migrator';
+import { WebRequestMigrator } from './modules/web_request_migrator/web_request_migrator';
 import {
     checkMemoryThreshold,
     clearExtensionMemory,
@@ -91,7 +91,7 @@ async function main() {
     // Migration modules (WriteMigrated should be last to queue completed migrations)
     const migrationModules = [
         WebRequestMigrator.migrate,
-        migrateManifest,
+        MigrateManifest.migrate,
         MigrateCSP.migrate,
         // ResourceDownloader.migrate,
         RenameAPIS.migrate,
