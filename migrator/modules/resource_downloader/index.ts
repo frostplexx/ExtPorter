@@ -15,6 +15,7 @@ export { RemoteResource, DownloadResult } from './types';
 export class ResourceDownloader extends MigrationModule {
     public static migrate(extension: Extension): Extension | MigrationError {
         try {
+
             // Check for null/invalid extension or manifest
             if (!extension || !extension.manifest) {
                 throw new Error('Extension or manifest is null/undefined');
