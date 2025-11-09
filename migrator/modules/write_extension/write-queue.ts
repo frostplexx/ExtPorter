@@ -20,6 +20,7 @@ export class WriteQueue {
     private readonly concurrentWrites = 10;
     private activeWriters = 0;
     private autoPro = true; // Auto-process queue (can be disabled for testing)
+    private readonly fileBatchSize = 50; // Number of files to write concurrently
 
     private constructor() {
         // Handle graceful shutdown
