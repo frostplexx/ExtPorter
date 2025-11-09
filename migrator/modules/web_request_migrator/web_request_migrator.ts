@@ -1,16 +1,16 @@
-import { Extension } from '../types/extension';
-import { MigrationError, MigrationModule } from '../types/migration_module';
-import { LazyFile } from '../types/abstract_file';
-import { ExtFileType } from '../types/ext_file_types';
-import { logger } from '../utils/logger';
-import { Tags } from '../types/tags';
+import { Extension } from '../../types/extension';
+import { MigrationError, MigrationModule } from '../../types/migration_module';
+import { LazyFile } from '../../types/abstract_file';
+import { ExtFileType } from '../../types/ext_file_types';
+import { logger } from '../../utils/logger';
+import { Tags } from '../../types/tags';
 import * as espree from 'espree';
 import {
     Rule,
     RuleActionType,
     ResourceType,
     RuleCondition,
-} from '../types/dnr_rule_types';
+} from '../../types/dnr_rule_types';
 
 /**
  * Migration module that converts blocking chrome.webRequest API calls to chrome.declarativeNetRequest.
