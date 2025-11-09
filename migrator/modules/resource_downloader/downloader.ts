@@ -48,29 +48,9 @@ export function downloadResources(
 }
 
 /**
- * Downloads a single resource
- */
-export function downloadSingleResource(
-    extension: Extension,
-    resource: RemoteResource
-): DownloadResult {
-    logger.debug(extension, `Downloading resource: ${resource.url}`);
-
-    try {
-        return downloadResourceSync(extension, resource);
-    } catch (error) {
-        return {
-            success: false,
-            url: resource.url,
-            error: error instanceof Error ? error.message : String(error),
-        };
-    }
-}
-
-/**
  * Downloads a resource synchronously
  */
-export function downloadResourceSync(
+export function downloadSingleResource(
     extension: Extension,
     resource: RemoteResource
 ): DownloadResult {
