@@ -1,7 +1,7 @@
 import dotenv from 'dotenv';
 import * as path from 'path';
 import { RenameAPIS } from './modules/api_renames';
-import { MigrateManifest, migrateManifest } from './modules/manifest';
+import { MigrateManifest } from './modules/manifest';
 import { MigrateCSP } from './modules/csp';
 import { InterestingnessScorer } from './modules/interestingenss_scorer';
 import { Extension } from './types/extension';
