@@ -414,33 +414,54 @@ async function sendToOffscreen(type, data = {}) {
                             }
                         }
                         if (splitIdx !== -1) {
-                            key = args.slice(0, splitIdx).trim();
-                            value = args.slice(splitIdx + 1).trim();
-                        } else {
-                            // fallback: treat all as key, no value
-                            key = args.trim();
-                            value = 'undefined';
-                        }
-                        // Remove quotes from key if present
-                        const keyMatch = key.match(/^(['"`])(.+)\1$/);
-                        const keyStr = keyMatch ? keyMatch[2] : key;
-                        return `await chrome.storage.local.set({${JSON.stringify(keyStr)}: ${value}})`;
-                    }
+            // Transform localStorage calls to use storageHelper wrapper
+            if (needsLocalStorage) {
+                // Inject storageHelper definition at the top if not already present
+                const storageHelperDef = `
+// storageHelper wrapper for chrome.storage.local
+const storageHelper = {
+    async getItem(key) {
+        const result = await chrome.storage.local.get([key]);
+        return result[key];
+    },
+    async setItem(key, value) {
+        await chrome.storage.local.set({ [key]: value });
+    },
+    async removeItem(key) {
+        await chrome.storage.local.remove([key]);
+    },
+    async clear() {
+        await chrome.storage.local.clear();
+    }
+};
+`;
+                content = storageHelperDef + '\n' + content;
+
+                // localStorage.getItem(key) -> await storageHelper.getItem(key)
+                content = content.replace(
+                    /localStorage\.getItem\s*\(\s*(['"`])([^'"`]+)\1\s*\)/g,
+                    'await storageHelper.getItem("$2")'
                 );
 
-                // localStorage.removeItem(key) -> await chrome.storage.local.remove([key])
+                // localStorage.setItem(key, value) -> await storageHelper.setItem(key, value)
+                content = content.replace(
+                    /localStorage\.setItem\s*\(\s*(['"`])([^'"`]+)\1\s*,\s*([^)]+)\)/g,
+                    'await storageHelper.setItem("$2", $3)'
+                );
+
+                // localStorage.removeItem(key) -> await storageHelper.removeItem(key)
                 content = content.replace(
                     /localStorage\.removeItem\s*\(\s*(['"`])([^'"`]+)\1\s*\)/g,
-                    'await chrome.storage.local.remove(["$2"])'
+                    'await storageHelper.removeItem("$2")'
                 );
 
-                // localStorage.clear() -> await chrome.storage.local.clear()
+                // localStorage.clear() -> await storageHelper.clear()
                 content = content.replace(
                     /localStorage\.clear\s*\(\s*\)/g,
-                    'await chrome.storage.local.clear()'
+                    'await storageHelper.clear()'
                 );
 
-                logger.info(extension, 'Migrated localStorage calls to chrome.storage.local');
+                logger.info(extension, 'Migrated localStorage calls to storageHelper');
             }
 
             // Create transformed file
