@@ -44,21 +44,29 @@ export const MigratorTab: React.FC = () => {
             <Box flexDirection="column" flexShrink={0}>
                 {visibleMessages.map((msg, idx) => {
                     let prefix = '';
-                    let color: 'green' | 'blue' | 'yellow' | 'white' | 'red' = 'green';
+                    let color: 'green' | 'blue' | 'yellow' | 'white' | 'red' | 'cyan' | 'magenta' =
+                        'green';
 
                     switch (msg.type) {
                         case 'sent':
-                            prefix = '→';
-                            color = 'green';
+                            prefix = '[META]';
+                            color = 'magenta';
                             break;
                         case 'received':
-                            prefix = '←';
-                            color = 'blue';
+                            prefix = '[META]';
+                            color = 'magenta';
                             break;
                         case 'system':
-                            if (msg.content.startsWith('⚠')) {
+                            // Check for log level prefixes
+                            if (msg.content.startsWith('⚠') || msg.content.includes('[ERROR]')) {
                                 prefix = '';
                                 color = 'red';
+                            } else if (msg.content.includes('[WARNING]')) {
+                                prefix = '';
+                                color = 'yellow';
+                            } else if (msg.content.includes('[INFO]')) {
+                                prefix = '';
+                                color = 'cyan';
                             } else {
                                 prefix = '';
                                 color = 'white';
