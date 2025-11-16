@@ -357,45 +357,78 @@ const storageHelper = {
 
         // Find functions that contain download logic
         const downloadFunctionPattern =
-            /function\s+(\w*)\s*\([^)]*\)\s*\{[^}]*document\.createElement\s*\(\s*['"`]a['"`]\s*\)[^}]*?\.download\s*=[^}]*?\}/g;
+            // Removed fragile regex. Use brace-matching below.
 
         let result = content;
 
-        result = result.replace(downloadFunctionPattern, (match) => {
-            // Check if it's an async function
-            const isAsync = /^async\s+function/.test(match);
-            if (!isAsync) {
-                // Make it async
-                match = match.replace(/^function/, 'async function');
+        // Find all function declarations that may contain the download pattern
+        const functionDeclPattern = /(?:async\s+)?function\s+(\w*)\s*\([^)]*\)\s*\{/g;
+        let match: RegExpExecArray | null;
+        let newContent = '';
+        let lastIndex = 0;
+        while ((match = functionDeclPattern.exec(content)) !== null) {
+            const funcStart = match.index;
+            const funcHeaderEnd = functionDeclPattern.lastIndex;
+            // Find the matching closing brace for the function body
+            let braceCount = 1;
+            let i = funcHeaderEnd;
+            while (i < content.length && braceCount > 0) {
+                if (content[i] === '{') braceCount++;
+                else if (content[i] === '}') braceCount--;
+                i++;
             }
+            const funcEnd = i;
+            const funcBody = content.slice(funcStart, funcEnd);
 
-            // Replace DOM download code with chrome.downloads
-            let transformed = match;
+            // Check if function contains the download pattern
+            if (
+                /document\.createElement\s*\(\s*['"`]a['"`]\s*\)/.test(funcBody) &&
+                /\.download\s*=/.test(funcBody)
+            ) {
+                // Check if it's an async function
+                const isAsync = /^async\s+function/.test(funcBody);
+                let transformed = funcBody;
+                if (!isAsync) {
+                    transformed = transformed.replace(/^function/, 'async function');
+                }
 
-            // Look for the file download pattern
-            // var pom = document.createElement('a');
-            // var blob = new Blob([data], {type: 'mime/type'});
-            // var url = URL.createObjectURL(blob);
-            // pom.href = url;
-            // pom.setAttribute('download', fileName);
-            // pom.click();
+                // Extract fileName and data if possible
+                const fileNameMatch = funcBody.match(
+                    /\.setAttribute\s*\(\s*['"`]download['"`]\s*,\s*([^)]+)\)/
+                );
+                const blobMatch = funcBody.match(
+                    /new\s+Blob\s*\(\s*\[([^\]]+)\]\s*,\s*\{\s*type:\s*['"`]([^'"`]+)['"`]/
+                );
 
-            // Extract fileName and data if possible
-            const fileNameMatch = match.match(
-                /\.setAttribute\s*\(\s*['"`]download['"`]\s*,\s*([^)]+)\)/
-            );
-            const blobMatch = match.match(
-                /new\s+Blob\s*\(\s*\[([^\]]+)\]\s*,\s*\{\s*type:\s*['"`]([^'"`]+)['"`]/
-            );
+                if (fileNameMatch && blobMatch) {
+                    const fileName = fileNameMatch[1];
+                    const dataVar = blobMatch[1];
+                    const mimeType = blobMatch[2];
 
-            if (fileNameMatch && blobMatch) {
-                const fileName = fileNameMatch[1];
-                const dataVar = blobMatch[1];
-                const mimeType = blobMatch[2];
-
-                // Replace the DOM manipulation with chrome.downloads
-                const downloadCode = `
+                    // Replace the DOM manipulation with chrome.downloads
+                    const downloadCode = `
     // Use chrome.downloads API instead of DOM manipulation
+    chrome.downloads.download({
+        url: URL.createObjectURL(new Blob([${dataVar}], {type: '${mimeType}'})),
+        filename: ${fileName},
+        saveAs: true
+    });
+`;
+                    // Replace the old download logic with the new code
+                    // Remove pom.click(), setAttribute('download', ...), etc.
+                    transformed = transformed.replace(
+                        /var\s+pom\s*=\s*document\.createElement\s*\(\s*['"`]a['"`]\s*\);[\s\S]*?pom\.click\s*\(\s*\);?/,
+                        downloadCode
+                    );
+                }
+                // Append transformed function
+                newContent += content.slice(lastIndex, funcStart) + transformed;
+                lastIndex = funcEnd;
+            }
+        }
+        // Append the rest of the content
+        newContent += content.slice(lastIndex);
+        result = newContent;
     const dataUrl = 'data:${mimeType};charset=utf-8,' + encodeURIComponent(${dataVar});
     
     try {
