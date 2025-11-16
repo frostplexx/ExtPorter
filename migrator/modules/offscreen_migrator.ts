@@ -386,8 +386,43 @@ async function sendToOffscreen(type, data = {}) {
 
                 // localStorage.setItem(key, value) -> await chrome.storage.local.set({key: value})
                 content = content.replace(
-                    /localStorage\.setItem\s*\(\s*(['"`])([^'"`]+)\1\s*,\s*([^)]+)\)/g,
-                    'await chrome.storage.local.set({"$2": $3})'
+                    /localStorage\.setItem\s*\(\s*([^)]*)\)/g,
+                    (match, args) => {
+                        // Try to split args into key and value
+                        // This is a best-effort split on the first comma not inside quotes or parentheses
+                        let key = '';
+                        let value = '';
+                        let depth = 0;
+                        let inQuote = null;
+                        let splitIdx = -1;
+                        for (let i = 0; i < args.length; i++) {
+                            const c = args[i];
+                            if (inQuote) {
+                                if (c === inQuote && args[i-1] !== '\\') inQuote = null;
+                            } else if (c === '"' || c === "'" || c === '`') {
+                                inQuote = c;
+                            } else if (c === '(') {
+                                depth++;
+                            } else if (c === ')') {
+                                depth--;
+                            } else if (c === ',' && depth === 0) {
+                                splitIdx = i;
+                                break;
+                            }
+                        }
+                        if (splitIdx !== -1) {
+                            key = args.slice(0, splitIdx).trim();
+                            value = args.slice(splitIdx + 1).trim();
+                        } else {
+                            // fallback: treat all as key, no value
+                            key = args.trim();
+                            value = 'undefined';
+                        }
+                        // Remove quotes from key if present
+                        const keyMatch = key.match(/^(['"`])(.+)\1$/);
+                        const keyStr = keyMatch ? keyMatch[2] : key;
+                        return `await chrome.storage.local.set({${JSON.stringify(keyStr)}: ${value}})`;
+                    }
                 );
 
                 // localStorage.removeItem(key) -> await chrome.storage.local.remove([key])
