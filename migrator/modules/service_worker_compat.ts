@@ -256,9 +256,9 @@ const storageHelper = {
         // Replace localStorage.getItem
         result = result.replace(
             ServiceWorkerCompat.LOCALSTORAGE_GETITEM,
-            (_fullMatch, quote, key) => {
+            (_fullMatch, quote, key, offset) => {
                 // Check if it's in a JSON.parse call
-                const beforeMatch = result.substring(0, result.indexOf(_fullMatch));
+                const beforeMatch = result.substring(0, offset);
                 if (beforeMatch.endsWith('JSON.parse(')) {
                     return `storageHelper.get(${quote}${key}${quote})`;
                 }
