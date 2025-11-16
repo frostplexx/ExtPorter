@@ -15,7 +15,6 @@ import { BridgeInjector } from './modules/bridge_injector';
 import { ServiceWorkerCompat } from './modules/service_worker_compat';
 import { OffscreenMigrator } from './modules/offscreen_migrator';
 import { WebRequestMigrator } from './modules/web_request_migrator/web_request_migrator';
-import { checkMemoryThreshold, clearExtensionMemory, forceGarbageCollection, logMemoryUsage } from './utils/garbage';
 import { extensionUtils } from './utils/extension_utils';
 import { WriteMigrated } from './modules/write_extension';
 import { WriteQueue } from './modules/write_extension/write-queue';
