@@ -1,7 +1,10 @@
+import { logger } from "./logger";
+
 /**
  * Utility functions for normalizing file content
  * Handles line ending normalization and cleanup
  */
+
 
 /**
  * Normalize line endings to LF and clean up whitespace
@@ -83,6 +86,7 @@ export function normalizeJSONContent(content: string): string {
     } catch (error) {
         // If JSON parsing fails, just return the normalized version
         // without reformatting
+        logger.error(null, error as any)
     }
 
     return normalized;

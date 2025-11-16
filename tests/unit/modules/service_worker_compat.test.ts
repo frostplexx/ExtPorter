@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from '@jest/globals';
-import { ServiceWorkerCompat } from '../../../migrator/modules/service_worker_compat';
+import { ServiceWorkerCompat } from '../../../migrator/modules/offscreen_documents';
 import { Extension } from '../../../migrator/types/extension';
 import { LazyFile } from '../../../migrator/types/abstract_file';
 import { ExtFileType } from '../../../migrator/types/ext_file_types';
@@ -289,8 +289,8 @@ async function download() {
             };
 
             const result = ServiceWorkerCompat.testHelpers.updateManifest(manifest, {
-                hasLocalStorage: true,
-                hasDOMDownload: false,
+                needsLocalStorage: true,
+                needsDOMDownload: false,
             });
 
             expect(result.permissions).toContain('storage');
@@ -303,8 +303,8 @@ async function download() {
             };
 
             const result = ServiceWorkerCompat.testHelpers.updateManifest(manifest, {
-                hasLocalStorage: false,
-                hasDOMDownload: true,
+                needsLocalStorage: false,
+                needsDOMDownload: true,
             });
 
             expect(result.permissions).toContain('downloads');
@@ -317,8 +317,8 @@ async function download() {
             };
 
             const result = ServiceWorkerCompat.testHelpers.updateManifest(manifest, {
-                hasLocalStorage: true,
-                hasDOMDownload: true,
+                needsLocalStorage: true,
+                needsDOMDownload: true,
             });
 
             expect(result.permissions).toContain('storage');
@@ -332,8 +332,8 @@ async function download() {
             };
 
             const result = ServiceWorkerCompat.testHelpers.updateManifest(manifest, {
-                hasLocalStorage: true,
-                hasDOMDownload: true,
+                needsLocalStorage: true,
+                needsDOMDownload: true,
             });
 
             expect(result.permissions.filter((p: string) => p === 'storage')).toHaveLength(1);
@@ -346,8 +346,8 @@ async function download() {
             };
 
             const result = ServiceWorkerCompat.testHelpers.updateManifest(manifest, {
-                hasLocalStorage: true,
-                hasDOMDownload: false,
+                needsLocalStorage: true,
+                needsDOMDownload: false,
             });
 
             expect(result.permissions).toBeDefined();
