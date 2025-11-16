@@ -410,7 +410,8 @@ describe('WriteQueue', () => {
 
     describe('batch file writing', () => {
         it('should handle extensions with many files without exhausting file descriptors', async () => {
-            const writer = MigrationWriter.shared;
+            const writer = WriteQueue.shared;
+            
             const outputPath = '/test/output/test-extension';
 
             // Create an extension with 100 files (more than the batch size of 50)
@@ -441,7 +442,7 @@ describe('WriteQueue', () => {
         });
 
         it('should write files in batches', async () => {
-            const writer = MigrationWriter.shared;
+            const writer = WriteQueue.shared;
             const outputPath = '/test/output/test-extension';
 
             // Track the order of writeFile calls
