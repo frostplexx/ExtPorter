@@ -1,7 +1,6 @@
 import * as ESTree from 'estree';
 import { buildMemberExpressionPath } from '../ast-utils';
 import { logger } from '../../../utils/logger';
-import { SpecialTransform } from '../../../types/special_transform';
 
 // Note: This class only contains static methods and does not implement SpecialTransform at the instance level.
 export class WindowOpenTransform {

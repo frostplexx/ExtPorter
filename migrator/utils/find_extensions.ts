@@ -1,12 +1,13 @@
 import { lstatSync, existsSync, readdirSync } from 'fs';
 import path from 'path';
-import { Extension, isNewTabExtension } from '../types/extension';
+import { Extension } from '../types/extension';
 import { ExtFileType } from '../types/ext_file_types';
 import { LazyFile } from '../types/abstract_file';
 import { MMapFile } from './memory_mapped_file';
 import { logger } from './logger';
 import JSON5 from 'json5';
 import crypto from 'crypto';
+import { extensionUtils } from './extension_utils';
 
 /**
  * Finds all unpacked extensions given a path. Can be pointed to a single extension directory or a directory containing multiple extensions.
@@ -95,7 +96,7 @@ function get_manifest(manifest_paths: string[], includes_mv3: boolean): Extensio
                     manifest_v2_path: extensionDir,
                     manifest: json,
                     files: files,
-                    isNewTabExtension: isNewTabExtension({ manifest: json } as Extension),
+                    isNewTabExtension: extensionUtils.isNewTabExtension({ manifest: json } as Extension),
                 };
 
                 extensions.push(extension);

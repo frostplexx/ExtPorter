@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
 import * as fs from 'fs-extra';
 import * as path from 'path';
-import { RenameAPIS } from '../../../migrator/modules/api_renames/api_renames';
+import { RenameAPIS } from '../../../migrator/modules/api_renames';
 import { Extension } from '../../../migrator/types/extension';
 import { LazyFile } from '../../../migrator/types/abstract_file';
 import { ExtFileType } from '../../../migrator/types/ext_file_types';

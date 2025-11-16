@@ -1,12 +1,12 @@
-import { Extension } from '../types/extension';
-import { MigrationError, MigrationModule } from '../types/migration_module';
-import { MigrationWriter } from './migration_writer';
-import { logger } from '../utils/logger';
+import { Extension } from '../../types/extension';
+import { MigrationError, MigrationModule } from '../../types/migration_module';
+import { logger } from '../../utils/logger';
+import { WriteQueue } from './write-queue';
 
 export class WriteMigrated implements MigrationModule {
     public static migrate(extension: Extension): Extension | MigrationError {
         try {
-            MigrationWriter.shared.queueExtension(extension);
+            WriteQueue.shared.queueExtension(extension);
 
             logger.debug(extension, 'Extension queued for async write', {
                 extensionName: extension.name,
@@ -24,4 +24,10 @@ export class WriteMigrated implements MigrationModule {
             return new MigrationError(extension, error);
         }
     }
+}
+
+
+export interface WriteTask {
+    extension: Extension;
+    priority?: number;
 }

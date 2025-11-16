@@ -389,6 +389,13 @@ describe('Database Manager', () => {
     });
 
     describe('Shutdown Handling', () => {
+        afterEach(() => {
+            // Reset shutdown flag after each test
+            if (db) {
+                (db as any).isShuttingDown = false;
+            }
+        });
+
         it('should prevent operations after shutdown', async () => {
             if (!db) pending('Database not available');
 
@@ -407,7 +414,7 @@ describe('Database Manager', () => {
                 files: [],
             };
 
-            // These should not execute when shutting down
+            // These should be rejected when shutting down
             const log = {
                 loglevel: LogLevel.INFO,
                 message: 'Test log',
@@ -415,11 +422,11 @@ describe('Database Manager', () => {
                 time: Date.now(),
             };
 
-            await db.insertLog(log);
-            await db.insertManyLogs([log]);
-
-            // Reset shutdown flag
-            (db as any).isShuttingDown = false;
+            // Single operations should be rejected
+            await expect(db.insertLog(log)).rejects.toThrow('Database is shutting down');
+            await expect(db.insertMigratedExtension(extension)).rejects.toThrow(
+                'Database is shutting down'
+            );
         });
     });
 
@@ -445,6 +452,133 @@ describe('Database Manager', () => {
 
             // All operations should complete successfully
             expect(true).toBe(true); // Placeholder assertion
+        });
+    });
+
+    describe('Queue Management', () => {
+        it('should process operations through the queue', async () => {
+            if (!db) pending('Database not available');
+
+            const extension: Extension = {
+                id: `queue-test-${Date.now()}-${Math.random()}`,
+                name: 'Queue Test Extension',
+                manifest_v2_path: '/queue/path',
+                manifest: {
+                    name: 'Queue Test Extension',
+                    version: '1.0.0',
+                    manifest_version: 2,
+                },
+                files: [],
+            };
+
+            // Insert extension through the queue
+            await db.insertMigratedExtension(extension);
+
+            // Verify it was inserted
+            const found = await db.findExtension({ id: extension.id });
+            expect(found).toBeDefined();
+        });
+
+        it('should handle concurrent operations', async () => {
+            if (!db) pending('Database not available');
+
+            const extensions: Extension[] = Array.from({ length: 20 }, (_, i) => ({
+                id: `concurrent-${Date.now()}-${i}-${Math.random()}`,
+                name: `Concurrent Test ${i}`,
+                manifest_v2_path: `/concurrent/path/${i}`,
+                manifest: {
+                    name: `Concurrent Test ${i}`,
+                    version: '1.0.0',
+                    manifest_version: 2,
+                },
+                files: [],
+            }));
+
+            // Insert all extensions concurrently
+            const promises = extensions.map((ext) => db.insertMigratedExtension(ext));
+            await Promise.all(promises);
+
+            // Verify all were inserted
+            for (const ext of extensions) {
+                const found = await db.findExtension({ id: ext.id });
+                expect(found).toBeDefined();
+            }
+        });
+
+        it('should wait for queue to complete before closing', async () => {
+            if (!db) pending('Database not available');
+
+            const extensions: Extension[] = Array.from({ length: 10 }, (_, i) => ({
+                id: `close-test-${Date.now()}-${i}-${Math.random()}`,
+                name: `Close Test ${i}`,
+                manifest_v2_path: `/close/path/${i}`,
+                manifest: {
+                    name: `Close Test ${i}`,
+                    version: '1.0.0',
+                    manifest_version: 2,
+                },
+                files: [],
+            }));
+
+            // Start inserting extensions
+            const promises = extensions.map((ext) => db.insertMigratedExtension(ext));
+
+            // Wait for all operations to complete
+            await Promise.all(promises);
+
+            // Verify queue is empty by checking pending operations
+            const pendingOps = (db as any).pendingOperations;
+            const queueLength = (db as any).operationQueue.length;
+
+            expect(pendingOps).toBe(0);
+            expect(queueLength).toBe(0);
+        });
+
+        it('should reject operations when shutting down', async () => {
+            if (!db) pending('Database not available');
+
+            // Mark as shutting down
+            (db as any).isShuttingDown = true;
+
+            const extension: Extension = {
+                id: `reject-test-${Date.now()}-${Math.random()}`,
+                name: 'Reject Test',
+                manifest_v2_path: '/reject/path',
+                manifest: {
+                    name: 'Reject Test',
+                    version: '1.0.0',
+                    manifest_version: 2,
+                },
+                files: [],
+            };
+
+            // Attempt to insert should be rejected
+            await expect(db.insertMigratedExtension(extension)).rejects.toThrow(
+                'Database is shutting down'
+            );
+
+            // Reset shutdown flag
+            (db as any).isShuttingDown = false;
+        });
+
+        it('should handle queue errors gracefully', async () => {
+            if (!db) pending('Database not available');
+
+            // Create an invalid extension that might cause errors
+            const invalidExtension = {
+                id: `error-test-${Date.now()}-${Math.random()}`,
+                name: 'Error Test',
+                manifest_v2_path: '/error/path',
+                manifest: {
+                    name: 'Error Test',
+                    version: '1.0.0',
+                    manifest_version: 2,
+                },
+                files: [],
+            } as Extension;
+
+            // Should handle gracefully even with potential errors
+            await expect(db.insertMigratedExtension(invalidExtension)).resolves.not.toThrow();
         });
     });
 });

@@ -3,11 +3,10 @@ import * as fs from 'fs-extra';
 import * as path from 'path';
 import {
     Extension,
-    closeExtensionFiles,
-    isNewTabExtension,
 } from '../../../migrator/types/extension';
 import { LazyFile } from '../../../migrator/types/abstract_file';
 import { ExtFileType } from '../../../migrator/types/ext_file_types';
+import { extensionUtils } from '../../../migrator/utils/extension_utils';
 
 describe('Extension types and utilities', () => {
     const testDir = path.join(process.env.TEST_OUTPUT_DIR!, 'extension_test');
@@ -50,7 +49,7 @@ describe('Extension types and utilities', () => {
             };
 
             // Close files
-            closeExtensionFiles(extension);
+            extensionUtils.closeExtensionFiles(extension);
 
             // File descriptors should be closed
             expect((lazyFile1 as any)._mmapFile).toBeUndefined();
@@ -71,7 +70,7 @@ describe('Extension types and utilities', () => {
             };
 
             // Should not throw
-            expect(() => closeExtensionFiles(extension)).not.toThrow();
+            expect(() => extensionUtils.closeExtensionFiles(extension)).not.toThrow();
         });
 
         it('should handle files that are already closed', () => {
@@ -95,7 +94,7 @@ describe('Extension types and utilities', () => {
             };
 
             // Should not throw even if file is already closed
-            expect(() => closeExtensionFiles(extension)).not.toThrow();
+            expect(() => extensionUtils.closeExtensionFiles(extension)).not.toThrow();
         });
 
         it('should handle errors when closing files gracefully', () => {
@@ -120,7 +119,7 @@ describe('Extension types and utilities', () => {
             };
 
             // Should not throw even if close() throws
-            expect(() => closeExtensionFiles(extension)).not.toThrow();
+            expect(() => extensionUtils.closeExtensionFiles(extension)).not.toThrow();
             expect(mockFile.close).toHaveBeenCalled();
         });
     });
@@ -142,7 +141,7 @@ describe('Extension types and utilities', () => {
                 files: [],
             };
 
-            expect(isNewTabExtension(extension)).toBe(true);
+            expect(extensionUtils.isNewTabExtension(extension)).toBe(true);
         });
 
         it('should return false for extensions without chrome_url_overrides', () => {
@@ -158,7 +157,7 @@ describe('Extension types and utilities', () => {
                 files: [],
             };
 
-            expect(isNewTabExtension(extension)).toBe(false);
+            expect(extensionUtils.isNewTabExtension(extension)).toBe(false);
         });
 
         it('should return false for extensions with chrome_url_overrides but no newtab', () => {
@@ -177,7 +176,7 @@ describe('Extension types and utilities', () => {
                 files: [],
             };
 
-            expect(isNewTabExtension(extension)).toBe(false);
+            expect(extensionUtils.isNewTabExtension(extension)).toBe(false);
         });
 
         it('should return false for extensions with empty chrome_url_overrides.newtab', () => {
@@ -196,7 +195,7 @@ describe('Extension types and utilities', () => {
                 files: [],
             };
 
-            expect(isNewTabExtension(extension)).toBe(false);
+            expect(extensionUtils.isNewTabExtension(extension)).toBe(false);
         });
 
         it('should return true for extensions with newtab set to empty string', () => {
@@ -216,7 +215,7 @@ describe('Extension types and utilities', () => {
             };
 
             // Empty string is truthy in terms of being set
-            expect(isNewTabExtension(extension)).toBe(false);
+            expect(extensionUtils.isNewTabExtension(extension)).toBe(false);
         });
 
         it('should handle null manifest gracefully', () => {
@@ -228,7 +227,7 @@ describe('Extension types and utilities', () => {
                 files: [],
             };
 
-            expect(isNewTabExtension(extension)).toBe(false);
+            expect(extensionUtils.isNewTabExtension(extension)).toBe(false);
         });
 
         it('should handle undefined manifest gracefully', () => {
@@ -240,7 +239,7 @@ describe('Extension types and utilities', () => {
                 files: [],
             };
 
-            expect(isNewTabExtension(extension)).toBe(false);
+            expect(extensionUtils.isNewTabExtension(extension)).toBe(false);
         });
     });
 
