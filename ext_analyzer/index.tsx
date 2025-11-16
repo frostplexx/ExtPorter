@@ -52,18 +52,14 @@ const App: React.FC = () => {
 
     return (
         <WebSocketProvider>
-            <Box
-                flexDirection="column"
-                width="100%"
-                height="100%"
-                overflowY="hidden"
-                overflowX="hidden"
-            >
-                {/* Menu Bar */}
-                <MenuBar activeTab={activeTab} tabs={tabs} />
+            <Box flexDirection="column" width="100%" height="100%">
+                {/* Menu Bar - Fixed at top */}
+                <Box flexShrink={0}>
+                    <MenuBar activeTab={activeTab} tabs={tabs} />
+                </Box>
 
                 {/* Active Tab Content - Takes remaining space */}
-                <Box width="100%" flexGrow={1} overflowY="hidden" overflowX="hidden">
+                <Box width="100%" flexGrow={1} flexShrink={1}>
                     <ActiveComponent />
                 </Box>
             </Box>

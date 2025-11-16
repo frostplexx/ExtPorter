@@ -1,85 +1,50 @@
-import React, { useState } from 'react';
-import { Box, Text, useInput } from 'ink';
+import React, { useEffect, useRef } from 'react';
+import { Box, Text, useInput, useStdout } from 'ink';
 import { useWebSocket } from '../websocket-context.js';
+import { colors } from '../colors.js';
 
 export const MigratorTab: React.FC = () => {
-    const { messages, connectionStatus, sendMessage } = useWebSocket();
-    const [input, setInput] = useState('');
+    const { messages, sendMessage, migrationStatus } = useWebSocket();
+    const isRunning = migrationStatus === 'running';
+    const { stdout } = useStdout();
+    const lastMessageCount = useRef(0);
 
-    useInput((inputChar: string, key: any) => {
-        // Don't handle tab navigation keys
-        if (inputChar === '1' || inputChar === '2' || inputChar === '3') {
-            return;
-        }
-        if (key.leftArrow || key.rightArrow) {
-            return;
-        }
+    // Calculate visible messages based on terminal height
+    // Account for: Menu bar (3 lines with border), Footer (1 line)
+    const terminalHeight = stdout?.rows || 24;
+    const reservedLines = 5; // UI chrome: menu (3) + footer (1) + safety (1)
+    const availableLines = Math.max(1, terminalHeight - reservedLines);
+    const maxVisibleMessages = Math.max(5, availableLines);
+    const visibleMessages = messages.slice(-maxVisibleMessages);
 
-        if (key.return) {
-            sendMessage(input);
-            setInput('');
-            return;
-        }
+    // Calculate how many empty lines we need to fill the space
+    // We want exactly enough lines to fill to the footer
+    const emptyLineCount = Math.max(0, availableLines - visibleMessages.length);
 
-        if (key.backspace || key.delete) {
-            setInput((prev) => prev.slice(0, -1));
-            return;
-        }
+    // Update last message count
+    useEffect(() => {
+        lastMessageCount.current = messages.length;
+    }, [messages]);
 
-        if (!key.ctrl && !key.meta && inputChar.length === 1) {
-            setInput((prev) => prev + inputChar);
+    // Handle key inputs
+    useInput((input, key) => {
+        // Start migration
+        if (input === 's' && !isRunning) {
+            sendMessage('start');
+        }
+        // Stop migration
+        else if (input === 'S' && isRunning) {
+            sendMessage('stop');
         }
     });
 
-    const getStatusColor = (): 'green' | 'yellow' | 'red' => {
-        switch (connectionStatus) {
-            case 'connected':
-                return 'green';
-            case 'connecting':
-                return 'yellow';
-            case 'disconnected':
-                return 'red';
-        }
-    };
-
-    const getStatusText = (): string => {
-        switch (connectionStatus) {
-            case 'connected':
-                return 'CONNECTED';
-            case 'connecting':
-                return 'CONNECTING';
-            case 'disconnected':
-                return 'DISCONNECTED';
-        }
-    };
-
-    // Keep only last 15 messages for display
-    const displayMessages = messages.slice(-15);
-
     return (
         <Box flexDirection="column" width="100%" height="100%">
-            {/* Status Bar */}
-            <Box marginBottom={1}>
-                <Text bold color={getStatusColor()}>
-                    Server Status: [{getStatusText()}]
-                </Text>
-            </Box>
-
-            {/* Messages */}
-            <Box
-                flexDirection="column"
-                borderStyle="round"
-                borderColor="gray"
-                paddingX={1}
-                paddingY={0}
-                flexGrow={1}
-            >
-                <Text bold underline color="cyan" dimColor>
-                    Migration Server Messages:
-                </Text>
-                {displayMessages.map((msg, idx) => {
+            {/* Messages - scrolling area */}
+            <Box flexDirection="column" flexShrink={0}>
+                {visibleMessages.map((msg, idx) => {
                     let prefix = '';
-                    let color: 'green' | 'blue' | 'yellow' = 'green';
+                    let color: 'green' | 'blue' | 'yellow' | 'white' | 'red' = 'green';
 
                     switch (msg.type) {
                         case 'sent':
@@ -91,29 +56,62 @@ export const MigratorTab: React.FC = () => {
                             color = 'blue';
                             break;
                         case 'system':
-                            prefix = '•';
-                            color = 'yellow';
+                            if (msg.content.startsWith('⚠')) {
+                                prefix = '';
+                                color = 'red';
+                            } else {
+                                prefix = '';
+                                color = 'white';
+                            }
                             break;
                     }
 
+                    // Truncate very long messages to prevent multi-line wrapping
+                    const maxLength = (stdout?.columns || 80) - 5;
+                    const content =
+                        msg.content.length > maxLength
+                            ? msg.content.substring(0, maxLength) + '...'
+                            : msg.content;
+
                     return (
-                        <Text key={`msg-${msg.timestamp.getTime()}-${idx}`} color={color}>
-                            {prefix} {msg.content}
+                        <Text
+                            key={`msg-${msg.timestamp.getTime()}-${idx}`}
+                            color={color}
+                            wrap="truncate-end"
+                        >
+                            {prefix} {content}
                         </Text>
                     );
                 })}
+
+                {/* Fill with empty lines to push footer to bottom */}
+                {Array.from({ length: emptyLineCount }).map((_, idx) => (
+                    <Text key={`empty-${idx}`}> </Text>
+                ))}
             </Box>
 
-            {/* Input */}
-            <Box borderStyle="round" borderColor="cyan" paddingX={1} marginTop={1}>
-                <Text color="gray">{'> '}</Text>
-                <Text>{input}</Text>
-                <Text color="gray">█</Text>
-            </Box>
+            {/* Footer with help text and status */}
+            <Box flexShrink={0} backgroundColor={colors.purple}>
+                {/* Left: Help text */}
+                <Box flexShrink={0}>
+                    <Text color={colors.text1}>
+                        {isRunning ? '[S]top migration' : '[s]tart migration'}
+                    </Text>
+                </Box>
 
-            {/* Help text */}
-            <Box marginTop={1}>
-                <Text dimColor>Commands: migrate &lt;extension-id&gt; | stop | status</Text>
+                {/* Spacer */}
+                <Box flexGrow={1} />
+
+                {/* Right: Migration status */}
+                <Box flexShrink={0}>
+                    <Text color={colors.text1}>
+                        Status:{' '}
+                        <Text color={isRunning ? 'green' : 'red'}>
+                            {isRunning ? '● Running' : '○ Stopped'}
+                        </Text>
+                        <Text dimColor> ({messages.length} msgs)</Text>
+                    </Text>
+                </Box>
             </Box>
         </Box>
     );

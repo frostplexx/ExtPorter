@@ -39,20 +39,22 @@ export const MenuBar: React.FC<MenuBarProps> = ({ activeTab, tabs }) => {
         <Box
             flexDirection="column"
             width="100%"
-            height="1px"
-            flexGrow={1}
+            flexShrink={0}
             borderStyle={'round'}
             borderColor={colors.purple}
         >
             {/* Menu Bar */}
-            <Box width="100%">
+            <Box width="100%" flexShrink={0}>
                 {/* Left: App Title */}
                 <Box marginRight={2} flexShrink={0}>
                     <Text bold>ExtPorter</Text>
                 </Box>
 
+                {/* Left Spacer */}
+                <Box flexGrow={1} />
+
                 {/* Center: Tabs */}
-                <Box width="100%" flexGrow={1} justifyContent="center">
+                <Box flexShrink={0} justifyContent="center">
                     {tabs.map((tab, index) => {
                         const isActive = tab.name === activeTab;
                         return (
@@ -70,7 +72,7 @@ export const MenuBar: React.FC<MenuBarProps> = ({ activeTab, tabs }) => {
                     })}
                 </Box>
 
-                {/* Spacer */}
+                {/* Right Spacer */}
                 <Box flexGrow={1} />
 
                 {/* Right: Status Indicators */}
@@ -79,9 +81,9 @@ export const MenuBar: React.FC<MenuBarProps> = ({ activeTab, tabs }) => {
                     <Text color={getStatusColor(connectionStatus)}>
                         {getStatusIcon(connectionStatus)}
                     </Text>
-                    <Text dimColor>  Database: </Text>
+                    <Text dimColor> Database: </Text>
                     <Text color={getStatusColor(databaseStatus)}>
-                        {getStatusIcon(databaseStatus)} 
+                        {getStatusIcon(databaseStatus)}
                     </Text>
                 </Box>
             </Box>

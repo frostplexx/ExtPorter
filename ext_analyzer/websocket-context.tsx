@@ -12,6 +12,7 @@ interface WebSocketContextType {
     messages: Message[];
     connectionStatus: 'disconnected' | 'connecting' | 'connected';
     databaseStatus: 'disconnected' | 'connecting' | 'connected';
+    migrationStatus: 'running' | 'stopped';
     sendMessage: (message: string) => void;
 }
 
@@ -29,6 +30,7 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
     const [databaseStatus, setDatabaseStatus] = useState<
         'disconnected' | 'connecting' | 'connected'
     >('disconnected');
+    const [migrationStatus, setMigrationStatus] = useState<'running' | 'stopped'>('stopped');
     const [client] = useState(() => new ExtensionAnalyzerClient('ws://localhost:8080'));
     const [reconnectTimer, setReconnectTimer] = useState<NodeJS.Timeout | null>(null);
     const [handlersRegistered, setHandlersRegistered] = useState(false);
@@ -140,12 +142,38 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
                 return;
             }
 
-            // Log regular messages
+            // Check if message contains migration status info
+            if (message.includes('MIGRATION_STATUS:')) {
+                const statusMatch = message.match(/MIGRATION_STATUS:(\w+)/);
+                if (statusMatch) {
+                    const migStatus = statusMatch[1].toLowerCase() as 'running' | 'stopped';
+                    setMigrationStatus(migStatus);
+                }
+                // Don't log MIGRATION_STATUS messages to the message list
+                return;
+            }
+
+            // Check if message is STDOUT or STDERR
+            let messageType: 'sent' | 'received' | 'system' = 'received';
+            let content = message;
+
+            if (message.startsWith('STDOUT: ')) {
+                messageType = 'system';
+                content = message.substring(8); // Remove 'STDOUT: ' prefix
+            } else if (message.startsWith('STDERR: ')) {
+                messageType = 'system';
+                content = '⚠ ' + message.substring(8); // Remove 'STDERR: ' prefix and add warning
+            }
+
+            // Normalize content to single line (replace newlines and multiple spaces)
+            content = content.replace(/\n/g, ' ').replace(/\s+/g, ' ').trim();
+
+            // Log messages
             setMessages((prev) => [
                 ...prev,
                 {
-                    type: 'received',
-                    content: message,
+                    type: messageType,
+                    content: content,
                     timestamp: new Date(),
                 },
             ]);
@@ -184,6 +212,7 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
         messages,
         connectionStatus,
         databaseStatus,
+        migrationStatus,
         sendMessage,
     };
 
