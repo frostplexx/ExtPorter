@@ -71,4 +71,7 @@ const App: React.FC = () => {
     );
 };
 
+// Clear terminal before rendering
+process.stdout.write('\x1Bc');
+
 render(<App />);

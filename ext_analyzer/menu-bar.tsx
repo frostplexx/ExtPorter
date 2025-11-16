@@ -1,6 +1,7 @@
 import React from 'react';
 import { Box, Text } from 'ink';
 import { useWebSocket } from './websocket-context.js';
+import { colors } from './colors.js';
 
 type TabName = 'migrator' | 'analyzer' | 'settings';
 
@@ -34,41 +35,32 @@ export const MenuBar: React.FC<MenuBarProps> = ({ activeTab, tabs }) => {
         }
     };
 
-    const getStatusText = (status: 'connected' | 'disconnected' | 'connecting'): string => {
-        switch (status) {
-            case 'connected':
-                return 'Connected';
-            case 'connecting':
-                return 'Connecting';
-            case 'disconnected':
-                return 'Disconnected';
-        }
-    };
-
     return (
-        <Box flexDirection="column" width="100%">
+        <Box
+            flexDirection="column"
+            width="100%"
+            height="1px"
+            flexGrow={1}
+            borderStyle={'round'}
+            borderColor={colors.purple}
+        >
             {/* Menu Bar */}
             <Box width="100%">
                 {/* Left: App Title */}
-                <Box marginRight={2}>
-                    <Text bold color="cyan">
-                        ExtPorter
-                    </Text>
+                <Box marginRight={2} flexShrink={0}>
+                    <Text bold>ExtPorter</Text>
                 </Box>
 
-                {/* Spacer */}
-                <Box flexGrow={1} />
-
                 {/* Center: Tabs */}
-                <Box>
+                <Box width="100%" flexGrow={1} justifyContent="center">
                     {tabs.map((tab, index) => {
                         const isActive = tab.name === activeTab;
                         return (
                             <Box key={tab.name} marginRight={2}>
                                 <Text
                                     bold={isActive}
-                                    color={isActive ? 'cyan' : 'white'}
-                                    backgroundColor={isActive ? 'blue' : undefined}
+                                    color={isActive ? colors.text1 : colors.text1}
+                                    backgroundColor={isActive ? colors.purple : undefined}
                                     dimColor={!isActive}
                                 >
                                     {index + 1}. {tab.label}
@@ -82,21 +74,17 @@ export const MenuBar: React.FC<MenuBarProps> = ({ activeTab, tabs }) => {
                 <Box flexGrow={1} />
 
                 {/* Right: Status Indicators */}
-                <Box>
-                    <Text dimColor>┃ Server: </Text>
+                <Box flexShrink={0}>
+                    <Text dimColor>Server: </Text>
                     <Text color={getStatusColor(connectionStatus)}>
-                        {getStatusIcon(connectionStatus)} {getStatusText(connectionStatus)}
+                        {getStatusIcon(connectionStatus)}
                     </Text>
-                    <Text dimColor> ┃ Database: </Text>
+                    <Text dimColor>  Database: </Text>
                     <Text color={getStatusColor(databaseStatus)}>
-                        {getStatusIcon(databaseStatus)} {getStatusText(databaseStatus)}
+                        {getStatusIcon(databaseStatus)} 
                     </Text>
-                    <Text dimColor> ┃</Text>
                 </Box>
             </Box>
-
-            {/* Full-width Separator - Uses single line style which stretches to full width */}
-            <Box width="100%" borderStyle="single" borderTop />
         </Box>
     );
 };
