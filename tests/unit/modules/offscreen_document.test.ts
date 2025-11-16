@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
-import { OffscreenDocumentMigrator } from '../../../migrator/modules/offscreen_document';
+import { OffscreenDocumentMigrator } from '../../../migrator/modules/offscreen_documents';
 import { Extension } from '../../../migrator/types/extension';
 import { MigrationError } from '../../../migrator/types/migration_module';
 import { LazyFile } from '../../../migrator/types/abstract_file';
@@ -73,8 +73,7 @@ describe('OffscreenDocumentMigrator', () => {
                 expect(
                     result.files.some(
                         (f) =>
-                            f.path ===
-                            OffscreenDocumentMigrator.testHelpers.OFFSCREEN_HTML_FILENAME
+                            f.path === OffscreenDocumentMigrator.testHelpers.OFFSCREEN_HTML_FILENAME
                     )
                 ).toBe(true);
                 expect(
@@ -184,7 +183,7 @@ describe('OffscreenDocumentMigrator', () => {
 
         it('should add OFFSCREEN_DOCUMENT_ADDED tag', async () => {
             (mockServiceWorkerFile.getContent as jest.Mock).mockReturnValue(
-                'window.localStorage.getItem("key");'
+                'const el = document.getElementById("test");' // Actual DOM access that needs offscreen
             );
 
             const result = await OffscreenDocumentMigrator.migrate(baseExtension);
@@ -356,9 +355,8 @@ describe('OffscreenDocumentMigrator', () => {
                 'document.getElementById("test");'
             );
 
-            const result = OffscreenDocumentMigrator.testHelpers.needsOffscreenDocument(
-                baseExtension
-            );
+            const result =
+                OffscreenDocumentMigrator.testHelpers.needsOffscreenDocument(baseExtension);
             expect(result).toBe(true);
         });
 
@@ -367,36 +365,32 @@ describe('OffscreenDocumentMigrator', () => {
                 'chrome.tabs.query({}, () => {});'
             );
 
-            const result = OffscreenDocumentMigrator.testHelpers.needsOffscreenDocument(
-                baseExtension
-            );
+            const result =
+                OffscreenDocumentMigrator.testHelpers.needsOffscreenDocument(baseExtension);
             expect(result).toBe(false);
         });
 
         it('should return false when no service worker exists', () => {
             delete baseExtension.manifest.background;
 
-            const result = OffscreenDocumentMigrator.testHelpers.needsOffscreenDocument(
-                baseExtension
-            );
+            const result =
+                OffscreenDocumentMigrator.testHelpers.needsOffscreenDocument(baseExtension);
             expect(result).toBe(false);
         });
 
         it('should return false when service worker file not found', () => {
             baseExtension.files = [mockOtherFile];
 
-            const result = OffscreenDocumentMigrator.testHelpers.needsOffscreenDocument(
-                baseExtension
-            );
+            const result =
+                OffscreenDocumentMigrator.testHelpers.needsOffscreenDocument(baseExtension);
             expect(result).toBe(false);
         });
 
         it('should return false when service worker is not JS file', () => {
             mockServiceWorkerFile.filetype = ExtFileType.HTML;
 
-            const result = OffscreenDocumentMigrator.testHelpers.needsOffscreenDocument(
-                baseExtension
-            );
+            const result =
+                OffscreenDocumentMigrator.testHelpers.needsOffscreenDocument(baseExtension);
             expect(result).toBe(false);
         });
 
@@ -405,9 +399,8 @@ describe('OffscreenDocumentMigrator', () => {
                 throw new Error('File read error');
             });
 
-            const result = OffscreenDocumentMigrator.testHelpers.needsOffscreenDocument(
-                baseExtension
-            );
+            const result =
+                OffscreenDocumentMigrator.testHelpers.needsOffscreenDocument(baseExtension);
             expect(result).toBe(false);
         });
     });
@@ -455,9 +448,7 @@ describe('OffscreenDocumentMigrator', () => {
         it('should create JS file with correct structure', () => {
             const jsFile = OffscreenDocumentMigrator.testHelpers.createOffscreenJS();
 
-            expect(jsFile.path).toBe(
-                OffscreenDocumentMigrator.testHelpers.OFFSCREEN_JS_FILENAME
-            );
+            expect(jsFile.path).toBe(OffscreenDocumentMigrator.testHelpers.OFFSCREEN_JS_FILENAME);
             expect(jsFile.filetype).toBe(ExtFileType.JS);
         });
 
@@ -603,7 +594,9 @@ describe('OffscreenDocumentMigrator', () => {
                 permissions: ['storage'],
             };
 
-            const result = OffscreenDocumentMigrator.testHelpers.updateManifest(manifest);
+            const result = OffscreenDocumentMigrator.testHelpers.updateManifest(manifest, {
+                needsOffscreen: true,
+            });
 
             expect(result.permissions).toContain('offscreen');
             expect(result.permissions).toContain('storage');
@@ -616,7 +609,9 @@ describe('OffscreenDocumentMigrator', () => {
                 permissions: ['offscreen', 'storage'],
             };
 
-            const result = OffscreenDocumentMigrator.testHelpers.updateManifest(manifest);
+            const result = OffscreenDocumentMigrator.testHelpers.updateManifest(manifest, {
+                needsOffscreen: true,
+            });
 
             const offscreenCount = result.permissions.filter(
                 (p: string) => p === 'offscreen'
@@ -630,7 +625,9 @@ describe('OffscreenDocumentMigrator', () => {
                 version: '1.0',
             };
 
-            const result = OffscreenDocumentMigrator.testHelpers.updateManifest(manifest);
+            const result = OffscreenDocumentMigrator.testHelpers.updateManifest(manifest, {
+                needsOffscreen: true,
+            });
 
             expect(result.permissions).toBeDefined();
             expect(result.permissions).toContain('offscreen');
@@ -643,7 +640,9 @@ describe('OffscreenDocumentMigrator', () => {
                 permissions: ['storage'],
             };
 
-            const result = OffscreenDocumentMigrator.testHelpers.updateManifest(manifest);
+            const result = OffscreenDocumentMigrator.testHelpers.updateManifest(manifest, {
+                needsOffscreen: true,
+            });
 
             expect(result).not.toBe(manifest);
             expect(result.permissions).not.toBe(manifest.permissions);
@@ -740,8 +739,7 @@ describe('OffscreenDocumentMigrator', () => {
                 expect(result.manifest.permissions).toContain('offscreen');
 
                 const htmlFile = result.files.find(
-                    (f) =>
-                        f.path === OffscreenDocumentMigrator.testHelpers.OFFSCREEN_HTML_FILENAME
+                    (f) => f.path === OffscreenDocumentMigrator.testHelpers.OFFSCREEN_HTML_FILENAME
                 );
                 const jsFile = result.files.find(
                     (f) => f.path === OffscreenDocumentMigrator.testHelpers.OFFSCREEN_JS_FILENAME

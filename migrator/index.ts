@@ -12,8 +12,7 @@ import { Database } from './features/database/db_manager';
 import { MigrationError } from './types/migration_module';
 // import { ResourceDownloader } from './modules/resource_downloader';
 import { BridgeInjector } from './modules/bridge_injector';
-import { ServiceWorkerCompat } from './modules/service_worker_compat';
-import { OffscreenMigrator } from './modules/offscreen_migrator';
+import { OffscreenDocumentMigrator } from './modules/offscreen_documents';
 import { WebRequestMigrator } from './modules/web_request_migrator/web_request_migrator';
 import { extensionUtils } from './utils/extension_utils';
 import { WriteMigrated } from './modules/write_extension';
@@ -92,8 +91,7 @@ async function main() {
         // ResourceDownloader.migrate,
         RenameAPIS.migrate,
         BridgeInjector.migrate,
-        ServiceWorkerCompat.migrate, // Fix window, localStorage, DOM issues
-        OffscreenMigrator.migrate, // Add offscreen document if needed
+        OffscreenDocumentMigrator.migrate, // Unified: Fix window, localStorage, DOM issues + Add offscreen document
         InterestingnessScorer.migrate,
         WriteMigrated.migrate,
     ];
