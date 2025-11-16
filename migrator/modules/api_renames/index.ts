@@ -11,6 +11,7 @@ import { BlacklistChecker } from '../../utils/blacklist_checker';
 import { FormatPreservingGenerator } from '../../utils/format_preserving_generator';
 import { loadApiMappings } from './api-mappings-loader';
 import { applyApiTransformations } from './ast-transformers';
+import { extensionUtils } from '../../utils/extension_utils';
 
 /**
  * This module handles the transformation of Chrome Extension Manifest V2 APIs
@@ -127,7 +128,7 @@ export class RenameAPIS implements MigrationModule {
             };
 
             // Add API_RENAMES_APPLIED tag to extension object
-            RenameAPIS.addTagToExtension(updatedExtension, Tags.API_RENAMES_APPLIED);
+            extension = extensionUtils.addTag(extension, Tags.API_RENAMES_APPLIED);
 
             return updatedExtension;
         } catch (error) {
@@ -304,22 +305,5 @@ export class RenameAPIS implements MigrationModule {
         logger.error(extension, `Migration error at ${startTime}`, {
             error: error instanceof Error ? error.message : String(error),
         });
-    }
-
-    /**
-     * Adds a tag to an extension if it doesn't already exist.
-     * Utility method for consistent tag management across migration modules.
-     *
-     * @param extension Extension to add tag to
-     * @param tag Tag enum value to add
-     */
-    private static addTagToExtension(extension: Extension, tag: Tags): void {
-        if (!extension.tags) {
-            extension.tags = [];
-        }
-        const tagValue = Tags[tag];
-        if (!extension.tags.includes(tagValue)) {
-            extension.tags.push(tagValue);
-        }
     }
 }

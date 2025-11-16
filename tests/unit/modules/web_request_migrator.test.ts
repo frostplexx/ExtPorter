@@ -1,5 +1,5 @@
 import { describe, it, expect } from '@jest/globals';
-import { WebRequestMigrator } from '../../../migrator/modules/web_request_migrator';
+import { WebRequestMigrator } from '../../../migrator/modules/web_request_migrator/web_request_migrator';
 import { Extension } from '../../../migrator/types/extension';
 import { LazyFile } from '../../../migrator/types/abstract_file';
 import { ExtFileType } from '../../../migrator/types/ext_file_types';

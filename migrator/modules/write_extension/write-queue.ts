@@ -1,28 +1,26 @@
-import * as fs from 'fs/promises';
-import * as path from 'path';
-import { Extension } from '../types/extension';
-import { globals } from '../index';
-import { logger } from '../utils/logger';
-import { ExtFileType } from '../types/ext_file_types';
-import {
-    normalizeJavaScriptContent,
-    normalizeJSONContent,
-    normalizeHTMLContent,
-    normalizeCSSContent,
-} from '../utils/file_normalizer';
+import { Extension } from '../../types/extension';
+import { logger } from '../../utils/logger';
+import { WriteTask } from './index';
+import { resolveOutputPath } from './path-resolver';
+import { Writer } from './writer';
 
-interface WriteTask {
-    extension: Extension;
-    priority?: number;
-}
-
-export class MigrationWriter {
-    private static instance: MigrationWriter;
+/**
+ * WriteQueue manages asynchronous writing of migrated extensions to disk.
+ *
+ * Features:
+ * - Priority-based task queue
+ * - Concurrent processing with configurable workers
+ * - Graceful shutdown handling
+ * - Singleton pattern for global queue management
+ */
+export class WriteQueue {
+    private static instance: WriteQueue;
     private writeQueue: WriteTask[] = [];
     private isProcessing = false;
-    private readonly concurrentWrites = 3;
+    private readonly concurrentWrites = 10;
     private activeWriters = 0;
     private autoPro = true; // Auto-process queue (can be disabled for testing)
+    private readonly fileBatchSize = 50; // Number of files to write concurrently
 
     private constructor() {
         // Handle graceful shutdown
@@ -45,11 +43,11 @@ export class MigrationWriter {
         });
     }
 
-    public static get shared(): MigrationWriter {
-        if (!MigrationWriter.instance) {
-            MigrationWriter.instance = new MigrationWriter();
+    public static get shared(): WriteQueue {
+        if (!WriteQueue.instance) {
+            WriteQueue.instance = new WriteQueue();
         }
-        return MigrationWriter.instance;
+        return WriteQueue.instance;
     }
 
     public async queueExtension(extension: Extension, priority: number = 0): Promise<void> {
@@ -133,134 +131,16 @@ export class MigrationWriter {
     }
 
     private async writeExtensionToDisk(extension: Extension): Promise<void> {
-        // Check if NEW_TAB_SUBFOLDER is enabled and this is a new tab extension
-        const useNewTabSubfolder = process.env.NEW_TAB_SUBFOLDER === 'true';
-        const isNewTab = extension.isNewTabExtension || false;
-
-        let outputPath: string;
-        // Use MV3 ID if available, otherwise fall back to MV2 ID
-        const extensionId = extension.mv3_extension_id || extension.id;
-
-        if (useNewTabSubfolder && isNewTab) {
-            outputPath = path.join(globals.outputDir, 'new_tab_extensions', extensionId);
-        } else {
-            outputPath = path.join(globals.outputDir, extensionId);
-        }
+        const outputPath = resolveOutputPath(extension);
 
         try {
-            await fs.mkdir(outputPath, { recursive: true });
-
-            await Promise.all([
-                this.writeManifest(extension, outputPath),
-                this.writeFiles(extension, outputPath),
-            ]);
-
-            // const logMessage = isNewTab && useNewTabSubfolder ?
-            //     "written new-tab extension to subfolder" :
-            //     "written extension";
-            //
-            // logger.info(extension, logMessage, {
-            //     outputSizeBytes: await this.calculateDirectorySize(outputPath),
-            //     outputPath: outputPath
-            // });
+            await Writer.writeExtension(extension, outputPath);
         } catch (error) {
             logger.error(extension, 'Failed to create output directory or write extension', {
                 outputPath,
                 error: error instanceof Error ? error.message : String(error),
             });
             throw error;
-        }
-    }
-
-    private async writeManifest(extension: Extension, outputPath: string): Promise<void> {
-        const manifestPath = path.join(outputPath, 'manifest.json');
-        let manifestContent = JSON.stringify(extension.manifest, null, 2);
-
-        // Normalize JSON content (line endings, EOF newline)
-        manifestContent = normalizeJSONContent(manifestContent);
-
-        try {
-            await fs.writeFile(manifestPath, manifestContent, 'utf8');
-        } catch (error) {
-            logger.error(extension, 'Failed to write manifest', {
-                error: error instanceof Error ? error.message : String(error),
-            });
-            throw error;
-        }
-    }
-
-    private async writeFiles(extension: Extension, outputPath: string): Promise<void> {
-        const writePromises = extension.files.map(async (file) => {
-            const filePath = path.join(outputPath, file.path);
-            const fileDir = path.dirname(filePath);
-
-            try {
-                await fs.mkdir(fileDir, { recursive: true });
-
-                // Use text encoding only for recognized text file types, binary copy for everything else
-                if (
-                    file.filetype === ExtFileType.JS ||
-                    file.filetype === ExtFileType.CSS ||
-                    file.filetype === ExtFileType.HTML
-                ) {
-                    // Write text files with UTF-8 encoding
-                    let content = file.getContent();
-
-                    // Normalize content based on file type
-                    if (file.filetype === ExtFileType.JS) {
-                        content = normalizeJavaScriptContent(content);
-                    } else if (file.filetype === ExtFileType.CSS) {
-                        content = normalizeCSSContent(content);
-                    } else if (file.filetype === ExtFileType.HTML) {
-                        content = normalizeHTMLContent(content);
-                    }
-
-                    await fs.writeFile(filePath, content, 'utf8');
-                } else {
-                    // Write all other files (ExtFileType.OTHER) as binary to preserve data integrity
-                    const buffer = file.getBuffer();
-                    await fs.writeFile(filePath, buffer);
-                }
-            } catch (error) {
-                logger.error(extension, 'Failed to write file', {
-                    filePath: file.path,
-                    fileType: file.filetype,
-                    isTextFile:
-                        file.filetype === ExtFileType.JS ||
-                        file.filetype === ExtFileType.CSS ||
-                        file.filetype === ExtFileType.HTML,
-                    error: error instanceof Error ? error.message : String(error),
-                });
-                throw error;
-            }
-        });
-
-        await Promise.all(writePromises);
-    }
-
-    private async calculateDirectorySize(dirPath: string): Promise<number> {
-        try {
-            const entries = await fs.readdir(dirPath, { withFileTypes: true });
-            let totalSize = 0;
-
-            for (const entry of entries) {
-                const fullPath = path.join(dirPath, entry.name);
-
-                if (entry.isDirectory()) {
-                    totalSize += await this.calculateDirectorySize(fullPath);
-                } else if (entry.isFile()) {
-                    const stats = await fs.stat(fullPath);
-                    totalSize += stats.size;
-                }
-            }
-
-            return totalSize;
-        } catch (error) {
-            logger.debug(null, 'Failed to calculate directory size', {
-                dirPath,
-                error: error instanceof Error ? error.message : String(error),
-            });
-            return 0;
         }
     }
 
@@ -329,12 +209,7 @@ export class MigrationWriter {
      */
     public async writeExtensionSync(extension: Extension, outputPath: string): Promise<void> {
         try {
-            await fs.mkdir(outputPath, { recursive: true });
-
-            await Promise.all([
-                this.writeManifest(extension, outputPath),
-                this.writeFiles(extension, outputPath),
-            ]);
+            await Writer.writeExtension(extension, outputPath);
         } catch (error) {
             logger.error(
                 extension,

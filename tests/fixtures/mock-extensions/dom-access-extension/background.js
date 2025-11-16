@@ -44,24 +44,6 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 });
 
 // Canvas operations - should use offscreen document
-function generateImage() {
-    try {
-        // This will fail in service worker
-        const canvas = document.createElement('canvas');
-        canvas.width = 100;
-        canvas.height = 100;
-        
-        const ctx = canvas.getContext('2d');
-        ctx.fillStyle = 'red';
-        ctx.fillRect(0, 0, 100, 100);
-        
-        return canvas.toDataURL();
-    } catch (error) {
-        console.error('Canvas access failed:', error);
-        return null;
-    }
-}
-
 // Example of code that SHOULD work in service worker (no DOM access)
 chrome.tabs.onUpdated.addListener((_tabId, changeInfo, tab) => {
     if (changeInfo.status === 'complete') {

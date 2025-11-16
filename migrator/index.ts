@@ -1,12 +1,10 @@
 import dotenv from 'dotenv';
 import * as path from 'path';
-import { RenameAPIS } from './modules/api_renames/api_renames';
+import { RenameAPIS } from './modules/api_renames';
 import { MigrateManifest } from './modules/manifest';
 import { MigrateCSP } from './modules/csp';
-import { WriteMigrated } from './modules/write_migrated';
-import { MigrationWriter } from './modules/migration_writer';
-import { InterestingnessScorer } from './modules/interestingness_scorer';
-import { Extension, closeExtensionFiles } from './types/extension';
+import { InterestingnessScorer } from './modules/interestingenss_scorer';
+import { Extension } from './types/extension';
 import { find_extensions } from './utils/find_extensions';
 import { logger } from './utils/logger';
 import { Globals } from './types/globals';
@@ -14,16 +12,13 @@ import { Database } from './features/database/db_manager';
 import { MigrationError } from './types/migration_module';
 // import { ResourceDownloader } from './modules/resource_downloader';
 import { BridgeInjector } from './modules/bridge_injector';
-import { WebRequestMigrator } from './modules/web_request_migrator';
 import { ServiceWorkerCompat } from './modules/service_worker_compat';
 import { OffscreenMigrator } from './modules/offscreen_migrator';
-import {
-    checkMemoryThreshold,
-    clearExtensionMemory,
-    forceGarbageCollection,
-    logMemoryUsage,
-} from './utils/garbage';
+import { WebRequestMigrator } from './modules/web_request_migrator/web_request_migrator';
 import { checkMemoryThreshold, clearExtensionMemory, forceGarbageCollection, logMemoryUsage } from './utils/garbage';
+import { extensionUtils } from './utils/extension_utils';
+import { WriteMigrated } from './modules/write_extension';
+import { WriteQueue } from './modules/write_extension/write-queue';
 
 // Load environment variables once at application startup
 dotenv.config();
@@ -81,7 +76,7 @@ async function main() {
 
     // Close all file descriptors immediately after discovery to prevent FD leak
     extensions.forEach((extension) => {
-        closeExtensionFiles(extension);
+        extensionUtils.closeExtensionFiles(extension);
     });
 
     logger.info(null, `Found ${extensions.length} extensions in ${globals.extensionsPath}`);
@@ -171,7 +166,7 @@ async function main() {
                     }
 
                     // Write extension synchronously to ensure it completes before memory cleanup
-                    await MigrationWriter.shared.writeExtensionSync(extension, outputPath);
+                    await WriteQueue.shared.writeExtensionSync(extension, outputPath);
 
                     // Insert migrated extension to database immediately after successful migration
                     try {
@@ -239,7 +234,7 @@ async function main() {
         }
 
         // Flush the migration writer queue after each batch to prevent memory buildup
-        await MigrationWriter.shared.flush();
+        await WriteQueue.shared.flush();
 
         logger.info(
             null,
@@ -260,7 +255,7 @@ async function main() {
     forceGarbageCollection();
 
     // Flush the migration writer queue before finishing
-    await MigrationWriter.shared.flush();
+    await WriteQueue.shared.flush();
 
     // Note: Extensions are now inserted individually during migration to protect against crashes
     // This bulk insertion is kept as a safety net for any extensions that might have been missed
