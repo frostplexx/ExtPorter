@@ -141,8 +141,11 @@ export class ServiceWorkerCompat implements MigrationModule {
             }
 
             // 2.5. Convert callback-based chrome API calls to async/await
-            content = ServiceWorkerCompat.convertCallbacksToAsync(content);
-            modified = true;
+            const convertedContent = ServiceWorkerCompat.convertCallbacksToAsync(content);
+            if (convertedContent !== content) {
+                content = convertedContent;
+                modified = true;
+            }
 
             // 3. Replace DOM download with chrome.downloads API
             if (fixes.hasDOMDownload) {
