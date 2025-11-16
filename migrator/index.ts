@@ -17,6 +17,12 @@ import { WebRequestMigrator } from './modules/web_request_migrator/web_request_m
 import { extensionUtils } from './utils/extension_utils';
 import { WriteMigrated } from './modules/write_extension';
 import { WriteQueue } from './modules/write_extension/write-queue';
+import {
+    logMemoryUsage,
+    forceGarbageCollection,
+    checkMemoryThreshold,
+    clearExtensionMemory,
+} from './utils/garbage';
 
 // Load environment variables once at application startup
 dotenv.config();

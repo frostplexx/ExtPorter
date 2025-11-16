@@ -379,41 +379,6 @@ async function sendToOffscreen(type, data = {}) {
             // Add setup at the beginning
             content = offscreenSetup + '\n' + content;
 
-            // Transform localStorage calls to use chrome.storage.local
-            if (needsLocalStorage) {
-                // localStorage.getItem(key) -> await chrome.storage.local.get([key])
-                content = content.replace(
-                    /localStorage\.getItem\s*\(\s*(['"`])([^'"`]+)\1\s*\)/g,
-                    '(await chrome.storage.local.get(["$2"]))["$2"]'
-                );
-
-                // localStorage.setItem(key, value) -> await chrome.storage.local.set({key: value})
-                content = content.replace(
-                    /localStorage\.setItem\s*\(\s*([^)]*)\)/g,
-                    (match, args) => {
-                        // Try to split args into key and value
-                        // This is a best-effort split on the first comma not inside quotes or parentheses
-                        let key = '';
-                        let value = '';
-                        let depth = 0;
-                        let inQuote = null;
-                        let splitIdx = -1;
-                        for (let i = 0; i < args.length; i++) {
-                            const c = args[i];
-                            if (inQuote) {
-                                if (c === inQuote && args[i-1] !== '\\') inQuote = null;
-                            } else if (c === '"' || c === "'" || c === '`') {
-                                inQuote = c;
-                            } else if (c === '(') {
-                                depth++;
-                            } else if (c === ')') {
-                                depth--;
-                            } else if (c === ',' && depth === 0) {
-                                splitIdx = i;
-                                break;
-                            }
-                        }
-                        if (splitIdx !== -1) {
             // Transform localStorage calls to use storageHelper wrapper
             if (needsLocalStorage) {
                 // Inject storageHelper definition at the top if not already present

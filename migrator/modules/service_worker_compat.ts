@@ -356,8 +356,7 @@ const storageHelper = {
         // Replace with: chrome.downloads.download()
 
         // Find functions that contain download logic
-        const downloadFunctionPattern =
-            // Removed fragile regex. Use brace-matching below.
+        // Removed fragile regex. Use brace-matching below.
 
         let result = content;
 
@@ -429,29 +428,6 @@ const storageHelper = {
         // Append the rest of the content
         newContent += content.slice(lastIndex);
         result = newContent;
-    const dataUrl = 'data:${mimeType};charset=utf-8,' + encodeURIComponent(${dataVar});
-    
-    try {
-        await chrome.downloads.download({
-            url: dataUrl,
-            filename: ${fileName},
-            saveAs: true
-        });
-        return true;
-    } catch (error) {
-        console.error('Download failed:', error);
-        return false;
-    }`;
-
-                // Remove old DOM code and replace with downloads API
-                transformed = transformed.replace(
-                    /var\s+\w+\s*=\s*document\.createElement\s*\([^;]+;[\s\S]*?\.click\(\);?/,
-                    downloadCode
-                );
-            }
-
-            return transformed;
-        });
 
         return result;
     }
