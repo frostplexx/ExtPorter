@@ -333,7 +333,10 @@ async function setupOffscreenDocument() {
   try {
     await chrome.offscreen.createDocument({
       url: chrome.runtime.getURL('${OffscreenMigrator.OFFSCREEN_HTML}'),
-      reasons: ['${needsLocalStorage ? 'LOCAL_STORAGE' : 'DOM_SCRAPING'}'],
+      reasons: [
+        ${needsLocalStorage ? 'chrome.offscreen.Reason.LOCAL_STORAGE,' : ''}
+        chrome.offscreen.Reason.DOM_SCRAPING
+      ],
       justification: 'Required for DOM and window API access in Manifest V3',
     });
     offscreenCreated = true;
