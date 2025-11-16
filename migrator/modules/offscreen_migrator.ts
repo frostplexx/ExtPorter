@@ -24,7 +24,7 @@ export class OffscreenMigrator implements MigrationModule {
         /\blocalStorage\./,
         /\bsessionStorage\./,
         /\bnavigator\.clipboard\./,
-        /\b(DOM|HTML|Element|Node)\w*/,
+        /\b(HTMLElement|HTMLDocument|DOMParser|Element|Node|NodeList|DocumentFragment|ShadowRoot|HTMLCollection|HTMLInputElement|HTMLCanvasElement|HTMLImageElement|HTMLFormElement|HTMLButtonElement|HTMLAnchorElement|HTMLTableElement|HTMLTableRowElement|HTMLTableCellElement)\b/,
         /\b(querySelector|getElementById|createElement)\b/,
         /\b(addEventListener|removeEventListener)\b/,
         /\b(getComputedStyle|matchMedia)\b/,
