@@ -163,6 +163,26 @@ export class MigrationServer {
             ws.on('message', (message: Buffer) => {
                 const command = message.toString().trim();
 
+                // Try to parse as JSON for API calls
+                try {
+                    const jsonMessage = JSON.parse(command);
+                    if (jsonMessage.type === 'db_query') {
+                        this.handleDatabaseQuery(ws, jsonMessage).catch((error) => {
+                            console.error('Error in handleDatabaseQuery:', error);
+                            ws.send(
+                                JSON.stringify({
+                                    type: 'db_response',
+                                    id: jsonMessage.id,
+                                    error: error.message || String(error),
+                                })
+                            );
+                        });
+                        return;
+                    }
+                } catch (e) {
+                    // Not JSON, continue with legacy command handling
+                }
+
                 // Handle migrator commands
                 if (command === 'start') {
                     this.handleStartCommand().catch((error) => {
@@ -501,6 +521,75 @@ export class MigrationServer {
     // Get client identifier
     private getClientId(ws: WebSocket): string {
         return (ws as any).id || 'default';
+    }
+
+    // Handle database query requests
+    private async handleDatabaseQuery(ws: WebSocket, message: any): Promise<void> {
+        const { id, method, params } = message;
+
+        try {
+            let result: any;
+
+            switch (method) {
+                case 'getExtensions':
+                    // Fetch all extensions from database
+                    result = await Database.shared.getAllExtensions();
+                    break;
+
+                case 'findExtension':
+                    // Find a specific extension by filter
+                    result = await Database.shared.findExtension(params.filter || {});
+                    break;
+
+                case 'getCollections':
+                    // Get list of collections with counts
+                    result = await Database.shared.getCollections();
+                    break;
+
+                case 'queryCollection':
+                    // Query a specific collection
+                    result = await Database.shared.queryCollection(
+                        params.collection,
+                        params.query || {},
+                        params.limit || 10
+                    );
+                    break;
+
+                case 'countDocuments':
+                    // Count documents in a collection
+                    result = await Database.shared.countDocuments(
+                        params.collection,
+                        params.query || {}
+                    );
+                    break;
+
+                case 'getLogs':
+                    // Get logs with optional limit and sort
+                    result = await Database.shared.getLogs(params.limit || 50);
+                    break;
+
+                default:
+                    throw new Error(`Unknown database method: ${method}`);
+            }
+
+            // Send success response
+            ws.send(
+                JSON.stringify({
+                    type: 'db_response',
+                    id,
+                    result,
+                })
+            );
+        } catch (error) {
+            // Send error response
+            ws.send(
+                JSON.stringify({
+                    type: 'db_response',
+                    id,
+                    error: error instanceof Error ? error.message : String(error),
+                })
+            );
+        }
     }
 
     // Close the server gracefully
