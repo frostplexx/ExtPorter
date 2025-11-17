@@ -1,13 +1,15 @@
 #!/usr/bin/env tsx
 import React, { useState } from 'react';
-import { render, Box, Text, useInput, useApp } from 'ink';
+import { render, Box, useInput, useApp } from 'ink';
 import { MigratorTab } from './tabs/migrator-tab.js';
+import { ExplorerTab } from './tabs/explorer-tab.js';
 import { AnalyzerTab } from './tabs/analyzer-tab.js';
+import { DatabaseTab } from './tabs/database-tab.js';
 import { SettingsTab } from './tabs/settings-tab.js';
 import { MenuBar } from './menu-bar.js';
 import { WebSocketProvider } from './websocket-context.js';
 
-type TabName = 'migrator' | 'analyzer' | 'settings';
+type TabName = 'migrator' | 'explorer' | 'analyzer' | 'database' | 'settings';
 
 interface Tab {
     name: TabName;
@@ -17,8 +19,10 @@ interface Tab {
 
 const tabs: Tab[] = [
     { name: 'migrator', label: 'Migrator', component: MigratorTab },
-    { name: 'analyzer', label: 'Extension Analyzer', component: AnalyzerTab },
-    { name: 'settings', label: 'Settings', component: SettingsTab },
+    { name: 'explorer', label: 'Explorer', component: ExplorerTab },
+    { name: 'analyzer', label: 'Analyzer', component: AnalyzerTab },
+    { name: 'database', label: 'Database', component: DatabaseTab },
+    { name: 'settings', label: 'About', component: SettingsTab },
 ];
 
 const App: React.FC = () => {
@@ -26,10 +30,12 @@ const App: React.FC = () => {
     const [activeTab, setActiveTab] = useState<TabName>('migrator');
 
     useInput((input, key) => {
-        // Tab navigation with numbers 1, 2, 3
+        // Tab navigation with numbers 1-5
         if (input === '1') setActiveTab('migrator');
-        if (input === '2') setActiveTab('analyzer');
-        if (input === '3') setActiveTab('settings');
+        if (input === '2') setActiveTab('explorer');
+        if (input === '3') setActiveTab('analyzer');
+        if (input === '4') setActiveTab('database');
+        if (input === '5') setActiveTab('settings');
 
         // Tab navigation with arrow keys
         if (key.leftArrow || key.rightArrow) {

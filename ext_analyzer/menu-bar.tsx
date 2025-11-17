@@ -3,7 +3,7 @@ import { Box, Text } from 'ink';
 import { useWebSocket } from './websocket-context.js';
 import { colors } from './colors.js';
 
-type TabName = 'migrator' | 'analyzer' | 'settings';
+type TabName = 'migrator' | 'explorer' | 'analyzer' | 'database' | 'settings';
 
 interface MenuBarProps {
     activeTab: TabName;
@@ -57,17 +57,21 @@ export const MenuBar: React.FC<MenuBarProps> = ({ activeTab, tabs }) => {
                 <Box flexShrink={0} justifyContent="center">
                     {tabs.map((tab, index) => {
                         const isActive = tab.name === activeTab;
+                        // Truncate long labels for space
+                        const label =
+                            tab.label.length > 15 ? tab.label.slice(0, 13) + '..' : tab.label;
                         return (
-                            <Box key={tab.name} marginRight={2}>
+                            <Text key={tab.name}>
+                                {index > 0 && ' '}
                                 <Text
                                     bold={isActive}
                                     color={isActive ? colors.text1 : colors.text1}
                                     backgroundColor={isActive ? colors.purple : undefined}
                                     dimColor={!isActive}
                                 >
-                                    {index + 1}. {tab.label}
+                                    {index + 1}. {label}
                                 </Text>
-                            </Box>
+                            </Text>
                         );
                     })}
                 </Box>

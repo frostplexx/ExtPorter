@@ -1,75 +1,33 @@
 import React, { useState, useEffect } from 'react';
 import { Box, Text, useInput } from 'ink';
+import { useWebSocket } from '../websocket-context.js';
 
-// Mock database for now - will be replaced with actual database integration
-interface MockExtension {
+interface ExtensionAnalysis {
     id: string;
     name: string;
-    score: number;
-    hasMv3: boolean;
-}
-
-const mockExtensions: MockExtension[] = [
-    { id: 'ext1', name: 'AdBlock Plus', score: 95.2, hasMv3: true },
-    { id: 'ext2', name: 'LastPass', score: 88.7, hasMv3: false },
-    { id: 'ext3', name: 'Grammarly', score: 92.1, hasMv3: true },
-    { id: 'ext4', name: 'Honey', score: 76.4, hasMv3: false },
-    { id: 'ext5', name: 'Dark Reader', score: 84.9, hasMv3: true },
-];
-
-interface ExtensionListItem {
-    id: string;
-    name: string;
-    score: number;
-    hasMv3: boolean;
+    version: string;
+    interestingness?: number;
+    tags?: string[];
+    features?: {
+        usesWebRequest?: boolean;
+        usesBackgroundPage?: boolean;
+        usesServiceWorker?: boolean;
+        usesOffscreenDocument?: boolean;
+        usesDNR?: boolean;
+        permissions?: string[];
+    };
+    migrationStatus?: 'not-started' | 'in-progress' | 'completed' | 'failed';
 }
 
 export const AnalyzerTab: React.FC = () => {
-    const [extensions, setExtensions] = useState<ExtensionListItem[]>([]);
+    const { extensions, databaseStatus } = useWebSocket();
     const [selectedIndex, setSelectedIndex] = useState(0);
     const [searchQuery, setSearchQuery] = useState('');
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
-    const [dbConnected, setDbConnected] = useState(false);
-
-    useEffect(() => {
-        loadExtensions();
-    }, []);
-
-    const loadExtensions = async () => {
-        try {
-            setLoading(true);
-            setError(null);
-
-            // Simulate database connection check
-            const dbConnected = true; // Will be replaced with actual check
-            setDbConnected(dbConnected);
-
-            // Use mock data for now
-            const extensionList: ExtensionListItem[] = mockExtensions.map((ext) => ({
-                id: ext.id,
-                name: ext.name,
-                score: ext.score,
-                hasMv3: ext.hasMv3,
-            }));
-
-            // Sort by interestingness score
-            extensionList.sort((a, b) => b.score - a.score);
-
-            setExtensions(extensionList);
-            setLoading(false);
-        } catch (err) {
-            setError(
-                `Error loading extensions: ${err instanceof Error ? err.message : String(err)}`
-            );
-            setLoading(false);
-            setDbConnected(false);
-        }
-    };
+    const [sortBy, setSortBy] = useState<'name' | 'interestingness' | 'version'>('interestingness');
 
     useInput((inputChar: string, key: any) => {
         // Don't handle tab navigation keys
-        if (inputChar === '1' || inputChar === '2' || inputChar === '3') {
+        if (['1', '2', '3', '4', '5'].includes(inputChar)) {
             return;
         }
         if (key.leftArrow || key.rightArrow) {
@@ -91,17 +49,19 @@ export const AnalyzerTab: React.FC = () => {
             !key.ctrl &&
             !key.meta &&
             inputChar.length === 1 &&
-            inputChar !== '1' &&
-            inputChar !== '2' &&
-            inputChar !== '3'
+            !['1', '2', '3', '4', '5'].includes(inputChar)
         ) {
             setSearchQuery((prev) => prev + inputChar);
             setSelectedIndex(0);
         }
 
-        // Reload
-        if (inputChar === 'r' && !key.ctrl) {
-            loadExtensions();
+        // Sort toggle
+        if (inputChar === 's' && !key.ctrl) {
+            setSortBy((prev) => {
+                if (prev === 'interestingness') return 'name';
+                if (prev === 'name') return 'version';
+                return 'interestingness';
+            });
         }
     });
 
@@ -109,29 +69,56 @@ export const AnalyzerTab: React.FC = () => {
     const filteredExtensions = extensions.filter(
         (ext) =>
             ext.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            ext.id.toLowerCase().includes(searchQuery.toLowerCase())
+            ext.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            ext.tags?.some((tag) => tag.toLowerCase().includes(searchQuery.toLowerCase()))
     );
 
-    // Display only 10 extensions at a time
-    const displayExtensions = filteredExtensions.slice(0, 15);
+    // Sort extensions
+    const sortedExtensions = [...filteredExtensions].sort((a, b) => {
+        if (sortBy === 'name') {
+            return a.name.localeCompare(b.name);
+        } else if (sortBy === 'version') {
+            return (a.version || '').localeCompare(b.version || '');
+        } else {
+            // Sort by interestingness (default)
+            return (b.interestingness || 0) - (a.interestingness || 0);
+        }
+    });
+
+    // Display only 15 extensions at a time
+    const displayExtensions = sortedExtensions.slice(0, 15);
+
+    // Get selected extension details
+    const selectedExtension =
+        selectedIndex >= 0 && selectedIndex < displayExtensions.length
+            ? displayExtensions[selectedIndex]
+            : null;
+
+    // Calculate statistics
+    const stats = {
+        total: extensions.length,
+        withMv3: extensions.filter((ext) => ext.mv3_extension_id).length,
+        withMv2Only: extensions.filter((ext) => !ext.mv3_extension_id).length,
+        failed: extensions.filter((ext) => ext.tags?.includes('migration-failed')).length,
+        avgInterestingness:
+            extensions.reduce((sum, ext) => sum + (ext.interestingness || 0), 0) /
+            extensions.length,
+    };
 
     return (
         <Box flexDirection="column" width="100%" height="100%">
-            {/* Status */}
-            <Box marginBottom={1}>
+            {/* Statistics Bar */}
+            <Box marginBottom={1} paddingX={1}>
                 <Text>
-                    Database:{' '}
-                    <Text color={dbConnected ? 'green' : 'red'}>
-                        {dbConnected ? 'Connected' : 'Disconnected'}
-                    </Text>
+                    <Text color="cyan">Total:</Text> {stats.total}
                     {' • '}
-                    Extensions: <Text color="cyan">{extensions.length}</Text>
-                    {searchQuery && (
-                        <>
-                            {' • '}
-                            Filtered: <Text color="yellow">{filteredExtensions.length}</Text>
-                        </>
-                    )}
+                    <Text color="green">MV3:</Text> {stats.withMv3}
+                    {' • '}
+                    <Text color="yellow">MV2 Only:</Text> {stats.withMv2Only}
+                    {' • '}
+                    <Text color="red">Failed:</Text> {stats.failed}
+                    {' • '}
+                    <Text color="magenta">Avg Score:</Text> {stats.avgInterestingness.toFixed(1)}
                 </Text>
             </Box>
 
@@ -140,67 +127,180 @@ export const AnalyzerTab: React.FC = () => {
                 <Text color="gray">Search: </Text>
                 <Text>{searchQuery}</Text>
                 <Text color="gray">█</Text>
+                <Text color="gray"> • Sort by: </Text>
+                <Text color="cyan">{sortBy}</Text>
             </Box>
 
-            {/* Extension List */}
-            <Box
-                flexDirection="column"
-                borderStyle="round"
-                borderColor="gray"
-                paddingX={1}
-                paddingY={0}
-                flexGrow={1}
-            >
-                <Text bold underline color="cyan" dimColor>
-                    Extensions (sorted by interestingness):
-                </Text>
-
-                {loading && <Text color="yellow">Loading extensions...</Text>}
-
-                {error && <Text color="red">{error}</Text>}
-
-                {!loading && !error && displayExtensions.length === 0 && (
-                    <Text color="yellow">
-                        {searchQuery
-                            ? 'No extensions match your search'
-                            : 'No extensions found in database'}
+            <Box flexDirection="row" flexGrow={1}>
+                {/* Extension List (Left Panel) */}
+                <Box
+                    flexDirection="column"
+                    borderStyle="round"
+                    borderColor="gray"
+                    paddingX={1}
+                    paddingY={0}
+                    width="50%"
+                    marginRight={1}
+                >
+                    <Text bold underline color="cyan" dimColor>
+                        Extensions:
                     </Text>
-                )}
 
-                {!loading &&
-                    !error &&
-                    displayExtensions.map((ext, idx) => {
-                        const isSelected = idx === selectedIndex;
+                    {databaseStatus !== 'connected' && (
+                        <Text color="yellow">Waiting for database connection...</Text>
+                    )}
 
-                        return (
-                            <Box key={ext.id}>
+                    {databaseStatus === 'connected' && displayExtensions.length === 0 && (
+                        <Text color="yellow">
+                            {searchQuery
+                                ? 'No extensions match your search'
+                                : 'No extensions found'}
+                        </Text>
+                    )}
+
+                    {databaseStatus === 'connected' &&
+                        displayExtensions.map((ext, idx) => {
+                            const isSelected = idx === selectedIndex;
+                            const hasMv3 = !!ext.mv3_extension_id;
+                            const isFailed = ext.tags?.includes('migration-failed');
+
+                            return (
+                                <Box key={ext.id}>
+                                    <Text
+                                        bold={isSelected}
+                                        color={isSelected ? 'cyan' : 'white'}
+                                        backgroundColor={isSelected ? 'blue' : undefined}
+                                    >
+                                        {isSelected ? '▶ ' : '  '}
+                                        {ext.name.slice(0, 30)}
+                                        {ext.name.length > 30 ? '...' : ''}
+                                        {hasMv3 && <Text color="green"> ✓</Text>}
+                                        {isFailed && <Text color="red"> ✗</Text>}
+                                    </Text>
+                                </Box>
+                            );
+                        })}
+
+                    {filteredExtensions.length > 15 && (
+                        <Text color="gray" dimColor>
+                            ... and {filteredExtensions.length - 15} more
+                        </Text>
+                    )}
+                </Box>
+
+                {/* Details Panel (Right Panel) */}
+                <Box
+                    flexDirection="column"
+                    borderStyle="round"
+                    borderColor="gray"
+                    paddingX={1}
+                    paddingY={0}
+                    width="50%"
+                >
+                    <Text bold underline color="cyan" dimColor>
+                        Details:
+                    </Text>
+
+                    {!selectedExtension ? (
+                        <Text color="gray" dimColor>
+                            Select an extension to view details
+                        </Text>
+                    ) : (
+                        <Box flexDirection="column">
+                            <Text>
+                                <Text bold color="cyan">
+                                    Name:
+                                </Text>{' '}
+                                {selectedExtension.name}
+                            </Text>
+                            <Text>
+                                <Text bold color="cyan">
+                                    ID:
+                                </Text>{' '}
+                                {selectedExtension.id}
+                            </Text>
+                            <Text>
+                                <Text bold color="cyan">
+                                    Version:
+                                </Text>{' '}
+                                {selectedExtension.version || 'N/A'}
+                            </Text>
+                            <Text>
+                                <Text bold color="cyan">
+                                    Interestingness:
+                                </Text>{' '}
                                 <Text
-                                    bold={isSelected}
-                                    color={isSelected ? 'cyan' : 'white'}
-                                    backgroundColor={isSelected ? 'blue' : undefined}
+                                    color={
+                                        (selectedExtension.interestingness || 0) > 80
+                                            ? 'green'
+                                            : (selectedExtension.interestingness || 0) > 50
+                                              ? 'yellow'
+                                              : 'red'
+                                    }
                                 >
-                                    {isSelected ? '▶ ' : '  '}
-                                    {ext.name.slice(0, 50)}
-                                    {ext.name.length > 50 ? '...' : ''}{' '}
-                                    <Text color="gray">(score: {ext.score.toFixed(1)})</Text>
-                                    {ext.hasMv3 && <Text color="green"> ✓MV3</Text>}
+                                    {selectedExtension.interestingness?.toFixed(1) || 'N/A'}
                                 </Text>
-                            </Box>
-                        );
-                    })}
+                            </Text>
 
-                {filteredExtensions.length > 15 && (
-                    <Text color="gray" dimColor>
-                        ... and {filteredExtensions.length - 15} more
-                    </Text>
-                )}
+                            {selectedExtension.mv3_extension_id && (
+                                <Text>
+                                    <Text bold color="green">
+                                        ✓ MV3 Version Available
+                                    </Text>
+                                </Text>
+                            )}
+
+                            {selectedExtension.tags && selectedExtension.tags.length > 0 && (
+                                <>
+                                    <Text bold color="cyan" marginTop={1}>
+                                        Tags:
+                                    </Text>
+                                    {selectedExtension.tags.map((tag) => (
+                                        <Text key={tag}>
+                                            {'  '}•{' '}
+                                            <Text
+                                                color={
+                                                    tag.includes('failed')
+                                                        ? 'red'
+                                                        : tag.includes('success')
+                                                          ? 'green'
+                                                          : 'yellow'
+                                                }
+                                            >
+                                                {tag}
+                                            </Text>
+                                        </Text>
+                                    ))}
+                                </>
+                            )}
+
+                            {selectedExtension.migration_time_seconds && (
+                                <Text marginTop={1}>
+                                    <Text bold color="cyan">
+                                        Migration Time:
+                                    </Text>{' '}
+                                    {selectedExtension.migration_time_seconds.toFixed(2)}s
+                                </Text>
+                            )}
+
+                            {selectedExtension.input_path && (
+                                <Text>
+                                    <Text bold color="cyan">
+                                        Path:
+                                    </Text>{' '}
+                                    <Text dimColor>
+                                        {selectedExtension.input_path.split('/').pop()}
+                                    </Text>
+                                </Text>
+                            )}
+                        </Box>
+                    )}
+                </Box>
             </Box>
 
             {/* Help text */}
             <Box marginTop={1}>
-                <Text dimColor>
-                    Use ↑/↓ to navigate • Type to search • R to reload • ENTER to view details
-                </Text>
+                <Text dimColor>↑/↓: Navigate • Type: Search • S: Toggle sort • ESC: Quit</Text>
             </Box>
         </Box>
     );
