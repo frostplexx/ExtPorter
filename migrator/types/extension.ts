@@ -40,4 +40,19 @@ export interface Extension {
         validation_errors: string[];
         duration_ms: number;
     };
+    cws_info?: {
+        description?: string;
+        short_description?: string;
+        rating?: number;
+        rating_count?: number;
+        user_count?: string;
+        last_updated?: string;
+        version?: string;
+        size?: string;
+        languages?: string[];
+        developer?: string;
+        developer_address?: string;
+        developer_website?: string;
+        privacy_policy?: string;
+    };
 }
