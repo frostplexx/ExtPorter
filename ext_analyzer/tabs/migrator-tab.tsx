@@ -49,11 +49,11 @@ export const MigratorTab: React.FC = () => {
 
                     switch (msg.type) {
                         case 'sent':
-                            prefix = '[META]';
+                            prefix = '[INFO]';
                             color = 'magenta';
                             break;
                         case 'received':
-                            prefix = '[META]';
+                            prefix = '[INFO]';
                             color = 'magenta';
                             break;
                         case 'system':

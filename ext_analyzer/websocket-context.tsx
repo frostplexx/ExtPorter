@@ -1,10 +1,40 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { ExtensionAnalyzerClient } from './websocket.js';
+import { MongoClient, Db, ChangeStream } from 'mongodb';
+import * as dotenv from 'dotenv';
+
+// Load environment variables
+dotenv.config();
 
 interface Message {
     type: 'sent' | 'received' | 'system';
     content: string;
     timestamp: Date;
+}
+
+interface LogEntry {
+    loglevel: string;
+    message: string;
+    meta: any;
+    time: number;
+}
+
+interface ExtensionData {
+    id: string;
+    name: string;
+    version: string;
+    mv2_extension_id?: string;
+    mv3_extension_id?: string;
+    tags?: string[];
+    originalManifest?: any;
+    migratedManifest?: any;
+    interestingness?: number;
+    files?: any[];
+    migration_time_seconds?: number;
+    migration_timestamp?: number;
+    input_path?: string;
+    new_tab_extension?: boolean;
+    [key: string]: any;
 }
 
 interface WebSocketContextType {
@@ -13,6 +43,7 @@ interface WebSocketContextType {
     connectionStatus: 'disconnected' | 'connecting' | 'connected';
     databaseStatus: 'disconnected' | 'connecting' | 'connected';
     migrationStatus: 'running' | 'stopped';
+    extensions: ExtensionData[];
     sendMessage: (message: string) => void;
 }
 
@@ -24,6 +55,7 @@ interface WebSocketProviderProps {
 
 export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }) => {
     const [messages, setMessages] = useState<Message[]>([]);
+    const [extensions, setExtensions] = useState<ExtensionData[]>([]);
     const [connectionStatus, setConnectionStatus] = useState<
         'disconnected' | 'connecting' | 'connected'
     >('disconnected');
@@ -51,7 +83,7 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
                     ...prev,
                     {
                         type: 'system',
-                        content: 'Cannot send: Not connected',
+                        content: 'Cannot send: Not connected to server',
                         timestamp: new Date(),
                     },
                 ]);
@@ -59,6 +91,7 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
         }
     };
 
+    // WebSocket connection effect
     useEffect(() => {
         // Only register handlers once
         if (handlersRegistered) {
@@ -91,7 +124,7 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
                 ...prev,
                 {
                     type: 'system',
-                    content: 'Disconnected from server',
+                    content: 'Disconnected from migration server',
                     timestamp: new Date(),
                 },
             ]);
@@ -106,7 +139,7 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
                         ...prevMessages,
                         {
                             type: 'system',
-                            content: 'Attempting to reconnect...',
+                            content: 'Attempting to reconnect to server...',
                             timestamp: new Date(),
                         },
                     ]);
@@ -121,7 +154,7 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
                 ...prev,
                 {
                     type: 'system',
-                    content: `Error: ${error.message}`,
+                    content: `Server Error: ${error.message}`,
                     timestamp: new Date(),
                 },
             ]);
@@ -188,7 +221,7 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
                 ...prev,
                 {
                     type: 'system',
-                    content: 'Connecting to server...',
+                    content: 'Connecting to migration server...',
                     timestamp: new Date(),
                 },
             ]);
@@ -207,12 +240,257 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
         };
     }, [client, handlersRegistered]);
 
+    // MongoDB connection effect
+    useEffect(() => {
+        let mongoClient: MongoClient | null = null;
+        let db: Db | null = null;
+        let logsChangeStream: ChangeStream | null = null;
+        let extensionsChangeStream: ChangeStream | null = null;
+        let dbReconnectTimer: NodeJS.Timeout | null = null;
+        let mounted = true;
+        let isCleaningUp = false;
+
+        const connectToMongoDB = async () => {
+            if (!mounted || isCleaningUp) return;
+
+            try {
+                setDatabaseStatus('connecting');
+                if (mounted) {
+                    setMessages((prev) => [
+                        ...prev,
+                        {
+                            type: 'system',
+                            content: 'Connecting to MongoDB...',
+                            timestamp: new Date(),
+                        },
+                    ]);
+                }
+
+                const mongoUri =
+                    process.env.MONGODB_URI || 'mongodb://admin:password@localhost:27017/migrator';
+                const dbName = process.env.DB_NAME || 'migrator';
+
+                // Connect to MongoDB
+                mongoClient = new MongoClient(mongoUri, {
+                    serverSelectionTimeoutMS: 5000,
+                    connectTimeoutMS: 5000,
+                });
+                await mongoClient.connect();
+                db = mongoClient.db(dbName);
+
+                if (!mounted || isCleaningUp) {
+                    await mongoClient.close();
+                    return;
+                }
+
+                setDatabaseStatus('connected');
+                setMessages((prev) => [
+                    ...prev,
+                    {
+                        type: 'system',
+                        content: 'Connected to MongoDB',
+                        timestamp: new Date(),
+                    },
+                ]);
+
+                // Fetch initial extensions
+                const extensionsCollection = db.collection<ExtensionData>('extensions');
+                const initialExtensions = await extensionsCollection.find({}).toArray();
+                if (mounted && !isCleaningUp) {
+                    setExtensions(initialExtensions as ExtensionData[]);
+                    setMessages((prev) => [
+                        ...prev,
+                        {
+                            type: 'system',
+                            content: `Loaded ${initialExtensions.length} extensions from database`,
+                            timestamp: new Date(),
+                        },
+                    ]);
+                }
+
+                // Fetch initial logs (limited to most recent 50)
+                const logsCollection = db.collection<LogEntry>('logs');
+                const initialLogs = await logsCollection
+                    .find({})
+                    .sort({ time: -1 })
+                    .limit(50)
+                    .toArray();
+
+                // Convert logs to messages
+                const logMessages: Message[] = initialLogs.reverse().map((log) => {
+                    let content = log.message;
+
+                    // Add extension name if available
+                    if (log.meta?.extension?.name) {
+                        content = `[${log.meta.extension.name}] ${content}`;
+                    }
+
+                    // Format based on log level
+                    const levelPrefix = `[${log.loglevel.toUpperCase()}]`;
+                    content = `${levelPrefix} ${content}`;
+
+                    return {
+                        type: 'system' as const,
+                        content,
+                        timestamp: new Date(log.time),
+                    };
+                });
+
+                if (mounted && !isCleaningUp && logMessages.length > 0) {
+                    setMessages((prev) => [...prev, ...logMessages]);
+                }
+
+                // Watch for changes in extensions collection
+                extensionsChangeStream = extensionsCollection.watch([], {
+                    fullDocument: 'updateLookup',
+                });
+
+                extensionsChangeStream.on('change', (change) => {
+                    if (!mounted || isCleaningUp) return;
+
+                    if (
+                        change.operationType === 'insert' ||
+                        change.operationType === 'update' ||
+                        change.operationType === 'replace'
+                    ) {
+                        const updatedDoc = change.fullDocument as ExtensionData;
+                        if (updatedDoc) {
+                            setExtensions((prev) => {
+                                const existingIndex = prev.findIndex(
+                                    (ext) => ext.id === updatedDoc.id
+                                );
+                                if (existingIndex >= 0) {
+                                    const updated = [...prev];
+                                    updated[existingIndex] = updatedDoc;
+                                    return updated;
+                                } else {
+                                    return [...prev, updatedDoc];
+                                }
+                            });
+                        }
+                    } else if (change.operationType === 'delete') {
+                        const deletedId = change.documentKey._id;
+                        setExtensions((prev) =>
+                            prev.filter((ext) => (ext as any)._id !== deletedId)
+                        );
+                    }
+                });
+
+                extensionsChangeStream.on('error', (error) => {
+                    if (!isCleaningUp) {
+                        console.error('Extensions change stream error:', error);
+                        setMessages((prev) => [
+                            ...prev,
+                            {
+                                type: 'system',
+                                content: `Database stream error: ${error.message}`,
+                                timestamp: new Date(),
+                            },
+                        ]);
+                    }
+                });
+
+                // Watch for new logs
+                logsChangeStream = logsCollection.watch([], { fullDocument: 'updateLookup' });
+
+                logsChangeStream.on('change', (change) => {
+                    if (!mounted || isCleaningUp) return;
+
+                    if (change.operationType === 'insert') {
+                        const newLog = change.fullDocument as LogEntry;
+                        if (newLog) {
+                            let content = newLog.message;
+
+                            // Add extension name if available
+                            if (newLog.meta?.extension?.name) {
+                                content = `[${newLog.meta.extension.name}] ${content}`;
+                            }
+
+                            // Format based on log level
+                            const levelPrefix = `[${newLog.loglevel.toUpperCase()}]`;
+                            content = `${levelPrefix} ${content}`;
+
+                            setMessages((prev) => [
+                                ...prev,
+                                {
+                                    type: 'system',
+                                    content,
+                                    timestamp: new Date(newLog.time),
+                                },
+                            ]);
+                        }
+                    }
+                });
+
+                logsChangeStream.on('error', (error) => {
+                    if (!isCleaningUp) {
+                        console.error('Logs change stream error:', error);
+                    }
+                });
+            } catch (error) {
+                if (!isCleaningUp) {
+                    console.error('MongoDB connection error:', error);
+                    setDatabaseStatus('disconnected');
+                    if (mounted) {
+                        setMessages((prev) => [
+                            ...prev,
+                            {
+                                type: 'system',
+                                content: `Database connection failed: ${error instanceof Error ? error.message : String(error)}`,
+                                timestamp: new Date(),
+                            },
+                        ]);
+                    }
+
+                    // Schedule reconnection attempt after 5 seconds
+                    if (mounted) {
+                        dbReconnectTimer = setTimeout(() => {
+                            if (mounted && !isCleaningUp) {
+                                setMessages((prev) => [
+                                    ...prev,
+                                    {
+                                        type: 'system',
+                                        content: 'Attempting to reconnect to database...',
+                                        timestamp: new Date(),
+                                    },
+                                ]);
+                                connectToMongoDB();
+                            }
+                        }, 5000);
+                    }
+                }
+            }
+        };
+
+        connectToMongoDB();
+
+        // Cleanup on unmount
+        return () => {
+            mounted = false;
+            isCleaningUp = true;
+
+            if (dbReconnectTimer) {
+                clearTimeout(dbReconnectTimer);
+            }
+            if (logsChangeStream) {
+                logsChangeStream.close().catch(() => {});
+            }
+            if (extensionsChangeStream) {
+                extensionsChangeStream.close().catch(() => {});
+            }
+            if (mongoClient) {
+                mongoClient.close().catch(() => {});
+            }
+        };
+    }, []);
+
     const contextValue: WebSocketContextType = {
         client,
         messages,
         connectionStatus,
         databaseStatus,
         migrationStatus,
+        extensions,
         sendMessage,
     };
 
