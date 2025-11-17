@@ -1,4 +1,5 @@
-import { closeExtensionFiles, Extension } from '../types/extension';
+import { Extension } from '../types/extension';
+import { extensionUtils } from './extension_utils';
 import { logger } from './logger';
 
 /**
@@ -77,7 +78,7 @@ export function checkMemoryThreshold(): boolean {
 
 export function clearExtensionMemory(extension: Extension): void {
     // Close all file descriptors
-    closeExtensionFiles(extension);
+    extensionUtils.closeExtensionFiles(extension);
 
     // Clear file contents and ASTs from memory
     extension.files.forEach((file) => {

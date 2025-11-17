@@ -1,5 +1,5 @@
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
-import { InterestingnessScorer } from '../../../migrator/modules/interestingness_scorer';
+import { InterestingnessScorer } from '../../../migrator/modules/interestingenss_scorer';
 import { logger } from '../../../migrator/utils/logger';
 import { Extension } from '../../../migrator/types/extension';
 import { MigrationError } from '../../../migrator/types/migration_module';
