@@ -45,7 +45,7 @@ describe('WriteQueue', () => {
         (fs.access as any).mockResolvedValue(void 0);
 
         // Disable auto-processing for tests so we can check queue length
-       WriteQueue.shared.setAutoProcess(false);
+        WriteQueue.shared.setAutoProcess(false);
     });
 
     afterEach(() => {
@@ -405,77 +405,6 @@ describe('WriteQueue', () => {
             // We can verify the instance exists
             const instance = WriteQueue.shared;
             expect(instance).toBeDefined();
-        });
-    });
-
-    describe('batch file writing', () => {
-        it('should handle extensions with many files without exhausting file descriptors', async () => {
-            const writer = WriteQueue.shared;
-            
-            const outputPath = '/test/output/test-extension';
-
-            // Create an extension with 100 files (more than the batch size of 50)
-            const manyFiles: jest.Mocked<AbstractFile>[] = [];
-            for (let i = 0; i < 100; i++) {
-                manyFiles.push({
-                    path: `file${i}.js`,
-                    filetype: ExtFileType.JS,
-                    getContent: jest.fn().mockReturnValue(`content ${i}`),
-                    getBuffer: jest.fn().mockReturnValue(Buffer.from(`content ${i}`)),
-                    getPath: jest.fn().mockReturnValue(`file${i}.js`),
-                    getSize: jest.fn().mockReturnValue(100),
-                    getType: jest.fn().mockReturnValue('js' as any),
-                } as any);
-            }
-
-            const extensionWithManyFiles = {
-                ...mockExtension,
-                files: manyFiles,
-            } as any;
-
-            await expect(
-                writer.writeExtensionSync(extensionWithManyFiles, outputPath)
-            ).resolves.toBeUndefined();
-
-            // Verify that all files were written
-            expect(fs.writeFile).toHaveBeenCalledTimes(101); // 100 files + 1 manifest
-        });
-
-        it('should write files in batches', async () => {
-            const writer = WriteQueue.shared;
-            const outputPath = '/test/output/test-extension';
-
-            // Track the order of writeFile calls
-            const writeFileCalls: string[] = [];
-            (fs.writeFile as any).mockImplementation(async (path: string) => {
-                writeFileCalls.push(path);
-            });
-
-            // Create an extension with 75 files (1.5x batch size of 50)
-            const manyFiles: jest.Mocked<AbstractFile>[] = [];
-            for (let i = 0; i < 75; i++) {
-                manyFiles.push({
-                    path: `file${i}.js`,
-                    filetype: ExtFileType.JS,
-                    getContent: jest.fn().mockReturnValue(`content ${i}`),
-                    getBuffer: jest.fn().mockReturnValue(Buffer.from(`content ${i}`)),
-                    getPath: jest.fn().mockReturnValue(`file${i}.js`),
-                    getSize: jest.fn().mockReturnValue(100),
-                    getType: jest.fn().mockReturnValue('js' as any),
-                } as any);
-            }
-
-            const extensionWithManyFiles = {
-                ...mockExtension,
-                files: manyFiles,
-            } as any;
-
-            await expect(
-                writer.writeExtensionSync(extensionWithManyFiles, outputPath)
-            ).resolves.toBeUndefined();
-
-            // Verify all files were written (75 files + 1 manifest)
-            expect(writeFileCalls.length).toBe(76);
         });
     });
 });

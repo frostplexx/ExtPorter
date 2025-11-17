@@ -1,17 +1,16 @@
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
-import { WriteMigrated } from '../../../migrator/modules/write_migrated';
-import { MigrationWriter } from '../../../migrator/modules/migration_writer';
 import { logger } from '../../../migrator/utils/logger';
 import { Extension } from '../../../migrator/types/extension';
 import { MigrationError } from '../../../migrator/types/migration_module';
+import { WriteMigrated } from '../../../migrator/modules/write_extension';
+import { WriteQueue } from '../../../migrator/modules/write_extension/write-queue';
 
 // Mock dependencies
-jest.mock('../../../migrator/modules/migration_writer');
 jest.mock('../../../migrator/utils/logger');
 
 describe('WriteMigrated', () => {
     let mockExtension: Extension;
-    let mockMigrationWriter: jest.Mocked<MigrationWriter>;
+    let queueExtensionSpy: jest.SpiedFunction<typeof WriteQueue.shared.queueExtension>;
 
     beforeEach(() => {
         jest.clearAllMocks();
@@ -24,19 +23,17 @@ describe('WriteMigrated', () => {
             files: [],
         } as Extension;
 
-        // Mock MigrationWriter.shared
-        mockMigrationWriter = {
-            queueExtension: jest.fn(),
-        } as any;
-
-        (MigrationWriter as any).shared = mockMigrationWriter;
+        // Spy on WriteQueue.shared.queueExtension
+        queueExtensionSpy = jest
+            .spyOn(WriteQueue.shared, 'queueExtension')
+            .mockResolvedValue(undefined);
     });
 
     describe('migrate', () => {
         it('should successfully queue extension and return it', () => {
             const result = WriteMigrated.migrate(mockExtension);
 
-            expect(mockMigrationWriter.queueExtension).toHaveBeenCalledWith(mockExtension);
+            expect(queueExtensionSpy).toHaveBeenCalledWith(mockExtension);
             expect(logger.debug).toHaveBeenCalledWith(
                 mockExtension,
                 'Extension queued for async write',
@@ -50,7 +47,7 @@ describe('WriteMigrated', () => {
 
         it('should handle errors and return MigrationError', () => {
             const error = new Error('Queue failed');
-            mockMigrationWriter.queueExtension.mockImplementation(() => {
+            queueExtensionSpy.mockImplementation(() => {
                 throw error;
             });
 
@@ -71,7 +68,7 @@ describe('WriteMigrated', () => {
 
         it('should handle non-Error objects thrown', () => {
             const errorMessage = 'String error';
-            mockMigrationWriter.queueExtension.mockImplementation(() => {
+            queueExtensionSpy.mockImplementation(() => {
                 throw errorMessage;
             });
 

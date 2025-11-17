@@ -212,6 +212,26 @@
                 "body": "chrome.tabs.query({active: true, windowId: windowId}, callback);"
             }
         },
+
+        {
+            "source": {
+                "returnType": "void",
+                "formals": [
+                    { "type": "number", "name": "tabId" },
+                    { "type": "object", "name": "details" },
+                    { "type": "function", "name": "callback" }
+                ],
+                "body": "chrome.tabs.insertCSS(tabId, details, callback );"
+            },
+            "target": {
+                "returnType": "void",
+                "formals": [
+                    { "type": "object", "name": "injection" },
+                    { "type": "function", "name": "callback" }
+                ],
+                "body": "chrome.tabs.insertCSS(injection, callback);"
+            }
+        },
         {
             "source": {
                 "returnType": "Event",
@@ -329,6 +349,54 @@
                 "returnType": "void",
                 "formals": [{ "type": "object", "name": "details" }],
                 "body": "chrome.action.setBadgeText(details);"
+            }
+        },
+        {
+            "source": {
+                "returnType": "void",
+                "formals": [{ "type": "object", "name": "details" }],
+                "body": "chrome.browserAction.setPopup(details);"
+            },
+            "target": {
+                "returnType": "void",
+                "formals": [{ "type": "object", "name": "details" }],
+                "body": "chrome.action.setPopup(details);"
+            }
+        },
+        {
+            "source": {
+                "returnType": "void",
+                "formals": [{ "type": "object", "name": "details" }],
+                "body": "chrome.browserAction.setTitle(details);"
+            },
+            "target": {
+                "returnType": "void",
+                "formals": [{ "type": "object", "name": "details" }],
+                "body": "chrome.action.setTitle(details);"
+            }
+        },
+        {
+            "source": {
+                "returnType": "void",
+                "formals": [{ "type": "object", "name": "details" }],
+                "body": "chrome.browserAction.setIcon(details);"
+            },
+            "target": {
+                "returnType": "void",
+                "formals": [{ "type": "object", "name": "details" }],
+                "body": "chrome.action.setIcon(details);"
+            }
+        },
+        {
+            "source": {
+                "returnType": "void",
+                "formals": [{ "type": "object", "name": "details" }],
+                "body": "chrome.browserAction.setBadgeBackgroundColor(details);"
+            },
+            "target": {
+                "returnType": "void",
+                "formals": [{ "type": "object", "name": "details" }],
+                "body": "chrome.action.setBadgeBackgroundColor(details);"
             }
         },
         {
