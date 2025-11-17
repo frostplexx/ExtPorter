@@ -75,6 +75,17 @@ async function main() {
         }
     }
 
+    // Filter out theme extensions (themes are purely visual and don't need migration)
+    const originalCount = extensions.length;
+    extensions = extensions.filter((extension) => !extension.isThemeExtension);
+    const filteredCount = originalCount - extensions.length;
+    if (filteredCount > 0) {
+        logger.info(
+            null,
+            `Filtered out ${filteredCount} theme extensions (themes don't require migration)`
+        );
+    }
+
     // insert the found extensions in the database
     await Database.shared.insertFoundExtensions(extensions);
 

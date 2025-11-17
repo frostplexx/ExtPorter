@@ -97,6 +97,7 @@ function get_manifest(manifest_paths: string[], includes_mv3: boolean): Extensio
                     manifest: json,
                     files: files,
                     isNewTabExtension: extensionUtils.isNewTabExtension({ manifest: json } as Extension),
+                    isThemeExtension: extensionUtils.isThemeExtension({ manifest: json } as Extension),
                 };
 
                 extensions.push(extension);
