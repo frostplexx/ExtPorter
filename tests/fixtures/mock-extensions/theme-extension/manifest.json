@@ -1,0 +1,19 @@
+{
+    "manifest_version": 2,
+    "name": "Theme Test Extension",
+    "version": "1.0.0",
+    "description": "A test theme extension that should be filtered out during migration",
+    "theme": {
+        "images": {},
+        "colors": {
+            "frame": [255, 0, 0],
+            "tab_background_text": [0, 0, 0],
+            "bookmark_text": [0, 0, 0],
+            "ntp_background": [255, 255, 255],
+            "ntp_text": [0, 0, 0],
+            "toolbar": [230, 230, 230]
+        },
+        "tints": {},
+        "properties": {}
+    }
+}
