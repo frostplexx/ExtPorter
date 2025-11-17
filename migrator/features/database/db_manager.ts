@@ -482,4 +482,68 @@ export class Database {
         if (logs.length === 0) return;
         return this.upsertMany(Collections.LOGS, logs, 'time');
     }
+
+    /**
+     * Get all extensions from the database
+     */
+    async getAllExtensions() {
+        return this.find(Collections.EXTENSIONS);
+    }
+
+    /**
+     * Get list of all collections with their document counts
+     */
+    async getCollections() {
+        return this.enqueueOperation(async () => {
+            if (!this.database) throw new Error('Database not initialized');
+            
+            const collections = await this.database.listCollections().toArray();
+            const result = await Promise.all(
+                collections.map(async (col) => ({
+                    name: col.name,
+                    count: await this.database!.collection(col.name).countDocuments(),
+                }))
+            );
+            return result;
+        });
+    }
+
+    /**
+     * Query a specific collection
+     */
+    async queryCollection(collectionName: string, query: any = {}, limit: number = 10) {
+        return this.enqueueOperation(async () => {
+            if (!this.database) throw new Error('Database not initialized');
+            return await this.database
+                .collection(collectionName)
+                .find(query)
+                .limit(limit)
+                .toArray();
+        });
+    }
+
+    /**
+     * Count documents in a collection
+     */
+    async countDocuments(collectionName: string, query: any = {}) {
+        return this.enqueueOperation(async () => {
+            if (!this.database) throw new Error('Database not initialized');
+            return await this.database.collection(collectionName).countDocuments(query);
+        });
+    }
+
+    /**
+     * Get logs with optional limit
+     */
+    async getLogs(limit: number = 50) {
+        return this.enqueueOperation(async () => {
+            if (!this.database) throw new Error('Database not initialized');
+            return await this.database
+                .collection(Collections.LOGS)
+                .find({})
+                .sort({ time: -1 })
+                .limit(limit)
+                .toArray();
+        });
+    }
 }
