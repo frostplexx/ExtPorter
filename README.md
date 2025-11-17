@@ -22,6 +22,7 @@ of Chrome extension migration in the face of Google's deprecation of Manifest V2
 
 - **Automated MV2 → MV3 Migration**: Converts extension manifests, API calls, and code structure
 - **Database Integration**: Tracks migration results and statistics with MongoDB
+- **Chrome Web Store Metadata**: Automatically extracts and stores extension metadata (description, ratings, developer info, etc.) from CWS HTML files for better searchability and filtering
 - **Docker Support**: Full containerized development and deployment
 - **Manual Analysis**: Provides tools for manually analysing if the migration succeeded
 
@@ -251,6 +252,36 @@ Modules are stored in `migrator/modules/` and get applied one after the other to
 
 Each module **must** implement the abstract class of `MigrationModule` found in `migrator/types/migration_module.ts`. This class provides a migrate function that takes an extension as a parameter and returns either the modified extension or a migration error.
 In addition to this mandatory function a module can include any arbitrary amount of code, however keep in mind that `migrate` is always the main entry point.
+
+### Chrome Web Store Metadata Extraction
+
+ExtPorter automatically extracts and stores Chrome Web Store metadata when loading extensions. This feature allows for better filtering, searching, and analysis of extensions.
+
+**How it works:**
+- When `find_extensions()` discovers extensions, it looks for CWS HTML files (e.g., `store.html`, `cws.html`)
+- The HTML parser (`migrator/utils/cws_parser.ts`) extracts metadata using CSS selectors
+- Extracted information is stored in the `cws_info` field of the Extension object
+- This data is persisted to MongoDB when extensions are saved
+
+**Extracted metadata includes:**
+- Extension description and short description
+- Rating and rating count
+- User count
+- Last update date
+- Version and size
+- Supported languages
+- Developer name, website, and contact info
+- Privacy policy URL
+
+**Supported HTML file names:**
+- `store.html` - Primary CWS HTML filename
+- `cws.html` - Chrome Web Store HTML
+- `metadata.html` - Metadata HTML
+- `info.html` - Info HTML
+- `extension.html` - Extension info HTML
+- Any other large HTML file (>10KB) that contains CWS data
+
+To include CWS metadata with your extensions, place a Chrome Web Store HTML file in each extension directory before running the migrator.
 
 ### Most important Scripts
 

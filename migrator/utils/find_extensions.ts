@@ -8,6 +8,7 @@ import { logger } from './logger';
 import JSON5 from 'json5';
 import crypto from 'crypto';
 import { extensionUtils } from './extension_utils';
+import { findAndParseCWSInfo } from './cws_parser';
 
 /**
  * Finds all unpacked extensions given a path. Can be pointed to a single extension directory or a directory containing multiple extensions.
@@ -90,6 +91,9 @@ function get_manifest(manifest_paths: string[], includes_mv3: boolean): Extensio
                     return [];
                 }
 
+                // Parse CWS information from HTML file if available
+                const cwsInfo = findAndParseCWSInfo(extensionDir);
+
                 const extension: Extension = {
                     id: id,
                     name: extensionName,
@@ -97,6 +101,7 @@ function get_manifest(manifest_paths: string[], includes_mv3: boolean): Extensio
                     manifest: json,
                     files: files,
                     isNewTabExtension: extensionUtils.isNewTabExtension({ manifest: json } as Extension),
+                    cws_info: cwsInfo || undefined,
                 };
 
                 extensions.push(extension);
