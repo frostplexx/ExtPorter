@@ -1,0 +1,113 @@
+use anyhow::Result;
+use crossterm::{
+    event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyModifiers},
+    execute,
+    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+};
+use ratatui::{
+    backend::CrosstermBackend,
+    Terminal,
+};
+use std::io;
+use tokio::sync::mpsc;
+
+mod app;
+mod tabs;
+mod websocket;
+
+use app::{App, AppEvent};
+
+#[tokio::main]
+async fn main() -> Result<()> {
+    // Load environment variables
+    dotenv::dotenv().ok();
+
+    // Setup terminal
+    enable_raw_mode()?;
+    let mut stdout = io::stdout();
+    execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
+    let backend = CrosstermBackend::new(stdout);
+    let mut terminal = Terminal::new(backend)?;
+
+    // Create application
+    let (tx, rx) = mpsc::unbounded_channel();
+    let mut app = App::new(tx.clone());
+
+    // Spawn WebSocket task
+    let ws_tx = tx.clone();
+    tokio::spawn(async move {
+        if let Err(e) = websocket::run_websocket_client(ws_tx).await {
+            eprintln!("WebSocket error: {}", e);
+        }
+    });
+
+    // Spawn input handler
+    let input_tx = tx;
+    tokio::spawn(async move {
+        loop {
+            if event::poll(std::time::Duration::from_millis(100)).unwrap() {
+                if let Event::Key(key) = event::read().unwrap() {
+                    if input_tx.send(AppEvent::Input(key)).is_err() {
+                        break;
+                    }
+                }
+            }
+        }
+    });
+
+    // Run app
+    let result = run_app(&mut terminal, &mut app, rx).await;
+
+    // Restore terminal
+    disable_raw_mode()?;
+    execute!(
+        terminal.backend_mut(),
+        LeaveAlternateScreen,
+        DisableMouseCapture
+    )?;
+    terminal.show_cursor()?;
+
+    result
+}
+
+async fn run_app(
+    terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
+    app: &mut App,
+    mut rx: mpsc::UnboundedReceiver<AppEvent>,
+) -> Result<()> {
+    loop {
+        terminal.draw(|f| app.draw(f))?;
+
+        // Handle events
+        if let Some(event) = rx.recv().await {
+            match event {
+                AppEvent::Input(key) => {
+                    // Global quit handlers
+                    if key.code == KeyCode::Esc
+                        || (key.code == KeyCode::Char('c') && key.modifiers.contains(KeyModifiers::CONTROL))
+                    {
+                        return Ok(());
+                    }
+
+                    // Handle input
+                    app.handle_input(key)?;
+                }
+                AppEvent::WebSocketConnected => {
+                    app.handle_websocket_connected();
+                }
+                AppEvent::WebSocketDisconnected => {
+                    app.handle_websocket_disconnected();
+                }
+                AppEvent::WebSocketMessage(msg) => {
+                    app.handle_websocket_message(msg);
+                }
+                AppEvent::WebSocketError(err) => {
+                    app.handle_websocket_error(err);
+                }
+                AppEvent::Quit => {
+                    return Ok(());
+                }
+            }
+        }
+    }
+}

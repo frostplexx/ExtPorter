@@ -42,3 +42,7 @@ comment.cut
 node_modules
 dist
 .env
+
+# Rust build artifacts
+ext_analyzer_rust/target
+ext_analyzer_rust/Cargo.lock
