@@ -107,9 +107,11 @@ yarn migrate
 
 ### Manual Analysis
 
-This project also provides a tool that helps you analyse if extensions got migrated successfully.
-To start, run `yarn ext` which will open a list of all extensions in the dataset. You can then press enter on an extension to get the following options (with
-keyboard shortcut in square brackets):
+This project provides two clients for manual analysis:
+
+#### TypeScript Client (Full Featured)
+
+Run `yarn client` to open the TypeScript/Ink client with full database querying capabilities. The client will display a list of all extensions in the dataset with the following options:
 
 ```
 View Source          [v]
@@ -129,6 +131,20 @@ Quit                 [q]
 
 - View Source needs you to use the [kitty](https://sw.kovidgoyal.net/kitty/) terminal as it opens new tabs and panes
 - If you want to use "Generate Description" You must first configure an ollama endpoint in `.env`. See [LLM Integration](https://github.com/frostplexx/ExtPorter/blob/dev/README.md#llm-integration) for more info.
+
+#### Rust Client (Streamlined)
+
+Run `yarn client:rust` to open the high-performance Rust/Ratatui client. This client provides:
+
+- Real-time migration monitoring and log viewing
+- Extension browsing and search
+- Extension analysis with statistics
+- Database status viewing
+- Lightweight and fast with no Node.js runtime required
+
+The Rust client is ideal for monitoring migrations and browsing results, while the TypeScript client offers advanced features like code viewing and LLM integration.
+
+See [ext_analyzer_rust/README.md](ext_analyzer_rust/README.md) for more details.
 
 ### LLM Integration
 
