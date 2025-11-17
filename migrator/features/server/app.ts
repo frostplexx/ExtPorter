@@ -197,6 +197,10 @@ export class MigrationServer {
                     this.stopMigrator(ws);
                 } else if (command === 'status') {
                     this.sendStatus(ws);
+                } else if (command.startsWith('LAUNCH_DUAL:')) {
+                    this.handleLaunchDual(ws, command);
+                } else if (command === 'CLOSE_BROWSERS') {
+                    this.handleCloseBrowsers(ws);
                 } else {
                     ws.send(`Server received: ${command}`);
                 }
@@ -593,6 +597,56 @@ export class MigrationServer {
                     error: error instanceof Error ? error.message : String(error),
                 })
             );
+        }
+    }
+
+    // Handle launch dual browsers command
+    private async handleLaunchDual(ws: WebSocket, command: string): Promise<void> {
+        try {
+            const extensionId = command.replace('LAUNCH_DUAL:', '').trim();
+
+            if (!extensionId) {
+                ws.send('ERROR: Extension ID is required');
+                return;
+            }
+
+            // Import DualChromeTester dynamically
+            const { DualChromeTester } = await import('../../../ext_tester/dual_chrome_tester.js');
+
+            // Get extension from database
+            const extensionDoc = await Database.shared.findExtension({ id: extensionId });
+
+            if (!extensionDoc) {
+                ws.send(`ERROR: Extension ${extensionId} not found in database`);
+                return;
+            }
+
+            ws.send(`Launching dual browsers for extension: ${(extensionDoc as any).name}`);
+
+            // Launch both browsers - cast to any to bypass type checking
+            await DualChromeTester.shared.initDualBrowsers(extensionDoc as any, 3, false);
+
+            ws.send('DUAL_BROWSERS_LAUNCHED');
+            ws.send(`Both browsers launched successfully for ${(extensionDoc as any).name}`);
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            ws.send(`ERROR launching dual browsers: ${errorMessage}`);
+        }
+    }
+
+    // Handle close browsers command
+    private async handleCloseBrowsers(ws: WebSocket): Promise<void> {
+        try {
+            // Import DualChromeTester dynamically
+            const { DualChromeTester } = await import('../../../ext_tester/dual_chrome_tester.js');
+
+            await DualChromeTester.shared.closeAll();
+
+            ws.send('BROWSERS_CLOSED');
+            ws.send('All browsers closed successfully');
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            ws.send(`ERROR closing browsers: ${errorMessage}`);
         }
     }
 
