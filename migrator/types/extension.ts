@@ -7,6 +7,7 @@ export interface Extension {
     manifest: any;
     files: LazyFile[];
     isNewTabExtension?: boolean;
+    isThemeExtension?: boolean;
     mv3_extension_id?: string;
     manifest_v3_path?: string;
     interestingness_score?: number;
