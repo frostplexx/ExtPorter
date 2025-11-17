@@ -2,6 +2,7 @@ migrator/logs/*
 migrator/output/*
 migrator/extensions
 migrator/node_modules
+ext_analyzer/target
 coverage
 tmp
 .DS_Store

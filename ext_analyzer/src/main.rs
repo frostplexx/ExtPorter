@@ -8,8 +8,8 @@ use ratatui::{
     backend::CrosstermBackend,
     Terminal,
 };
-use std::io;
-use tokio::sync::mpsc;
+use std::{io, sync::Arc};
+use tokio::sync::{mpsc, Mutex};
 
 mod app;
 mod tabs;
@@ -31,12 +31,14 @@ async fn main() -> Result<()> {
 
     // Create application
     let (tx, rx) = mpsc::unbounded_channel();
-    let mut app = App::new(tx.clone());
+    let ws_sender: websocket::WebSocketSender = Arc::new(Mutex::new(None));
+    let mut app = App::new(tx.clone(), ws_sender.clone());
 
     // Spawn WebSocket task
-    let ws_tx = tx.clone();
+    let event_tx = tx.clone();
+    let ws_sender_clone = ws_sender.clone();
     tokio::spawn(async move {
-        if let Err(e) = websocket::run_websocket_client(ws_tx).await {
+        if let Err(e) = websocket::run_websocket_client(event_tx, ws_sender_clone).await {
             eprintln!("WebSocket error: {}", e);
         }
     });
@@ -56,7 +58,7 @@ async fn main() -> Result<()> {
     });
 
     // Run app
-    let result = run_app(&mut terminal, &mut app, rx).await;
+    let result = run_app(&mut terminal, &mut app, rx, ws_sender.clone()).await;
 
     // Restore terminal
     disable_raw_mode()?;
@@ -74,6 +76,7 @@ async fn run_app(
     terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
     app: &mut App,
     mut rx: mpsc::UnboundedReceiver<AppEvent>,
+    ws_sender: websocket::WebSocketSender,
 ) -> Result<()> {
     loop {
         terminal.draw(|f| app.draw(f))?;
@@ -103,6 +106,12 @@ async fn run_app(
                 }
                 AppEvent::WebSocketError(err) => {
                     app.handle_websocket_error(err);
+                }
+                AppEvent::SendWebSocketMessage(msg) => {
+                    // Send message through WebSocket
+                    if let Some(sender) = ws_sender.lock().await.as_ref() {
+                        let _ = sender.send(msg);
+                    }
                 }
                 AppEvent::Quit => {
                     return Ok(());

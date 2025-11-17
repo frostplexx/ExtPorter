@@ -9,9 +9,12 @@ use ratatui::{
 };
 use tokio::sync::mpsc;
 
-use crate::tabs::{
-    analyzer::AnalyzerTab, database::DatabaseTab, explorer::ExplorerTab, migrator::MigratorTab,
-    settings::SettingsTab, Tab,
+use crate::{
+    tabs::{
+        analyzer::AnalyzerTab, database::DatabaseTab, explorer::ExplorerTab, migrator::MigratorTab,
+        settings::SettingsTab, Tab,
+    },
+    websocket::WebSocketSender,
 };
 
 #[derive(Debug, Clone)]
@@ -21,6 +24,7 @@ pub enum AppEvent {
     WebSocketDisconnected,
     WebSocketMessage(String),
     WebSocketError(String),
+    SendWebSocketMessage(String),
     Quit,
 }
 
@@ -70,10 +74,11 @@ pub struct App {
     tabs: Vec<Box<dyn Tab>>,
     state: AppState,
     tx: mpsc::UnboundedSender<AppEvent>,
+    ws_sender: WebSocketSender,
 }
 
 impl App {
-    pub fn new(tx: mpsc::UnboundedSender<AppEvent>) -> Self {
+    pub fn new(tx: mpsc::UnboundedSender<AppEvent>, ws_sender: WebSocketSender) -> Self {
         let state = AppState {
             ws_connected: false,
             db_connected: false,
@@ -95,6 +100,7 @@ impl App {
             tabs,
             state,
             tx,
+            ws_sender,
         }
     }
 
@@ -203,15 +209,25 @@ impl App {
 
         // Parse message type
         let (msg_type, content) = if msg.starts_with("STDOUT: ") {
-            (MessageType::System, msg.strip_prefix("STDOUT: ").unwrap().to_string())
+            (
+                MessageType::System,
+                msg.strip_prefix("STDOUT: ").unwrap().to_string(),
+            )
         } else if msg.starts_with("STDERR: ") {
-            (MessageType::System, format!("⚠ {}", msg.strip_prefix("STDERR: ").unwrap()))
+            (
+                MessageType::System,
+                format!("⚠ {}", msg.strip_prefix("STDERR: ").unwrap()),
+            )
         } else {
             (MessageType::Received, msg)
         };
 
         // Normalize content (single line)
-        let content = content.replace('\n', " ").split_whitespace().collect::<Vec<_>>().join(" ");
+        let content = content
+            .replace('\n', " ")
+            .split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" ");
 
         self.state.messages.push(Message {
             msg_type,
