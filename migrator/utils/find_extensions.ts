@@ -58,7 +58,7 @@ export function find_extensions(ext_path: string, includes_mv3: boolean = false)
  * @returns{boolean} true if this is a Chrome App, false otherwise
  */
 function isChromeApp(manifest: any): boolean {
-    return manifest && typeof manifest === 'object' && 'app' in manifest;
+    return !!(manifest && typeof manifest === 'object' && 'app' in manifest);
 }
 
 /**
