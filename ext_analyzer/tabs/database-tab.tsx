@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Box, Text, useInput } from 'ink';
 import { useWebSocket } from '../websocket-context.js';
-import { MongoClient, Db, Document } from 'mongodb';
 import * as dotenv from 'dotenv';
 
 dotenv.config();
@@ -11,10 +10,10 @@ interface Collection {
     count: number;
 }
 
-type QueryResult = Document[] | null;
+type QueryResult = any[] | null;
 
 export const DatabaseTab: React.FC = () => {
-    const { databaseStatus } = useWebSocket();
+    const { databaseStatus, client } = useWebSocket();
     const [collections, setCollections] = useState<Collection[]>([]);
     const [selectedCollectionIndex, setSelectedCollectionIndex] = useState(0);
     const [query, setQuery] = useState('{}');
@@ -31,24 +30,13 @@ export const DatabaseTab: React.FC = () => {
 
     const loadCollections = async () => {
         try {
-            const mongoUri =
-                process.env.MONGODB_URI || 'mongodb://admin:password@localhost:27017/migrator';
-            const dbName = process.env.DB_NAME || 'migrator';
+            if (!client.isConnected()) {
+                setError('Not connected to server');
+                return;
+            }
 
-            const client = new MongoClient(mongoUri);
-            await client.connect();
-            const db = client.db(dbName);
-
-            const collectionNames = await db.listCollections().toArray();
-            const collectionsWithCounts: Collection[] = await Promise.all(
-                collectionNames.map(async (col) => ({
-                    name: col.name,
-                    count: await db.collection(col.name).countDocuments(),
-                }))
-            );
-
-            setCollections(collectionsWithCounts);
-            await client.close();
+            const collectionsData = await client.getCollections();
+            setCollections(collectionsData);
         } catch (err) {
             setError(
                 `Failed to load collections: ${err instanceof Error ? err.message : String(err)}`
@@ -66,13 +54,9 @@ export const DatabaseTab: React.FC = () => {
             setLoading(true);
             setError(null);
 
-            const mongoUri =
-                process.env.MONGODB_URI || 'mongodb://admin:password@localhost:27017/migrator';
-            const dbName = process.env.DB_NAME || 'migrator';
-
-            const client = new MongoClient(mongoUri);
-            await client.connect();
-            const db = client.db(dbName);
+            if (!client.isConnected()) {
+                throw new Error('Not connected to server');
+            }
 
             // Parse query
             let parsedQuery: any = {};
@@ -82,15 +66,14 @@ export const DatabaseTab: React.FC = () => {
                 throw new Error('Invalid JSON query');
             }
 
-            // Execute query
-            const results = await db
-                .collection(selectedCollection.name)
-                .find(parsedQuery)
-                .limit(10)
-                .toArray();
+            // Execute query via WebSocket
+            const results = await client.queryCollection(
+                selectedCollection.name,
+                parsedQuery,
+                10
+            );
 
             setQueryResult(results);
-            await client.close();
             setLoading(false);
         } catch (err) {
             setError(`Query failed: ${err instanceof Error ? err.message : String(err)}`);
