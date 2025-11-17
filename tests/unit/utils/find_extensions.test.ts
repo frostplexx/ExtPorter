@@ -176,6 +176,49 @@ describe('find_extensions', () => {
             expect(result).toHaveLength(1);
             expect(result[0].isNewTabExtension).toBe(true);
         });
+
+        it('should identify theme extensions correctly', () => {
+            const extensionDir = path.join(testDir, 'theme-extension');
+            fs.ensureDirSync(extensionDir);
+
+            const manifest = {
+                name: 'Theme Extension',
+                version: '1.0',
+                manifest_version: 2,
+                theme: {
+                    colors: {
+                        frame: [255, 0, 0],
+                        tab_background_text: [0, 0, 0],
+                    },
+                },
+            };
+
+            fs.writeJsonSync(path.join(extensionDir, 'manifest.json'), manifest);
+
+            const result = find_extensions(extensionDir);
+            expect(result).toHaveLength(1);
+            expect(result[0].isThemeExtension).toBe(true);
+        });
+
+        it('should not identify regular extensions as themes', () => {
+            const extensionDir = path.join(testDir, 'regular-extension');
+            fs.ensureDirSync(extensionDir);
+
+            const manifest = {
+                name: 'Regular Extension',
+                version: '1.0',
+                manifest_version: 2,
+                background: {
+                    scripts: ['background.js'],
+                },
+            };
+
+            fs.writeJsonSync(path.join(extensionDir, 'manifest.json'), manifest);
+
+            const result = find_extensions(extensionDir);
+            expect(result).toHaveLength(1);
+            expect(result[0].isThemeExtension).toBe(false);
+        });
     });
 
     describe('when path is a directory without manifest.json', () => {
