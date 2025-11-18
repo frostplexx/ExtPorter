@@ -4,10 +4,7 @@ use crossterm::{
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
-use ratatui::{
-    backend::CrosstermBackend,
-    Terminal,
-};
+use ratatui::{backend::CrosstermBackend, Terminal};
 use std::{io, sync::Arc};
 use tokio::sync::{mpsc, Mutex};
 
@@ -87,7 +84,8 @@ async fn run_app(
                 AppEvent::Input(key) => {
                     // Global quit handlers
                     if key.code == KeyCode::Esc
-                        || (key.code == KeyCode::Char('c') && key.modifiers.contains(KeyModifiers::CONTROL))
+                        || (key.code == KeyCode::Char('c')
+                            && key.modifiers.contains(KeyModifiers::CONTROL))
                     {
                         return Ok(());
                     }

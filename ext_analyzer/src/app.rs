@@ -120,6 +120,18 @@ impl App {
     }
 
     fn render_menu_bar(&self, f: &mut Frame, area: ratatui::layout::Rect) {
+        use ratatui::layout::{Alignment, Constraint, Direction, Layout};
+        use ratatui::widgets::Paragraph;
+
+        // Split the menu bar area into tabs section and connection status section
+        let menu_chunks = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([
+                Constraint::Min(0),     // Tabs take remaining space
+                Constraint::Length(16), // Connection status fixed width
+            ])
+            .split(area);
+
         let tab_names = vec!["Migrator", "Explorer", "Analyzer", "Database", "About"];
         let titles: Vec<Line> = tab_names
             .iter()
@@ -149,7 +161,23 @@ impl App {
                     .add_modifier(Modifier::BOLD),
             );
 
-        f.render_widget(tabs, area);
+        f.render_widget(tabs, menu_chunks[0]);
+
+        // Create connection status indicator
+        let (status_symbol, status_color) = if self.state.ws_connected {
+            ("●", Color::Green)
+        } else {
+            ("●", Color::Red)
+        };
+
+        let connection_status = Paragraph::new(Line::from(vec![
+            Span::raw("Connection "),
+            Span::styled(status_symbol, Style::default().fg(status_color)),
+        ]))
+        .block(Block::default().borders(Borders::ALL))
+        .alignment(Alignment::Center);
+
+        f.render_widget(connection_status, menu_chunks[1]);
     }
 
     pub fn handle_input(&mut self, key: KeyEvent) -> Result<()> {
@@ -186,7 +214,7 @@ impl App {
         self.state.db_connected = false;
         self.state.messages.push(Message {
             msg_type: MessageType::System,
-            content: "Disconnected from migration server".to_string(),
+            content: "Disconnected from Migration Server".to_string(),
             timestamp: chrono::Utc::now(),
         });
     }

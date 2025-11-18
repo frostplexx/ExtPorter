@@ -9,7 +9,7 @@ use ratatui::{
 };
 use tokio::sync::mpsc;
 
-use crate::app::{AppEvent, AppState, MessageType};
+use crate::app::{AppEvent, AppState, Message, MessageType};
 
 pub struct MigratorTab;
 
@@ -52,7 +52,11 @@ impl super::Tab for MigratorTab {
                 };
 
                 let content = if msg.content.len() > (f.area().width as usize - 5) {
-                    format!("{} {}...", prefix, &msg.content[..f.area().width as usize - 8])
+                    format!(
+                        "{} {}...",
+                        prefix,
+                        &msg.content[..f.area().width as usize - 8]
+                    )
                 } else {
                     format!("{} {}", prefix, msg.content)
                 };
@@ -61,8 +65,8 @@ impl super::Tab for MigratorTab {
             })
             .collect();
 
-        let messages_widget = Paragraph::new(visible_messages)
-            .block(Block::default().borders(Borders::NONE));
+        let messages_widget =
+            Paragraph::new(visible_messages).block(Block::default().borders(Borders::NONE));
 
         f.render_widget(messages_widget, chunks[0]);
 
@@ -90,8 +94,8 @@ impl super::Tab for MigratorTab {
             ),
         ]);
 
-        let footer_widget = Paragraph::new(footer)
-            .style(Style::default().bg(Color::Rgb(88, 70, 120)));
+        let footer_widget =
+            Paragraph::new(footer).style(Style::default().bg(Color::Rgb(88, 70, 120)));
 
         f.render_widget(footer_widget, chunks[1]);
     }
@@ -100,14 +104,42 @@ impl super::Tab for MigratorTab {
         &mut self,
         key: KeyEvent,
         state: &mut AppState,
-        _tx: mpsc::UnboundedSender<AppEvent>,
+        tx: mpsc::UnboundedSender<AppEvent>,
     ) -> Result<()> {
         match key.code {
-            KeyCode::Char('s') if !state.migration_running => {
-                // TODO: Send start command to server
+            KeyCode::Char('s') => {
+                if !state.migration_running {
+                    // Send start command to server
+                    let _ = tx.send(AppEvent::SendWebSocketMessage("start".to_string()));
+                    state.messages.push(Message {
+                        msg_type: MessageType::System,
+                        content: "[INFO] Sending start command to server...".to_string(),
+                        timestamp: chrono::Utc::now(),
+                    });
+                } else {
+                    state.messages.push(Message {
+                        msg_type: MessageType::System,
+                        content: "[WARNING] Migration is already running".to_string(),
+                        timestamp: chrono::Utc::now(),
+                    });
+                }
             }
-            KeyCode::Char('S') if state.migration_running => {
-                // TODO: Send stop command to server
+            KeyCode::Char('S') => {
+                if state.migration_running {
+                    // Send stop command to server
+                    let _ = tx.send(AppEvent::SendWebSocketMessage("stop".to_string()));
+                    state.messages.push(Message {
+                        msg_type: MessageType::System,
+                        content: "[INFO] Sending stop command to server...".to_string(),
+                        timestamp: chrono::Utc::now(),
+                    });
+                } else {
+                    state.messages.push(Message {
+                        msg_type: MessageType::System,
+                        content: "[WARNING] No migration is running".to_string(),
+                        timestamp: chrono::Utc::now(),
+                    });
+                }
             }
             _ => {}
         }
