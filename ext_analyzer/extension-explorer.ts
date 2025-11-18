@@ -42,23 +42,30 @@ export class ExtensionExplorer {
             ];
         }
 
+        // Use projection to exclude large file contents to reduce memory and CPU usage
+        // This significantly improves performance when querying large datasets
+        const projection = {
+            id: 1,
+            name: 1,
+            manifest_v2_path: 1,
+            manifest: 1,
+            isNewTabExtension: 1,
+            mv3_extension_id: 1,
+            manifest_v3_path: 1,
+            interestingness_score: 1,
+            interestingness_breakdown: 1,
+            tags: 1,
+            migrationStatus: 1,
+            // Explicitly exclude the files array which can be very large
+            files: 0
+        };
+
         const allExtensions = await Database.shared.database
             .collection(Collections.EXTENSIONS)
             .find(query)
+            .project(projection)
             .toArray();
 
-        // return allExtensions.map((ext) => ({
-        //     id: ext.id,
-        //     name: ext.name || ext.manifest?.name || 'Unknown',
-        //     manifest_v2_path: ext.manifest_v2_path || '',
-        //     manifest: ext.manifest || {},
-        //     files: ext.files || [],
-        //     isNewTabExtension: ext.isNewTabExtension,
-        //     mv3_extension_id: ext.mv3_extension_id,
-        //     manifest_v3_path: ext.manifest_v3_path,
-        //     interestingness_score: ext.interestingness_score || 0,
-        //     interestingness_breakdown: ext.interestingness_breakdown,
-        // }));
         return allExtensions as any as Extension[];
     }
 

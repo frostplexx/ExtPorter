@@ -234,10 +234,12 @@ export async function showLogs(ext: ExtensionSearchResult): Promise<void> {
 
     let logs;
     try {
+        // Limit to 1000 most recent logs to prevent memory issues
         logs = await Database.shared.database
             .collection(Collections.LOGS)
             .find({ 'extension.id': ext.id })
             .sort({ time: -1 })
+            .limit(1000)
             .toArray();
     } catch (error: any) {
         console.log('❌ Failed to fetch logs from database');
@@ -256,7 +258,7 @@ export async function showLogs(ext: ExtensionSearchResult): Promise<void> {
     const logLines: string[] = [];
     logLines.push(`Logs for ${ext.name || 'Unknown Extension'}`);
     logLines.push(`Extension ID: ${ext.id}`);
-    logLines.push(`Total logs: ${logs.length}`);
+    logLines.push(`Total logs: ${logs.length}${logs.length === 1000 ? ' (limited to 1000 most recent)' : ''}`);
     logLines.push('═'.repeat(80));
     logLines.push('');
 
