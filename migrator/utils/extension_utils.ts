@@ -15,7 +15,6 @@ export const extensionUtils = {
         return extension;
     },
 
-
     closeExtensionFiles: (extension: Extension): void => {
         // Close all file descriptors for LazyFile objects
         extension.files.forEach((file) => {
@@ -31,10 +30,4 @@ export const extensionUtils = {
         const newtab = extension.manifest?.chrome_url_overrides?.newtab;
         return newtab != null && newtab !== '';
     },
-
-    isThemeExtension: (extension: Extension): boolean => {
-        // Theme extensions have a 'theme' field in their manifest
-        // They are purely visual customizations and don't contain executable code
-        return extension.manifest?.theme != null;
-    }
 };
