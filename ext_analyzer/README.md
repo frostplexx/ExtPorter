@@ -64,7 +64,23 @@ cargo run --manifest-path ext_analyzer_rust/Cargo.toml
 
 ## Configuration
 
-The client connects to the migration server at `ws://localhost:8080` by default. 
+The client connects to the migration server at `ws://localhost:8080` by default. This can be customized using the `WS_URL` environment variable:
+
+```bash
+# Connect to a different host/port
+export WS_URL="ws://192.168.1.100:8080"
+
+# Or use secure WebSocket (wss://) for production deployments
+export WS_URL="wss://your-server.com:8080"
+
+# Then run the client
+yarn client
+```
+
+You can also create a `.env` file in the `ext_analyzer` directory:
+```
+WS_URL=ws://localhost:8080
+``` 
 
 ## Architecture
 

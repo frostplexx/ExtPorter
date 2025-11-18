@@ -39,6 +39,9 @@ impl super::Tab for SettingsTab {
         )));
         f.render_widget(title, chunks[0]);
 
+        // Get the configured WebSocket URL
+        let ws_url = std::env::var("WS_URL").unwrap_or_else(|_| "ws://localhost:8080".to_string());
+
         // Server configuration
         let server_config = Paragraph::new(vec![
             Line::from(Span::styled(
@@ -47,7 +50,7 @@ impl super::Tab for SettingsTab {
             )),
             Line::from(vec![
                 Span::styled("Server URL:", Style::default().fg(Color::Cyan)),
-                Span::raw(" ws://localhost:8080"),
+                Span::raw(format!(" {}", ws_url)),
             ]),
         ])
         .block(Block::default().borders(Borders::NONE));
