@@ -34,7 +34,11 @@ export class Database {
         if (!process.env.MONGODB_URI) {
             throw Error('Could not find MONGODB_URI in environment');
         }
-        this.client = new MongoClient(process.env.MONGODB_URI);
+        this.client = new MongoClient(process.env.MONGODB_URI, {
+            maxPoolSize: 10,
+            minPoolSize: 2,
+            maxIdleTimeMS: 60000,
+        });
 
         try {
             await this.client.connect();
@@ -42,13 +46,43 @@ export class Database {
                 throw Error('Could not find DB_NAME in environment');
             }
             this.database = this.client.db(process.env.DB_NAME);
+
+            // Create collections upfront to avoid race conditions
+            await this.ensureCollectionsExist();
+
             logger.debug(null, 'Successfully connected to Mongo DB');
-            
+
             // Start queue processor after database is initialized
             this.startQueueProcessor();
         } catch (error) {
             logger.error(null, 'Failed to connect to MongoDB:', error);
             throw error;
+        }
+    }
+
+    /**
+     * Ensures all required collections exist to avoid race conditions
+     */
+    private async ensureCollectionsExist() {
+        if (!this.database) throw new Error('Database not initialized');
+
+        try {
+            const existingCollections = await this.database.listCollections().toArray();
+            const existingNames = new Set(existingCollections.map((c) => c.name));
+
+            // Create collections that don't exist
+            for (const collectionName of Object.values(Collections)) {
+                if (!existingNames.has(collectionName)) {
+                    await this.database.createCollection(collectionName);
+                    console.debug(`Created collection: ${collectionName}`);
+                }
+            }
+        } catch (error) {
+            // If collection already exists, that's fine - ignore the error
+            if ((error as any).code !== 48) {
+                // 48 = NamespaceExists
+                throw error;
+            }
         }
     }
 
@@ -68,7 +102,7 @@ export class Database {
         while (this.isProcessingQueue) {
             // Collect promises for operations we're starting
             const activePromises: Promise<void>[] = [];
-            
+
             // Process operations up to max concurrency
             while (
                 this.operationQueue.length > 0 &&
@@ -78,7 +112,8 @@ export class Database {
                 if (!item) continue;
 
                 this.pendingOperations++;
-                const promise = item.operation()
+                const promise = item
+                    .operation()
                     .then((result) => {
                         item.resolve(result);
                     })
@@ -88,7 +123,7 @@ export class Database {
                     .finally(() => {
                         this.pendingOperations--;
                     });
-                    
+
                 activePromises.push(promise);
             }
 
@@ -96,7 +131,7 @@ export class Database {
             if (activePromises.length > 0) {
                 await Promise.race([
                     Promise.all(activePromises),
-                    new Promise((resolve) => setTimeout(resolve, 10))
+                    new Promise((resolve) => setTimeout(resolve, 10)),
                 ]);
             } else {
                 // No operations to process, wait a bit before checking again
