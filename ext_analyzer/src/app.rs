@@ -20,6 +20,7 @@ use crate::{
 #[derive(Debug, Clone)]
 pub enum AppEvent {
     Input(KeyEvent),
+    WebSocketConnecting,
     WebSocketConnected,
     WebSocketDisconnected,
     WebSocketMessage(String),
@@ -28,13 +29,25 @@ pub enum AppEvent {
     Quit,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub enum ConnectionState {
+    Disconnected,
+    Connecting,
+    Connected,
+}
+
 pub struct AppState {
+    pub ws_connection_state: ConnectionState,
     pub ws_connected: bool,
     pub db_connected: bool,
     pub migration_running: bool,
     pub messages: Vec<Message>,
     pub extensions: Vec<Extension>,
     pub message_scroll_offset: usize,
+    pub connection_state_changed_at: Option<std::time::Instant>,
+    pub last_message_time: Option<std::time::Instant>,
+    pub recent_message_count: usize,
+    pub burst_window_start: Option<std::time::Instant>,
 }
 
 #[derive(Debug, Clone)]
@@ -81,12 +94,17 @@ pub struct App {
 impl App {
     pub fn new(tx: mpsc::UnboundedSender<AppEvent>, ws_sender: WebSocketSender) -> Self {
         let state = AppState {
+            ws_connection_state: ConnectionState::Connecting,
             ws_connected: false,
             db_connected: false,
             migration_running: false,
             messages: Vec::new(),
             extensions: Vec::new(),
             message_scroll_offset: 0,
+            connection_state_changed_at: Some(std::time::Instant::now()),
+            last_message_time: None,
+            recent_message_count: 0,
+            burst_window_start: None,
         };
 
         let tabs: Vec<Box<dyn Tab>> = vec![
@@ -166,15 +184,27 @@ impl App {
         f.render_widget(tabs, menu_chunks[0]);
 
         // Create connection status indicator
-        let (status_symbol, status_color) = if self.state.ws_connected {
-            ("●", Color::Green)
-        } else {
-            ("●", Color::Red)
+        // Ensure connecting state shows for at least 500ms to avoid blinking
+        let min_display_duration = std::time::Duration::from_millis(500);
+        let should_show_connecting =
+            if let Some(changed_at) = self.state.connection_state_changed_at {
+                changed_at.elapsed() < min_display_duration
+            } else {
+                false
+            };
+
+        let (status_text, status_color) = match self.state.ws_connection_state {
+            ConnectionState::Connected => ("●", Color::Green),
+            ConnectionState::Connecting if should_show_connecting || !self.state.ws_connected => {
+                ("◐", Color::Rgb(255, 165, 0)) // Half-filled dot, orange
+            }
+            ConnectionState::Connecting => ("●", Color::Green), // Fallback to connected if delay passed
+            ConnectionState::Disconnected => ("●", Color::Red),
         };
 
         let connection_status = Paragraph::new(Line::from(vec![
             Span::raw("Connection "),
-            Span::styled(status_symbol, Style::default().fg(status_color)),
+            Span::styled(status_text, Style::default().fg(status_color)),
         ]))
         .block(Block::default().borders(Borders::ALL))
         .alignment(Alignment::Center);
@@ -202,8 +232,17 @@ impl App {
         Ok(())
     }
 
+    pub fn handle_websocket_connecting(&mut self) {
+        self.state.ws_connection_state = ConnectionState::Connecting;
+        self.state.connection_state_changed_at = Some(std::time::Instant::now());
+
+        // Don't add a message for every connection attempt, it would spam the log
+    }
+
     pub fn handle_websocket_connected(&mut self) {
+        self.state.ws_connection_state = ConnectionState::Connected;
         self.state.ws_connected = true;
+        self.state.connection_state_changed_at = Some(std::time::Instant::now());
 
         // If user is scrolled up, increment scroll offset to maintain view position
         if self.state.message_scroll_offset > 0 {
@@ -218,8 +257,10 @@ impl App {
     }
 
     pub fn handle_websocket_disconnected(&mut self) {
+        self.state.ws_connection_state = ConnectionState::Disconnected;
         self.state.ws_connected = false;
         self.state.db_connected = false;
+        self.state.connection_state_changed_at = Some(std::time::Instant::now());
 
         // If user is scrolled up, increment scroll offset to maintain view position
         if self.state.message_scroll_offset > 0 {
@@ -271,17 +312,25 @@ impl App {
             .collect::<Vec<_>>()
             .join(" ");
 
-        // If user is scrolled up (not at bottom), increment scroll offset
-        // to maintain their current view position when new messages arrive
-        if self.state.message_scroll_offset > 0 {
-            self.state.message_scroll_offset += 1;
-        }
-
+        // Add message first
         self.state.messages.push(Message {
             msg_type,
             content,
             timestamp: chrono::Utc::now(),
         });
+
+        // Handle scroll position AFTER adding the message:
+        // - If at bottom (offset = 0), stay there
+        // - If scrolled up (offset > 0), increment offset to maintain view position
+        if self.state.message_scroll_offset > 0 {
+            self.state.message_scroll_offset += 1;
+
+            // Safety check: don't let offset exceed total messages
+            let max_offset = self.state.messages.len().saturating_sub(1);
+            if self.state.message_scroll_offset > max_offset {
+                self.state.message_scroll_offset = max_offset;
+            }
+        }
     }
 
     pub fn handle_websocket_error(&mut self, err: String) {

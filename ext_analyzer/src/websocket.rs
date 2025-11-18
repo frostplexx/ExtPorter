@@ -17,6 +17,9 @@ pub async fn run_websocket_client(
     ws_sender: WebSocketSender,
 ) -> Result<()> {
     loop {
+        // Notify that we're attempting to connect
+        let _ = event_tx.send(AppEvent::WebSocketConnecting);
+        
         match connect_and_run(&event_tx, &ws_sender).await {
             Ok(_) => {
                 // Connection closed normally
