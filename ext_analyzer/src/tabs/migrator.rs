@@ -34,18 +34,17 @@ impl super::Tab for MigratorTab {
         // scroll_offset = 0 means we're at the bottom (showing most recent)
         // scroll_offset > 0 means we're scrolled up
 
-        let end_idx = total_messages.saturating_sub(state.message_scroll_offset);
-        let start_idx = end_idx.saturating_sub(available_lines);
+        // Clamp scroll offset to prevent rendering issues
+        let clamped_offset = state.message_scroll_offset.min(total_messages);
 
-        // Clamp to ensure we always show exactly available_lines (or fewer if not enough messages)
-        let actual_end = end_idx.min(total_messages);
-        let actual_start = start_idx.min(actual_end);
+        let end_idx = total_messages.saturating_sub(clamped_offset);
+        let start_idx = end_idx.saturating_sub(available_lines);
 
         let visible_messages: Vec<Line> = state
             .messages
             .iter()
-            .skip(actual_start)
-            .take(actual_end - actual_start)
+            .skip(start_idx)
+            .take(end_idx - start_idx)
             .map(|msg| {
                 let (prefix, color) = match msg.msg_type {
                     MessageType::Sent => ("[INFO]", Color::Magenta),

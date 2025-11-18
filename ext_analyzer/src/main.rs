@@ -75,46 +75,61 @@ async fn run_app(
     mut rx: mpsc::UnboundedReceiver<AppEvent>,
     ws_sender: websocket::WebSocketSender,
 ) -> Result<()> {
+    // Create a ticker for regular redraws
+    let mut redraw_interval = tokio::time::interval(std::time::Duration::from_millis(50));
+    
     loop {
-        terminal.draw(|f| app.draw(f))?;
+        tokio::select! {
+            // Redraw on a timer (20 FPS)
+            _ = redraw_interval.tick() => {
+                terminal.draw(|f| app.draw(f))?;
+            }
+            
+            // Handle events as they come in
+            Some(event) = rx.recv() => {
+                match event {
+                    AppEvent::Input(key) => {
+                        // Global quit handlers
+                        if key.code == KeyCode::Esc
+                            || (key.code == KeyCode::Char('c')
+                                && key.modifiers.contains(KeyModifiers::CONTROL))
+                        {
+                            return Ok(());
+                        }
 
-        // Handle events
-        if let Some(event) = rx.recv().await {
-            match event {
-                AppEvent::Input(key) => {
-                    // Global quit handlers
-                    if key.code == KeyCode::Esc
-                        || (key.code == KeyCode::Char('c')
-                            && key.modifiers.contains(KeyModifiers::CONTROL))
-                    {
+                        // Handle input
+                        app.handle_input(key)?;
+                    }
+                    AppEvent::WebSocketConnecting => {
+                        app.handle_websocket_connecting();
+                    }
+                    AppEvent::WebSocketConnected => {
+                        app.handle_websocket_connected();
+                    }
+                    AppEvent::WebSocketDisconnected => {
+                        app.handle_websocket_disconnected();
+                    }
+                    AppEvent::WebSocketMessage(msg) => {
+                        app.handle_websocket_message(msg);
+                    }
+                    AppEvent::WebSocketError(err) => {
+                        app.handle_websocket_error(err);
+                    }
+                    AppEvent::SendWebSocketMessage(msg) => {
+                        // Send message through WebSocket
+                        if let Some(sender) = ws_sender.lock().await.as_ref() {
+                            let _ = sender.send(msg);
+                        }
+                    }
+                    AppEvent::Quit => {
                         return Ok(());
                     }
-
-                    // Handle input
-                    app.handle_input(key)?;
-                }
-                AppEvent::WebSocketConnected => {
-                    app.handle_websocket_connected();
-                }
-                AppEvent::WebSocketDisconnected => {
-                    app.handle_websocket_disconnected();
-                }
-                AppEvent::WebSocketMessage(msg) => {
-                    app.handle_websocket_message(msg);
-                }
-                AppEvent::WebSocketError(err) => {
-                    app.handle_websocket_error(err);
-                }
-                AppEvent::SendWebSocketMessage(msg) => {
-                    // Send message through WebSocket
-                    if let Some(sender) = ws_sender.lock().await.as_ref() {
-                        let _ = sender.send(msg);
-                    }
-                }
-                AppEvent::Quit => {
-                    return Ok(());
                 }
             }
+            
+            else => break,
         }
     }
+    
+    Ok(())
 }
