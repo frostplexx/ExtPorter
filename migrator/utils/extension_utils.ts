@@ -30,5 +30,11 @@ export const extensionUtils = {
     isNewTabExtension: (extension: Extension): boolean => {
         const newtab = extension.manifest?.chrome_url_overrides?.newtab;
         return newtab != null && newtab !== '';
+    },
+
+    isThemeExtension: (extension: Extension): boolean => {
+        // Theme extensions have a 'theme' field in their manifest
+        // They are purely visual customizations and don't contain executable code
+        return extension.manifest?.theme != null;
     }
 };
