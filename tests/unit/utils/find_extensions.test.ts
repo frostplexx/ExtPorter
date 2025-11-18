@@ -177,7 +177,7 @@ describe('find_extensions', () => {
             expect(result[0].isNewTabExtension).toBe(true);
         });
 
-        it('should identify theme extensions correctly', () => {
+        it('should filter out theme extensions', () => {
             const extensionDir = path.join(testDir, 'theme-extension');
             fs.ensureDirSync(extensionDir);
 
@@ -196,11 +196,10 @@ describe('find_extensions', () => {
             fs.writeJsonSync(path.join(extensionDir, 'manifest.json'), manifest);
 
             const result = find_extensions(extensionDir);
-            expect(result).toHaveLength(1);
-            expect(result[0].isThemeExtension).toBe(true);
+            expect(result).toHaveLength(0);
         });
 
-        it('should not identify regular extensions as themes', () => {
+        it('should not filter out regular extensions', () => {
             const extensionDir = path.join(testDir, 'regular-extension');
             fs.ensureDirSync(extensionDir);
 
@@ -217,7 +216,6 @@ describe('find_extensions', () => {
 
             const result = find_extensions(extensionDir);
             expect(result).toHaveLength(1);
-            expect(result[0].isThemeExtension).toBe(false);
         });
     });
 

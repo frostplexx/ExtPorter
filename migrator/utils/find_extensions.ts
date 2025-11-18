@@ -63,6 +63,17 @@ function isChromeApp(manifest: any): boolean {
 }
 
 /**
+ * Checks if a manifest represents a theme extension
+ * Theme extensions have a "theme" key in their manifest and only contain visual customizations
+ * They do not contain executable code and cannot be migrated to MV3
+ * @param{any} manifest - The parsed manifest object
+ * @returns{boolean} true if this is a theme extension, false otherwise
+ */
+function isThemeExtension(manifest: any): boolean {
+    return !!(manifest && typeof manifest === 'object' && 'theme' in manifest);
+}
+
+/**
  * Loads and parses all the manifest.jsons given a list of paths
  * @param{string[]} manifest_paths
  * @returns{Extension[]} list of extensions
@@ -87,6 +98,14 @@ function get_manifest(manifest_paths: string[], includes_mv3: boolean): Extensio
                         manifest_path: manifestPath,
                     }
                 );
+                continue;
+            }
+
+            // Skip theme extensions - they only contain visual customizations and no executable code
+            if (isThemeExtension(json)) {
+                logger.info(null, `Skipping theme extension: ${json['name'] || 'Unknown'}`, {
+                    manifest_path: manifestPath,
+                });
                 continue;
             }
 
@@ -124,9 +143,6 @@ function get_manifest(manifest_paths: string[], includes_mv3: boolean): Extensio
                     manifest: json,
                     files: files,
                     isNewTabExtension: extensionUtils.isNewTabExtension({
-                        manifest: json,
-                    } as Extension),
-                    isThemeExtension: extensionUtils.isThemeExtension({
                         manifest: json,
                     } as Extension),
                     cws_info: cwsInfo || undefined,
