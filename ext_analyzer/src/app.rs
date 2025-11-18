@@ -34,6 +34,7 @@ pub struct AppState {
     pub migration_running: bool,
     pub messages: Vec<Message>,
     pub extensions: Vec<Extension>,
+    pub message_scroll_offset: usize,
 }
 
 #[derive(Debug, Clone)]
@@ -85,6 +86,7 @@ impl App {
             migration_running: false,
             messages: Vec::new(),
             extensions: Vec::new(),
+            message_scroll_offset: 0,
         };
 
         let tabs: Vec<Box<dyn Tab>> = vec![
@@ -202,6 +204,12 @@ impl App {
 
     pub fn handle_websocket_connected(&mut self) {
         self.state.ws_connected = true;
+
+        // If user is scrolled up, increment scroll offset to maintain view position
+        if self.state.message_scroll_offset > 0 {
+            self.state.message_scroll_offset += 1;
+        }
+
         self.state.messages.push(Message {
             msg_type: MessageType::System,
             content: "Connected to Migration Server".to_string(),
@@ -212,6 +220,12 @@ impl App {
     pub fn handle_websocket_disconnected(&mut self) {
         self.state.ws_connected = false;
         self.state.db_connected = false;
+
+        // If user is scrolled up, increment scroll offset to maintain view position
+        if self.state.message_scroll_offset > 0 {
+            self.state.message_scroll_offset += 1;
+        }
+
         self.state.messages.push(Message {
             msg_type: MessageType::System,
             content: "Disconnected from Migration Server".to_string(),
@@ -257,6 +271,12 @@ impl App {
             .collect::<Vec<_>>()
             .join(" ");
 
+        // If user is scrolled up (not at bottom), increment scroll offset
+        // to maintain their current view position when new messages arrive
+        if self.state.message_scroll_offset > 0 {
+            self.state.message_scroll_offset += 1;
+        }
+
         self.state.messages.push(Message {
             msg_type,
             content,
@@ -265,6 +285,11 @@ impl App {
     }
 
     pub fn handle_websocket_error(&mut self, err: String) {
+        // If user is scrolled up, increment scroll offset to maintain view position
+        if self.state.message_scroll_offset > 0 {
+            self.state.message_scroll_offset += 1;
+        }
+
         self.state.messages.push(Message {
             msg_type: MessageType::System,
             content: format!("Server Error: {}", err),
