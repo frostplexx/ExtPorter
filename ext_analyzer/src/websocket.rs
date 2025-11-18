@@ -50,7 +50,7 @@ async fn connect_and_run(
 
     // Create channel for sending messages to WebSocket
     let (send_tx, mut send_rx) = mpsc::unbounded_channel::<String>();
-    
+
     // Store sender in shared state
     *ws_sender.lock().await = Some(send_tx);
 
@@ -78,6 +78,7 @@ async fn connect_and_run(
             msg = send_rx.recv() => {
                 match msg {
                     Some(text) => {
+                        let _ = tx.send(AppEvent::WebSocketMessage(format!("DEBUG: Sending message: {}", text)));
                         if let Err(e) = write.send(Message::Text(text)).await {
                             let _ = tx.send(AppEvent::WebSocketError(format!("Failed to send message: {}", e)));
                             break;

@@ -164,6 +164,7 @@ export class MigrationServer {
             // Handle incoming messages from client
             ws.on('message', (message: Buffer) => {
                 const command = message.toString().trim();
+                console.log(`Received command from client: "${command}"`);
 
                 // Try to parse as JSON for API calls
                 try {
@@ -187,6 +188,7 @@ export class MigrationServer {
 
                 // Handle migrator commands
                 if (command === 'start') {
+                    console.log('Starting migration via start command...');
                     this.handleStartCommand().catch((error) => {
                         console.error('Error in handleStartCommand:', error);
                         this.broadcastToClients(`ERROR: ${error.message || String(error)}`);
@@ -216,9 +218,6 @@ export class MigrationServer {
             ws.on('error', (error: Error) => {
                 console.error('WebSocket error:', error);
             });
-
-            // Send welcome message to new client
-            ws.send('Welcome to the Migration Server!');
         });
 
         // Server listening event
