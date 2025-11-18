@@ -6,7 +6,9 @@ use tokio_tungstenite::{connect_async, tungstenite::Message};
 
 use crate::app::AppEvent;
 
-const WS_URL: &str = "ws://localhost:8080";
+fn get_ws_url() -> String {
+    std::env::var("WS_URL").unwrap_or_else(|_| "ws://localhost:8080".to_string())
+}
 
 pub type WebSocketSender = Arc<Mutex<Option<mpsc::UnboundedSender<String>>>>;
 
@@ -40,7 +42,8 @@ async fn connect_and_run(
     tx: &mpsc::UnboundedSender<AppEvent>,
     ws_sender: &WebSocketSender,
 ) -> Result<()> {
-    let (ws_stream, _) = connect_async(WS_URL).await?;
+    let ws_url = get_ws_url();
+    let (ws_stream, _) = connect_async(&ws_url).await?;
     let _ = tx.send(AppEvent::WebSocketConnected);
 
     let (mut write, mut read) = ws_stream.split();
