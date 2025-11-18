@@ -53,6 +53,16 @@ export function find_extensions(ext_path: string, includes_mv3: boolean = false)
 }
 
 /**
+ * Checks if a manifest represents a Chrome App (deprecated)
+ * Chrome Apps have an "app" key in their manifest and are no longer supported
+ * @param{any} manifest - The parsed manifest object
+ * @returns{boolean} true if this is a Chrome App, false otherwise
+ */
+function isChromeApp(manifest: any): boolean {
+    return !!(manifest && typeof manifest === 'object' && 'app' in manifest);
+}
+
+/**
  * Loads and parses all the manifest.jsons given a list of paths
  * @param{string[]} manifest_paths
  * @returns{Extension[]} list of extensions
@@ -67,6 +77,19 @@ function get_manifest(manifest_paths: string[], includes_mv3: boolean): Extensio
             const manifestContent = manifestMMapFile.getContent();
 
             const json = JSON5.parse(manifestContent) as any;
+
+            // Skip Chrome Apps - they are deprecated and cannot be migrated
+            if (isChromeApp(json)) {
+                logger.info(
+                    null,
+                    `Skipping Chrome App (deprecated): ${json['name'] || 'Unknown'}`,
+                    {
+                        manifest_path: manifestPath,
+                    }
+                );
+                continue;
+            }
+
             if (json['manifest_version'] == 2 || includes_mv3) {
                 // logger.info(`Found valid Manifest V2 extension: ${json["name"] || 'Unknown'}`);
                 const extensionDir = path.dirname(manifestPath);
@@ -100,7 +123,12 @@ function get_manifest(manifest_paths: string[], includes_mv3: boolean): Extensio
                     manifest_v2_path: extensionDir,
                     manifest: json,
                     files: files,
-                    isNewTabExtension: extensionUtils.isNewTabExtension({ manifest: json } as Extension),
+                    isNewTabExtension: extensionUtils.isNewTabExtension({
+                        manifest: json,
+                    } as Extension),
+                    isThemeExtension: extensionUtils.isThemeExtension({
+                        manifest: json,
+                    } as Extension),
                     cws_info: cwsInfo || undefined,
                 };
 

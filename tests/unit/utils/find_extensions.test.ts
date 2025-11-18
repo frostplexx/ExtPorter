@@ -115,6 +115,48 @@ describe('find_extensions', () => {
             expect(result[0].name).toBe('MV3 Extension');
         });
 
+        it('should skip Chrome Apps (deprecated)', () => {
+            const extensionDir = path.join(testDir, 'chrome-app');
+            fs.ensureDirSync(extensionDir);
+
+            const manifest = {
+                name: 'Test Chrome App',
+                version: '1.0',
+                manifest_version: 2,
+                app: {
+                    background: {
+                        scripts: ['background.js'],
+                    },
+                },
+            };
+
+            fs.writeJsonSync(path.join(extensionDir, 'manifest.json'), manifest);
+
+            const result = find_extensions(extensionDir);
+            expect(result).toHaveLength(0);
+        });
+
+        it('should skip Chrome Apps even when includes_mv3 is true', () => {
+            const extensionDir = path.join(testDir, 'chrome-app-mv3');
+            fs.ensureDirSync(extensionDir);
+
+            const manifest = {
+                name: 'Test Chrome App MV3',
+                version: '1.0',
+                manifest_version: 2,
+                app: {
+                    background: {
+                        scripts: ['background.js'],
+                    },
+                },
+            };
+
+            fs.writeJsonSync(path.join(extensionDir, 'manifest.json'), manifest);
+
+            const result = find_extensions(extensionDir, true);
+            expect(result).toHaveLength(0);
+        });
+
         it('should identify new tab extensions correctly', () => {
             const extensionDir = path.join(testDir, 'newtab-extension');
             fs.ensureDirSync(extensionDir);
@@ -133,6 +175,49 @@ describe('find_extensions', () => {
             const result = find_extensions(extensionDir);
             expect(result).toHaveLength(1);
             expect(result[0].isNewTabExtension).toBe(true);
+        });
+
+        it('should identify theme extensions correctly', () => {
+            const extensionDir = path.join(testDir, 'theme-extension');
+            fs.ensureDirSync(extensionDir);
+
+            const manifest = {
+                name: 'Theme Extension',
+                version: '1.0',
+                manifest_version: 2,
+                theme: {
+                    colors: {
+                        frame: [255, 0, 0],
+                        tab_background_text: [0, 0, 0],
+                    },
+                },
+            };
+
+            fs.writeJsonSync(path.join(extensionDir, 'manifest.json'), manifest);
+
+            const result = find_extensions(extensionDir);
+            expect(result).toHaveLength(1);
+            expect(result[0].isThemeExtension).toBe(true);
+        });
+
+        it('should not identify regular extensions as themes', () => {
+            const extensionDir = path.join(testDir, 'regular-extension');
+            fs.ensureDirSync(extensionDir);
+
+            const manifest = {
+                name: 'Regular Extension',
+                version: '1.0',
+                manifest_version: 2,
+                background: {
+                    scripts: ['background.js'],
+                },
+            };
+
+            fs.writeJsonSync(path.join(extensionDir, 'manifest.json'), manifest);
+
+            const result = find_extensions(extensionDir);
+            expect(result).toHaveLength(1);
+            expect(result[0].isThemeExtension).toBe(false);
         });
     });
 
@@ -164,6 +249,50 @@ describe('find_extensions', () => {
             expect(result).toHaveLength(2);
             const names = result.map((ext) => ext.name).sort();
             expect(names).toEqual(['Extension 1', 'Extension 2']);
+        });
+
+        it('should filter Chrome Apps when searching recursively', () => {
+            const rootDir = path.join(testDir, 'mixed-extensions-root');
+            fs.ensureDirSync(rootDir);
+
+            // Create regular extension
+            const ext1Dir = path.join(rootDir, 'extension1');
+            fs.ensureDirSync(ext1Dir);
+            fs.writeJsonSync(path.join(ext1Dir, 'manifest.json'), {
+                name: 'Regular Extension',
+                version: '1.0',
+                manifest_version: 2,
+            });
+
+            // Create Chrome App (should be filtered)
+            const appDir = path.join(rootDir, 'chrome-app');
+            fs.ensureDirSync(appDir);
+            fs.writeJsonSync(path.join(appDir, 'manifest.json'), {
+                name: 'Chrome App',
+                version: '1.0',
+                manifest_version: 2,
+                app: {
+                    background: {
+                        scripts: ['background.js'],
+                    },
+                },
+            });
+
+            // Create another regular extension
+            const ext2Dir = path.join(rootDir, 'extension2');
+            fs.ensureDirSync(ext2Dir);
+            fs.writeJsonSync(path.join(ext2Dir, 'manifest.json'), {
+                name: 'Another Extension',
+                version: '1.0',
+                manifest_version: 2,
+            });
+
+            const result = find_extensions(rootDir);
+
+            // Should only find the 2 regular extensions, not the Chrome App
+            expect(result).toHaveLength(2);
+            const names = result.map((ext) => ext.name).sort();
+            expect(names).toEqual(['Another Extension', 'Regular Extension']);
         });
     });
 

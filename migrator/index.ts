@@ -53,7 +53,7 @@ async function initialize() {
  * Main function that runs the the migrator
  */
 async function main() {
-    await initialize()
+    await initialize();
     const server = new MigrationServer(globals);
 
     server.start();

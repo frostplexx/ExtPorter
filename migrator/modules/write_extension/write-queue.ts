@@ -119,6 +119,19 @@ export class WriteQueue {
             this.activeWriters++;
 
             try {
+                // Log global file write stats before processing
+                const stats = Writer.getGlobalWriteStats();
+                if (stats.waiting > 10) {
+                    // Only log if there's significant waiting
+                    logger.debug(task.extension, 'Global file write queue status', {
+                        activeFileWrites: stats.active,
+                        waitingFileWrites: stats.waiting,
+                        limit: stats.limit,
+                        activeExtensionWrites: this.activeWriters,
+                        queuedExtensions: this.writeQueue.length,
+                    });
+                }
+
                 await this.writeExtensionToDisk(task.extension);
             } catch (error) {
                 logger.error(task.extension, 'Failed to write extension to disk', {
