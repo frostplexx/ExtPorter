@@ -28,28 +28,43 @@ of Chrome extension migration in the face of Google's deprecation of Manifest V2
 
 ## Prerequisites
 
-### When using nix
+### Server Requirements
+
+#### When using nix
 
 - [Nix](https://nixos.org/)
 - [Flakes enabled](https://nixos.wiki/wiki/flakes)
 - Docker & Docker Compose
-- (optional) [kitty terminal](https://sw.kovidgoyal.net/kitty/)
 - (optional) [direnv](https://direnv.net/)
 
-### If you are not using nix
+#### If you are not using nix
 
 - Node.js (v18+)
 - yarn
 - Docker & Docker Compose
 - Git
-- Chrome 138 AND Chrome 141
 - (optional) [sshpass](https://linux.die.net/man/1/sshpass)
-- (optional) [kitty terminal](https://sw.kovidgoyal.net/kitty/)
 - (optional) [ollama](https://ollama.com/)
+
+### Client Requirements
+
+#### Rust Client (Recommended)
+
+- Rust toolchain (cargo, rustc)
+- Cargo (comes with Rust)
+- Chrome 138 AND Chrome 141
+
+#### TypeScript Client (Advanced Features)
+
+- Node.js (v18+)
+- yarn (installed with server dependencies)
+- (optional) [kitty terminal](https://sw.kovidgoyal.net/kitty/) - required for code viewing features
 
 ## Installation
 
-### Bare metal
+### Server Setup
+
+#### Bare metal
 
 1. **Clone the repository**
 
@@ -87,9 +102,74 @@ of Chrome extension migration in the face of Google's deprecation of Manifest V2
     ```
     (This should run automatically if you are using direnv)
 
+### Client Setup
+
+#### Rust Client (Recommended)
+
+1. **Install Rust** (if not already installed)
+
+    ```bash
+    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+    ```
+
+2. **Build the client**
+
+    ```bash
+    cargo build --manifest-path ext_analyzer/Cargo.toml
+    ```
+
+    Or use yarn to build:
+
+    ```bash
+    yarn client:build
+    ```
+
+The Rust client will be compiled and ready to use with `yarn client` or `cargo run --manifest-path ext_analyzer/Cargo.toml`.
+
+#### TypeScript Client (Advanced Features)
+
+The TypeScript client is already available after completing the server setup. No additional compilation needed.
+
+**Note**: For code viewing features, install [kitty terminal](https://sw.kovidgoyal.net/kitty/).
+
 ## Usage
 
 Make sure that the environment is Initialized before running any commands by doing `yarn env:init`!
+
+### Starting the Server and Client
+
+#### Quick Start (Recommended)
+
+Start both server and client together with automatic cleanup:
+
+```bash
+# Using the bash script
+./scripts/dev.sh
+
+# Or using the Python launcher
+./start.py
+```
+
+Both methods will:
+
+- Start the migration server in the background
+- Launch the Rust client in the foreground
+- Automatically terminate the server when the client exits
+
+#### Manual Start
+
+Start components separately:
+
+```bash
+# Terminal 1 - Start the server
+yarn server
+
+# Terminal 2 - Start the Rust client
+yarn client
+
+# Or start the TypeScript client
+yarn ext
+```
 
 ### Migration
 
@@ -110,9 +190,23 @@ yarn migrate
 
 This project provides two clients for manual analysis:
 
-#### TypeScript Client (Full Featured)
+#### Rust Client (Recommended)
 
-Run `yarn client` to open the TypeScript/Ink client with full database querying capabilities. The client will display a list of all extensions in the dataset with the following options:
+Run `yarn client` to open the high-performance Rust/Ratatui client. This client provides:
+
+- Real-time migration monitoring and log viewing
+- Extension browsing and search
+- Extension analysis with statistics
+- Database status viewing
+- Lightweight and fast with no Node.js runtime required
+
+The Rust client is ideal for monitoring migrations and browsing results.
+
+See [ext_analyzer/README.md](ext_analyzer/README.md) for more details.
+
+#### TypeScript Client (Advanced Features)
+
+Run `yarn ext` to open the TypeScript/Ink client with full database querying capabilities. The client will display a list of all extensions in the dataset with the following options:
 
 ```
 View Source          [v]
@@ -133,19 +227,7 @@ Quit                 [q]
 - View Source needs you to use the [kitty](https://sw.kovidgoyal.net/kitty/) terminal as it opens new tabs and panes
 - If you want to use "Generate Description" You must first configure an ollama endpoint in `.env`. See [LLM Integration](https://github.com/frostplexx/ExtPorter/blob/dev/README.md#llm-integration) for more info.
 
-#### Rust Client (Streamlined)
-
-Run `yarn client:rust` to open the high-performance Rust/Ratatui client. This client provides:
-
-- Real-time migration monitoring and log viewing
-- Extension browsing and search
-- Extension analysis with statistics
-- Database status viewing
-- Lightweight and fast with no Node.js runtime required
-
-The Rust client is ideal for monitoring migrations and browsing results, while the TypeScript client offers advanced features like code viewing and LLM integration.
-
-See [ext_analyzer_rust/README.md](ext_analyzer_rust/README.md) for more details.
+The TypeScript client offers advanced features like code viewing and LLM integration.
 
 ### LLM Integration
 
@@ -258,12 +340,14 @@ In addition to this mandatory function a module can include any arbitrary amount
 ExtPorter automatically extracts and stores Chrome Web Store metadata when loading extensions. This feature allows for better filtering, searching, and analysis of extensions.
 
 **How it works:**
+
 - When `find_extensions()` discovers extensions, it looks for CWS HTML files (e.g., `store.html`, `cws.html`)
 - The HTML parser (`migrator/utils/cws_parser.ts`) extracts metadata using CSS selectors
 - Extracted information is stored in the `cws_info` field of the Extension object
 - This data is persisted to MongoDB when extensions are saved
 
 **Extracted metadata includes:**
+
 - Extension description and short description
 - Rating and rating count
 - User count
@@ -274,6 +358,7 @@ ExtPorter automatically extracts and stores Chrome Web Store metadata when loadi
 - Privacy policy URL
 
 **Supported HTML file names:**
+
 - `store.html` - Primary CWS HTML filename
 - `cws.html` - Chrome Web Store HTML
 - `metadata.html` - Metadata HTML
