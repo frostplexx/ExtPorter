@@ -146,6 +146,14 @@ export class Writer {
                     // Don't throw - continue writing other files
                     // throw error;
                 } finally {
+                    // CRITICAL: Close the file descriptor immediately after writing to prevent EMFILE
+                    // This must be in finally block to ensure it runs even if there's an error
+                    try {
+                        file.close();
+                    } catch (closeError) {
+                        // Ignore close errors
+                    }
+
                     // Always release the semaphore slot
                     this.releaseGlobalFileWriteSlot();
                 }

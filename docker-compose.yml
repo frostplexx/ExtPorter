@@ -1,64 +1,58 @@
 services:
-  migrator-app:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: migrator-app
-    restart: "no"  # Changed from unless-stopped to prevent infinite restarts
-    environment:
-      - LOG_LEVEL=info
-      - MONGODB_URI=mongodb://admin:password@mongodb:27017/migrator
-      - DB_NAME=migrator
-    volumes:
-      - ./output:/app/output
-      - ./logs:/app/logs
-      - ./extensions:/app/extensions:ro
-    command: ["npm", "start", "/app/extensions", "/app/output"]  # Pass correct paths as arguments
-    depends_on:
-      - mongodb
-    networks:
-      - migrator-network
-    # Add security options for Chrome/Puppeteer
-    security_opt:
-      - seccomp:unconfined
-    # Optionally add shared memory size for Chrome
-    shm_size: 2gb
+    migrator-server:
+        build:
+            context: .
+            dockerfile: Dockerfile
+        container_name: migrator-server
+        restart: unless-stopped
+        # Run as host user to avoid permission issues with mounted volumes
+        user: '${UID:-1000}:${GID:-1000}'
+        ports:
+            - '8080:8080' # Expose WebSocket server for client connections
+        env_file:
+            - .env
+        environment:
+            # Override specific variables for Docker environment
+            - MONGODB_URI=mongodb://admin:password@mongodb:27017/migrator?authSource=admin
+            # Set paths to match volume mounts inside container
+            - INPUT_DIR=/app/extensions
+            - OUTPUT_DIR=/app/output
+        volumes:
+            - ./logs:/app/logs
+            # Mount host paths to standardized container paths
+            - ${INPUT_DIR:-./extensions}:/app/extensions:ro
+            - ${OUTPUT_DIR:-./output}:/app/output
+        depends_on:
+            - mongodb
+        networks:
+            - migrator-network
+        # Add security options for Chrome/Puppeteer
+        privileged: true
+        security_opt:
+            - seccomp:unconfined
+            - label=disable
+        # Optionally add shared memory size for Chrome
+        shm_size: 2gb
 
-  mongodb:
-    image: mongo:8.2
-    container_name: migrator-mongodb
-    restart: unless-stopped
-    ports:
-      - "27017:27017"
-    environment:
-      MONGO_INITDB_ROOT_USERNAME: admin
-      MONGO_INITDB_ROOT_PASSWORD: password
-      MONGO_INITDB_DATABASE: migrator
-    volumes:
-      - mongodb_data:/data/db
-      - ./mongo-init.js:/docker-entrypoint-initdb.d/mongo-init.js:ro
-    networks:
-      - migrator-network
-
-  mongo-express:
-    image: mongo-express:1.0.2
-    container_name: migrator-mongo-express
-    restart: unless-stopped
-    ports:
-      - "8081:8081"
-    environment:
-      ME_CONFIG_MONGODB_ADMINUSERNAME: admin
-      ME_CONFIG_MONGODB_ADMINPASSWORD: password
-      ME_CONFIG_MONGODB_URL: mongodb://admin:password@mongodb:27017/
-      ME_CONFIG_BASICAUTH: false
-    depends_on:
-      - mongodb
-    networks:
-      - migrator-network
+    mongodb:
+        image: mongo
+        container_name: migrator-mongodb
+        restart: unless-stopped
+        ports:
+            - '27017:27017'
+        environment:
+            MONGO_INITDB_ROOT_USERNAME: admin
+            MONGO_INITDB_ROOT_PASSWORD: password
+            MONGO_INITDB_DATABASE: migrator
+        volumes:
+            - mongodb_data:/data/db
+            - ./mongo-init.js:/docker-entrypoint-initdb.d/mongo-init.js:ro
+        networks:
+            - migrator-network
 
 volumes:
-  mongodb_data:
+    mongodb_data:
 
 networks:
-  migrator-network:
-    driver: bridge
+    migrator-network:
+        driver: bridge

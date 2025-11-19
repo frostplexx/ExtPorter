@@ -2,6 +2,8 @@ migrator/logs/*
 migrator/output/*
 migrator/extensions
 migrator/node_modules
+ext_analyzer/target
+target/
 coverage
 tmp
 .DS_Store
@@ -42,3 +44,7 @@ comment.cut
 node_modules
 dist
 .env
+
+# Rust build artifacts
+ext_analyzer_rust/target
+ext_analyzer_rust/Cargo.lock
