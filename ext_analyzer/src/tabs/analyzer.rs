@@ -12,7 +12,6 @@ use tokio::sync::mpsc;
 use crate::app::{AppEvent, AppState};
 
 pub struct AnalyzerTab {
-    selected_index: usize,
     search_query: String,
     sort_by: SortBy,
     mv2_browser_running: bool,
@@ -31,7 +30,6 @@ enum SortBy {
 impl AnalyzerTab {
     pub fn new() -> Self {
         Self {
-            selected_index: 0,
             search_query: String::new(),
             sort_by: SortBy::Interestingness,
             mv2_browser_running: false,
@@ -48,7 +46,7 @@ impl AnalyzerTab {
 
 impl super::Tab for AnalyzerTab {
     fn render(&mut self, f: &mut Frame, area: ratatui::layout::Rect, state: &AppState) {
-            self.render_comparison_mode(f, area, state);
+        self.render_comparison_mode(f, area, state);
     }
 
     fn handle_input(
@@ -88,8 +86,12 @@ impl AnalyzerTab {
             ])
             .split(chunks[0]);
 
-        // Get selected extension
-        let selected_ext = state.extensions.get(self.selected_index);
+        // Get selected extension by ID from AppState
+        let selected_ext = if let Some(ref ext_id) = state.selected_extension_id {
+            state.extensions.iter().find(|e| e.id == *ext_id)
+        } else {
+            None
+        };
 
         // LEFT PANEL: V2 and V3 cards vertically stacked
         let left_chunks = Layout::default()
@@ -259,9 +261,12 @@ impl AnalyzerTab {
         f.render_widget(status, chunks[1]);
 
         // Help text
-        let help =
-            Paragraph::new("O: Launch Both • Q: Close Both • C: Exit Compare Mode • ESC: Quit")
-                .style(Style::default().add_modifier(Modifier::DIM));
+        let help_text = if state.selected_extension_id.is_some() {
+            "O: Launch Both • Q: Close Both"
+        } else {
+            "No extension loaded • Go to Explorer tab and press 'A' to send an extension here"
+        };
+        let help = Paragraph::new(help_text).style(Style::default().add_modifier(Modifier::DIM));
 
         f.render_widget(help, chunks[2]);
     }
@@ -276,16 +281,18 @@ impl AnalyzerTab {
         tx: mpsc::UnboundedSender<AppEvent>,
     ) -> Result<()> {
         match key.code {
-            KeyCode::Char('o') => {
-                // Launch both browsers
-                if let Some(ext) = state.extensions.get(self.selected_index) {
-                    let msg = format!("LAUNCH_DUAL:{}", ext.id);
-                    let _ = tx.send(AppEvent::SendWebSocketMessage(msg));
-                    self.mv2_browser_running = true;
-                    self.mv3_browser_running = true;
+            KeyCode::Char('o') | KeyCode::Char('O') => {
+                // Launch both browsers using the selected extension from AppState
+                if let Some(ref ext_id) = state.selected_extension_id {
+                    if let Some(_ext) = state.extensions.iter().find(|e| e.id == *ext_id) {
+                        let msg = format!("LAUNCH_DUAL:{}", ext_id);
+                        let _ = tx.send(AppEvent::SendWebSocketMessage(msg));
+                        self.mv2_browser_running = true;
+                        self.mv3_browser_running = true;
+                    }
                 }
             }
-            KeyCode::Char('q') => {
+            KeyCode::Char('q') | KeyCode::Char('Q') => {
                 // Close both browsers
                 self.mv2_browser_running = false;
                 self.mv3_browser_running = false;

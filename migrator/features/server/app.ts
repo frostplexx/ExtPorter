@@ -543,6 +543,11 @@ export class MigrationServer {
                     result = await Database.shared.getAllExtensions();
                     break;
 
+                case 'getExtensionsWithStats':
+                    // Fetch all extensions with pre-calculated statistics and sorting
+                    result = await Database.shared.getExtensionsWithStats();
+                    break;
+
                 case 'findExtension':
                     // Find a specific extension by filter
                     result = await Database.shared.findExtension(params.filter || {});

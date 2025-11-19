@@ -75,13 +75,12 @@ impl super::Tab for DatabaseTab {
             Line::from("logs (mock data)"),
         ];
 
-        let collections = Paragraph::new(collections_text)
-            .block(
-                Block::default()
-                    .borders(Borders::ALL)
-                    .title("Collections")
-                    .border_style(Style::default().fg(Color::Gray)),
-            );
+        let collections = Paragraph::new(collections_text).block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title("Collections")
+                .border_style(Style::default().fg(Color::Gray)),
+        );
 
         f.render_widget(collections, main_chunks[0]);
 
@@ -107,24 +106,24 @@ impl super::Tab for DatabaseTab {
             )),
         ];
 
-        let query_panel = Paragraph::new(query_text)
-            .block(
-                Block::default()
-                    .borders(Borders::ALL)
-                    .title("Query & Results")
-                    .border_style(Style::default().fg(Color::Gray)),
-            );
+        let query_panel = Paragraph::new(query_text).block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title("Query & Results")
+                .border_style(Style::default().fg(Color::Gray)),
+        );
 
         f.render_widget(query_panel, main_chunks[1]);
 
         // Help text
         let help_text = match self.view_mode {
-            ViewMode::Collections => "M: Toggle mode • Database features available in TypeScript version",
+            ViewMode::Collections => {
+                "M: Toggle mode • Database features available in TypeScript version"
+            }
             ViewMode::Query => "M: Toggle mode • ESC: Back",
         };
 
-        let help = Paragraph::new(help_text)
-            .style(Style::default().add_modifier(Modifier::DIM));
+        let help = Paragraph::new(help_text).style(Style::default().add_modifier(Modifier::DIM));
 
         f.render_widget(help, chunks[2]);
     }

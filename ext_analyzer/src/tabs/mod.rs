@@ -19,4 +19,10 @@ pub trait Tab: Send {
         state: &mut AppState,
         tx: mpsc::UnboundedSender<AppEvent>,
     ) -> Result<()>;
+
+    /// Returns true if this tab wants to handle the Esc key itself
+    /// (e.g., to exit search mode) instead of quitting the application
+    fn handles_esc(&self) -> bool {
+        false
+    }
 }

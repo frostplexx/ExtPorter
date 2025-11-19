@@ -62,12 +62,12 @@ impl super::Tab for MigratorTab {
                     }
                 };
 
-                let content = if msg.content.len() > (f.area().width as usize - 5) {
-                    format!(
-                        "{} {}...",
-                        prefix,
-                        &msg.content[..f.area().width as usize - 8]
-                    )
+                // Unicode-safe truncation: count characters, not bytes
+                let max_width = f.area().width as usize;
+                let content = if msg.content.chars().count() > max_width.saturating_sub(5) {
+                    let truncate_at = max_width.saturating_sub(8);
+                    let truncated: String = msg.content.chars().take(truncate_at).collect();
+                    format!("{} {}...", prefix, truncated)
                 } else {
                     format!("{} {}", prefix, msg.content)
                 };

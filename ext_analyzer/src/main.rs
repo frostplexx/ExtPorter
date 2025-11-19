@@ -89,15 +89,16 @@ async fn run_app(
             Some(event) = rx.recv() => {
                 match event {
                     AppEvent::Input(key) => {
-                        // Global quit handlers
-                        if key.code == KeyCode::Esc
-                            || (key.code == KeyCode::Char('c')
+                        // Global quit handlers - Ctrl+C or Ctrl+Q only
+                        if (key.code == KeyCode::Char('c')
+                            && key.modifiers.contains(KeyModifiers::CONTROL))
+                            || (key.code == KeyCode::Char('q')
                                 && key.modifiers.contains(KeyModifiers::CONTROL))
                         {
                             return Ok(());
                         }
 
-                        // Handle input
+                        // Handle input (Esc is never used to quit)
                         app.handle_input(key)?;
                     }
                     AppEvent::WebSocketConnecting => {
@@ -120,6 +121,12 @@ async fn run_app(
                         if let Some(sender) = ws_sender.lock().await.as_ref() {
                             let _ = sender.send(msg);
                         }
+                    }
+                    AppEvent::ExtensionsLoaded(_) => {
+                        // This is handled in handle_websocket_message, no action needed here
+                    }
+                    AppEvent::SwitchToTab(tab_index) => {
+                        app.switch_to_tab(tab_index);
                     }
                     AppEvent::Quit => {
                         return Ok(());

@@ -26,6 +26,8 @@ pub enum AppEvent {
     WebSocketMessage(String),
     WebSocketError(String),
     SendWebSocketMessage(String),
+    ExtensionsLoaded(Vec<Extension>),
+    SwitchToTab(usize),
     Quit,
 }
 
@@ -43,11 +45,13 @@ pub struct AppState {
     pub migration_running: bool,
     pub messages: Vec<Message>,
     pub extensions: Vec<Extension>,
+    pub extension_stats: ExtensionStats,
     pub message_scroll_offset: usize,
     pub connection_state_changed_at: Option<std::time::Instant>,
     pub last_message_time: Option<std::time::Instant>,
     pub recent_message_count: usize,
     pub burst_window_start: Option<std::time::Instant>,
+    pub selected_extension_id: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -68,19 +72,39 @@ pub enum MessageType {
 pub struct Extension {
     pub id: String,
     pub name: String,
-    pub version: String,
+    #[serde(default)]
+    pub version: Option<String>,
     #[serde(default)]
     pub mv2_extension_id: Option<String>,
     #[serde(default)]
     pub mv3_extension_id: Option<String>,
     #[serde(default)]
     pub tags: Vec<String>,
-    #[serde(default)]
+    #[serde(default, rename = "interestingness_score")]
     pub interestingness: Option<f64>,
     #[serde(default)]
     pub migration_time_seconds: Option<f64>,
     #[serde(default)]
     pub input_path: Option<String>,
+    #[serde(default)]
+    pub manifest_v2_path: Option<String>,
+    #[serde(default)]
+    pub manifest_v3_path: Option<String>,
+}
+
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize, Default)]
+pub struct ExtensionStats {
+    pub total: usize,
+    pub with_mv3: usize,
+    pub with_mv2_only: usize,
+    pub failed: usize,
+    pub avg_score: f64,
+}
+
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
+pub struct ExtensionsWithStats {
+    pub extensions: Vec<Extension>,
+    pub stats: ExtensionStats,
 }
 
 pub struct App {
@@ -100,11 +124,13 @@ impl App {
             migration_running: false,
             messages: Vec::new(),
             extensions: Vec::new(),
+            extension_stats: ExtensionStats::default(),
             message_scroll_offset: 0,
             connection_state_changed_at: Some(std::time::Instant::now()),
             last_message_time: None,
             recent_message_count: 0,
             burst_window_start: None,
+            selected_extension_id: None,
         };
 
         let tabs: Vec<Box<dyn Tab>> = vec![
@@ -172,7 +198,11 @@ impl App {
             .collect();
 
         let tabs = Tabs::new(titles)
-            .block(Block::default().borders(Borders::ALL).title("ExtPorter"))
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .title("ExtPorter [Ctrl+C or Ctrl+Q: Quit]"),
+            )
             .select(self.active_tab)
             .style(Style::default())
             .highlight_style(
@@ -232,6 +262,20 @@ impl App {
         Ok(())
     }
 
+    /// Returns true if the current active tab wants to handle Esc itself
+    pub fn active_tab_handles_esc(&self) -> bool {
+        self.tabs
+            .get(self.active_tab)
+            .map(|tab| tab.handles_esc())
+            .unwrap_or(false)
+    }
+
+    pub fn switch_to_tab(&mut self, tab_index: usize) {
+        if tab_index < self.tabs.len() {
+            self.active_tab = tab_index;
+        }
+    }
+
     pub fn handle_websocket_connecting(&mut self) {
         self.state.ws_connection_state = ConnectionState::Connecting;
         self.state.connection_state_changed_at = Some(std::time::Instant::now());
@@ -275,6 +319,92 @@ impl App {
     }
 
     pub fn handle_websocket_message(&mut self, msg: String) {
+        // Try to parse as JSON first for database responses
+        if let Ok(json_msg) = serde_json::from_str::<serde_json::Value>(&msg) {
+            if json_msg.get("type").and_then(|v| v.as_str()) == Some("db_response") {
+                if let Some(id) = json_msg.get("id").and_then(|v| v.as_str()) {
+                    if id == "get_extensions" {
+                        if let Some(result) = json_msg.get("result") {
+                            // Try to parse as ExtensionsWithStats first
+                            if let Ok(data) =
+                                serde_json::from_value::<ExtensionsWithStats>(result.clone())
+                            {
+                                let count = data.extensions.len();
+                                self.state.extensions = data.extensions;
+                                self.state.extension_stats = data.stats;
+
+                                // Add a message about loaded extensions
+                                if self.state.message_scroll_offset > 0 {
+                                    self.state.message_scroll_offset += 1;
+                                }
+
+                                self.state.messages.push(Message {
+                                    msg_type: MessageType::System,
+                                    content: format!("✓ Loaded {} extensions (MV3: {}, Failed: {}, Avg Score: {:.2})", 
+                                        count, 
+                                        self.state.extension_stats.with_mv3,
+                                        self.state.extension_stats.failed,
+                                        self.state.extension_stats.avg_score
+                                    ),
+                                    timestamp: chrono::Utc::now(),
+                                });
+                                return;
+                            }
+
+                            // Fallback: Parse as plain extension array
+                            match serde_json::from_value::<Vec<Extension>>(result.clone()) {
+                                Ok(extensions) => {
+                                    let count = extensions.len();
+                                    self.state.extensions = extensions;
+
+                                    // Add a message about loaded extensions
+                                    if self.state.message_scroll_offset > 0 {
+                                        self.state.message_scroll_offset += 1;
+                                    }
+
+                                    self.state.messages.push(Message {
+                                        msg_type: MessageType::System,
+                                        content: format!(
+                                            "✓ Loaded {} extensions from database",
+                                            count
+                                        ),
+                                        timestamp: chrono::Utc::now(),
+                                    });
+                                    return;
+                                }
+                                Err(e) => {
+                                    // Log parse error
+                                    if self.state.message_scroll_offset > 0 {
+                                        self.state.message_scroll_offset += 1;
+                                    }
+
+                                    self.state.messages.push(Message {
+                                        msg_type: MessageType::System,
+                                        content: format!("Error parsing extensions: {}", e),
+                                        timestamp: chrono::Utc::now(),
+                                    });
+                                    return;
+                                }
+                            }
+                        }
+                        // Check for error
+                        if let Some(error) = json_msg.get("error").and_then(|v| v.as_str()) {
+                            if self.state.message_scroll_offset > 0 {
+                                self.state.message_scroll_offset += 1;
+                            }
+
+                            self.state.messages.push(Message {
+                                msg_type: MessageType::System,
+                                content: format!("Error loading extensions: {}", error),
+                                timestamp: chrono::Utc::now(),
+                            });
+                            return;
+                        }
+                    }
+                }
+            }
+        }
+
         // Parse special messages
         if msg.starts_with("DB_STATUS:") {
             if let Some(status) = msg.strip_prefix("DB_STATUS:") {
