@@ -55,7 +55,11 @@ async fn connect_and_run(
     let (send_tx, mut send_rx) = mpsc::unbounded_channel::<String>();
 
     // Store sender in shared state
-    *ws_sender.lock().await = Some(send_tx);
+    *ws_sender.lock().await = Some(send_tx.clone());
+
+    // Request extensions list with stats on connection
+    let extensions_request = r#"{"type":"db_query","id":"get_extensions","method":"getExtensionsWithStats","params":{}}"#;
+    let _ = send_tx.send(extensions_request.to_string());
 
     loop {
         tokio::select! {
@@ -81,7 +85,6 @@ async fn connect_and_run(
             msg = send_rx.recv() => {
                 match msg {
                     Some(text) => {
-                        let _ = tx.send(AppEvent::WebSocketMessage(format!("DEBUG: Sending message: {}", text)));
                         if let Err(e) = write.send(Message::Text(text)).await {
                             let _ = tx.send(AppEvent::WebSocketError(format!("Failed to send message: {}", e)));
                             break;

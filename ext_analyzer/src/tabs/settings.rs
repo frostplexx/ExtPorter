@@ -35,7 +35,9 @@ impl super::Tab for SettingsTab {
         // Title
         let title = Paragraph::new(Line::from(Span::styled(
             "⚙ Settings & Configuration",
-            Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
         )));
         f.render_widget(title, chunks[0]);
 
