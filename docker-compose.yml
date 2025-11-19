@@ -29,7 +29,7 @@ services:
         shm_size: 2gb
 
     mongodb:
-        image: mongo:8.2
+        image: mongo
         container_name: migrator-mongodb
         restart: unless-stopped
         ports:
@@ -44,23 +44,6 @@ services:
         networks:
             - migrator-network
 
-    # mongo-express (optional - uncomment if you want a web UI for MongoDB)
-    # Requires Docker Hub authentication due to rate limits
-    # mongo-express:
-    #     image: mongo-express:1.0.2
-    #     container_name: migrator-mongo-express
-    #     restart: unless-stopped
-    #     ports:
-    #         - '8081:8081'
-    #     environment:
-    #         ME_CONFIG_MONGODB_ADMINUSERNAME: admin
-    #         ME_CONFIG_MONGODB_ADMINPASSWORD: password
-    #         ME_CONFIG_MONGODB_URL: mongodb://admin:password@mongodb:27017/
-    #         ME_CONFIG_BASICAUTH: false
-    #     depends_on:
-    #         - mongodb
-    #     networks:
-    #         - migrator-network
 
 volumes:
     mongodb_data:
