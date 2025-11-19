@@ -384,7 +384,7 @@ export class MigrationServer {
                             const Database = (await import('../database/db_manager.js')).Database;
                             const dbExtension = {
                                 ...extension,
-                                manifest_v3_path: path.join(outputPath, 'manifest.json'),
+                                manifest_v3_path: outputPath,
                                 files: [],
                             };
 
@@ -616,6 +616,8 @@ export class MigrationServer {
 
             // Import DualChromeTester dynamically
             const { DualChromeTester } = await import('../../../ext_tester/dual_chrome_tester.js');
+            const fs = await import('fs');
+            const path = await import('path');
 
             // Get extension from database
             const extensionDoc = await Database.shared.findExtension({ id: extensionId });
@@ -625,16 +627,64 @@ export class MigrationServer {
                 return;
             }
 
-            ws.send(`Launching dual browsers for extension: ${(extensionDoc as any).name}`);
+            // Validate that extension has required paths
+            const ext = extensionDoc as any;
+            if (!ext.manifest_v2_path) {
+                ws.send(`ERROR: Extension ${ext.name} is missing manifest_v2_path`);
+                return;
+            }
+            if (!ext.manifest_v3_path) {
+                ws.send(`ERROR: Extension ${ext.name} is missing manifest_v3_path`);
+                return;
+            }
+
+            // Strip /manifest.json if present to get directory paths
+            const mv2Dir = ext.manifest_v2_path.endsWith('manifest.json')
+                ? ext.manifest_v2_path.replace(/\/manifest\.json$/, '')
+                : ext.manifest_v2_path;
+            const mv3Dir = ext.manifest_v3_path.endsWith('manifest.json')
+                ? ext.manifest_v3_path.replace(/\/manifest\.json$/, '')
+                : ext.manifest_v3_path;
+
+            // Check if directories exist
+            if (!fs.existsSync(mv2Dir)) {
+                ws.send(`ERROR: MV2 extension directory does not exist: ${mv2Dir}`);
+                return;
+            }
+            if (!fs.existsSync(mv3Dir)) {
+                ws.send(`ERROR: MV3 extension directory does not exist: ${mv3Dir}`);
+                return;
+            }
+
+            // Check if manifest.json files exist in those directories
+            const mv2Manifest = path.join(mv2Dir, 'manifest.json');
+            const mv3Manifest = path.join(mv3Dir, 'manifest.json');
+
+            if (!fs.existsSync(mv2Manifest)) {
+                ws.send(`ERROR: MV2 manifest.json not found at: ${mv2Manifest}`);
+                return;
+            }
+            if (!fs.existsSync(mv3Manifest)) {
+                ws.send(`ERROR: MV3 manifest.json not found at: ${mv3Manifest}`);
+                return;
+            }
+
+            ws.send(`Launching dual browsers for extension: ${ext.name}`);
+            ws.send(`MV2 path: ${mv2Dir}`);
+            ws.send(`MV3 path: ${mv3Dir}`);
 
             // Launch both browsers - cast to any to bypass type checking
             await DualChromeTester.shared.initDualBrowsers(extensionDoc as any, 3, false);
 
             ws.send('DUAL_BROWSERS_LAUNCHED');
-            ws.send(`Both browsers launched successfully for ${(extensionDoc as any).name}`);
+            ws.send(`Both browsers launched successfully for ${ext.name}`);
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : String(error);
+            const errorStack = error instanceof Error ? error.stack : '';
             ws.send(`ERROR launching dual browsers: ${errorMessage}`);
+            if (errorStack) {
+                ws.send(`Stack trace: ${errorStack}`);
+            }
         }
     }
 
