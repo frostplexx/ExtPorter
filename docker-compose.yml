@@ -27,6 +27,7 @@ services:
         networks:
             - migrator-network
         # Add security options for Chrome/Puppeteer
+        privileged: true
         security_opt:
             - seccomp:unconfined
             - label=disable
