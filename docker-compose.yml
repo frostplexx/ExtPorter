@@ -15,10 +15,11 @@ services:
             # Override specific variables for Docker environment
             - MONGODB_URI=mongodb://admin:password@mongodb:27017/migrator?authSource=admin
         volumes:
-            - ./logs:/app/logs
+            - ./logs:/app/logs:z
             # Mount the actual paths from .env file
-            - ${INPUT_DIR:-./extensions}:${INPUT_DIR:-./extensions}
-            - ${OUTPUT_DIR:-./output}:${OUTPUT_DIR:-./output}
+            # :z flag allows SELinux to relabel for container access
+            - ${INPUT_DIR:-./extensions}:${INPUT_DIR:-./extensions}:z
+            - ${OUTPUT_DIR:-./output}:${OUTPUT_DIR:-./output}:z
         depends_on:
             - mongodb
         networks:
