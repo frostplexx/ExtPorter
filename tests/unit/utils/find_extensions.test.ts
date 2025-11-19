@@ -177,7 +177,7 @@ describe('find_extensions', () => {
             expect(result[0].isNewTabExtension).toBe(true);
         });
 
-        it('should identify theme extensions correctly', () => {
+        it('should filter out theme extensions', () => {
             const extensionDir = path.join(testDir, 'theme-extension');
             fs.ensureDirSync(extensionDir);
 
@@ -196,11 +196,10 @@ describe('find_extensions', () => {
             fs.writeJsonSync(path.join(extensionDir, 'manifest.json'), manifest);
 
             const result = find_extensions(extensionDir);
-            expect(result).toHaveLength(1);
-            expect(result[0].isThemeExtension).toBe(true);
+            expect(result).toHaveLength(0);
         });
 
-        it('should not identify regular extensions as themes', () => {
+        it('should not filter out regular extensions', () => {
             const extensionDir = path.join(testDir, 'regular-extension');
             fs.ensureDirSync(extensionDir);
 
@@ -217,7 +216,6 @@ describe('find_extensions', () => {
 
             const result = find_extensions(extensionDir);
             expect(result).toHaveLength(1);
-            expect(result[0].isThemeExtension).toBe(false);
         });
     });
 
@@ -428,6 +426,65 @@ describe('find_extensions', () => {
             const result2 = find_extensions(extensionDir2);
 
             expect(result1[0].id).not.toBe(result2[0].id);
+        });
+    });
+
+    describe('CWS info extraction', () => {
+        it('should parse CWS info from store.html if present', () => {
+            const extensionDir = path.join(testDir, 'extension-with-cws');
+            fs.ensureDirSync(extensionDir);
+
+            const manifest = {
+                name: 'Test Extension',
+                version: '1.0',
+                manifest_version: 2,
+            };
+
+            fs.writeJsonSync(path.join(extensionDir, 'manifest.json'), manifest);
+
+            // Create a store.html with CWS data
+            const cwsHtml = `
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <meta name="description" content="This is a Chrome Web Store extension">
+                </head>
+                <body>
+                    <div class="rsw-stars" title="4.5"></div>
+                    <div class="q-N-O-k">1,000 ratings</div>
+                    <div class="e-f-Me">Test Developer</div>
+                </body>
+                </html>
+            `;
+
+            fs.writeFileSync(path.join(extensionDir, 'store.html'), cwsHtml);
+
+            const result = find_extensions(extensionDir);
+
+            expect(result).toHaveLength(1);
+            expect(result[0].cws_info).toBeDefined();
+            expect(result[0].cws_info?.description).toBe('This is a Chrome Web Store extension');
+            expect(result[0].cws_info?.rating).toBe(4.5);
+            expect(result[0].cws_info?.rating_count).toBe(1000);
+            expect(result[0].cws_info?.developer).toBe('Test Developer');
+        });
+
+        it('should have undefined cws_info if no HTML file present', () => {
+            const extensionDir = path.join(testDir, 'extension-no-cws');
+            fs.ensureDirSync(extensionDir);
+
+            const manifest = {
+                name: 'Test Extension',
+                version: '1.0',
+                manifest_version: 2,
+            };
+
+            fs.writeJsonSync(path.join(extensionDir, 'manifest.json'), manifest);
+
+            const result = find_extensions(extensionDir);
+
+            expect(result).toHaveLength(1);
+            expect(result[0].cws_info).toBeUndefined();
         });
     });
 });

@@ -22,33 +22,112 @@ of Chrome extension migration in the face of Google's deprecation of Manifest V2
 
 - **Automated MV2 → MV3 Migration**: Converts extension manifests, API calls, and code structure
 - **Database Integration**: Tracks migration results and statistics with MongoDB
+- **Chrome Web Store Metadata**: Automatically extracts and stores extension metadata (description, ratings, developer info, etc.) from CWS HTML files for better searchability and filtering
 - **Docker Support**: Full containerized development and deployment
 - **Manual Analysis**: Provides tools for manually analysing if the migration succeeded
 
 ## Prerequisites
 
-### When using nix
+### Using Docker (Recommended for Production)
+
+- Docker & Docker Compose
+- Rust toolchain (for the client only)
+    - `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`
+
+### Development Setup
+
+#### Server Requirements (Bare Metal)
+
+**When using nix:**
 
 - [Nix](https://nixos.org/)
 - [Flakes enabled](https://nixos.wiki/wiki/flakes)
 - Docker & Docker Compose
-- (optional) [kitty terminal](https://sw.kovidgoyal.net/kitty/)
 - (optional) [direnv](https://direnv.net/)
 
-### If you are not using nix
+**If you are not using nix:**
 
 - Node.js (v18+)
 - yarn
 - Docker & Docker Compose
 - Git
-- Chrome 138 AND Chrome 141
+- Chrome 138 AND Chrome 141 (for testing)
 - (optional) [sshpass](https://linux.die.net/man/1/sshpass)
-- (optional) [kitty terminal](https://sw.kovidgoyal.net/kitty/)
 - (optional) [ollama](https://ollama.com/)
+
+#### Client Requirements
+
+**Rust Client (Recommended):**
+
+- Rust toolchain (cargo, rustc)
+- Cargo (comes with Rust)
+
+**TypeScript Client (Advanced Features):**
+
+- Node.js (v18+)
+- yarn (installed with server dependencies)
+- (optional) [kitty terminal](https://sw.kovidgoyal.net/kitty/) - required for code viewing features
 
 ## Installation
 
-### Bare metal
+### Quick Start with Docker (Recommended)
+
+The easiest way to run ExtPorter is using Docker for the server and a native client.
+
+1. **Clone the repository**
+
+    ```bash
+    git clone https://github.com/frostplexx/ExtPorter.git
+    cd ExtPorter
+    ```
+
+2. **Set up environment**
+
+    ```bash
+    cp .env.example .env
+    # Edit .env with your configuration
+    ```
+
+3. **Create required directories**
+
+    ```bash
+    mkdir -p extensions output logs
+    ```
+
+    Place your unpacked Chrome extensions in the `extensions/` directory.
+
+4. **Start the server and database**
+
+    ```bash
+    docker-compose up -d
+    ```
+
+    This will start:
+    - Migration server on `ws://localhost:8080` (WebSocket)
+    - MongoDB on `localhost:27017`
+    - Mongo Express admin UI on `http://localhost:8081`
+
+5. **Install and run the Rust client**
+
+    ```bash
+    # Install Rust if not already installed
+    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+
+    # Run the client (it will connect to localhost:8080)
+    cargo run --manifest-path ext_analyzer/Cargo.toml
+    ```
+
+6. **Stop the server**
+
+    ```bash
+    docker-compose down
+    ```
+
+### Development Setup (Bare Metal)
+
+For active development, you may want to run the server locally instead of in Docker.
+
+#### Server Setup
 
 1. **Clone the repository**
 
@@ -86,9 +165,96 @@ of Chrome extension migration in the face of Google's deprecation of Manifest V2
     ```
     (This should run automatically if you are using direnv)
 
+#### Client Setup
+
+**Rust Client (Recommended):**
+
+1. **Install Rust** (if not already installed)
+
+    ```bash
+    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+    ```
+
+2. **Build the client**
+
+    ```bash
+    cargo build --manifest-path ext_analyzer/Cargo.toml
+    ```
+
+    Or use yarn to build:
+
+    ```bash
+    yarn client:build
+    ```
+
+The Rust client will be compiled and ready to use with `yarn client` or `cargo run --manifest-path ext_analyzer/Cargo.toml`.
+
+**TypeScript Client (Advanced Features):**
+
+The TypeScript client is already available after completing the server setup. No additional compilation needed.
+
+**Note**: For code viewing features, install [kitty terminal](https://sw.kovidgoyal.net/kitty/).
+
 ## Usage
 
-Make sure that the environment is Initialized before running any commands by doing `yarn env:init`!
+### Starting the Server and Client
+
+#### Using Docker (Production)
+
+If you're using Docker, the server is already running after `docker-compose up -d`. Simply connect with a client:
+
+```bash
+# Run the Rust client
+cargo run --manifest-path ext_analyzer/Cargo.toml
+
+# Or if you have yarn installed locally
+yarn client
+```
+
+The client will automatically connect to the WebSocket server at `ws://localhost:8080`.
+
+To view server logs:
+
+```bash
+docker-compose logs -f migrator-server
+```
+
+#### Development (Bare Metal)
+
+Make sure that the environment is initialized before running any commands by doing `yarn env:init`!
+
+**Quick Start:**
+
+Start both server and client together with automatic cleanup:
+
+```bash
+# Using the bash script
+./scripts/dev.sh
+
+# Or using the Python launcher
+./start.py
+```
+
+Both methods will:
+
+- Start the migration server in the background
+- Launch the Rust client in the foreground
+- Automatically terminate the server when the client exits
+
+**Manual Start:**
+
+Start components separately:
+
+```bash
+# Terminal 1 - Start the server
+yarn server
+
+# Terminal 2 - Start the Rust client
+yarn client
+
+# Or start the TypeScript client
+yarn ext
+```
 
 ### Migration
 
@@ -107,9 +273,25 @@ yarn migrate
 
 ### Manual Analysis
 
-This project also provides a tool that helps you analyse if extensions got migrated successfully.
-To start, run `yarn ext` which will open a list of all extensions in the dataset. You can then press enter on an extension to get the following options (with
-keyboard shortcut in square brackets):
+This project provides two clients for manual analysis:
+
+#### Rust Client (Recommended)
+
+Run `yarn client` to open the high-performance Rust/Ratatui client. This client provides:
+
+- Real-time migration monitoring and log viewing
+- Extension browsing and search
+- Extension analysis with statistics
+- Database status viewing
+- Lightweight and fast with no Node.js runtime required
+
+The Rust client is ideal for monitoring migrations and browsing results.
+
+See [ext_analyzer/README.md](ext_analyzer/README.md) for more details.
+
+#### TypeScript Client (Advanced Features)
+
+Run `yarn ext` to open the TypeScript/Ink client with full database querying capabilities. The client will display a list of all extensions in the dataset with the following options:
 
 ```
 View Source          [v]
@@ -129,6 +311,8 @@ Quit                 [q]
 
 - View Source needs you to use the [kitty](https://sw.kovidgoyal.net/kitty/) terminal as it opens new tabs and panes
 - If you want to use "Generate Description" You must first configure an ollama endpoint in `.env`. See [LLM Integration](https://github.com/frostplexx/ExtPorter/blob/dev/README.md#llm-integration) for more info.
+
+The TypeScript client offers advanced features like code viewing and LLM integration.
 
 ### LLM Integration
 
@@ -236,17 +420,63 @@ Modules are stored in `migrator/modules/` and get applied one after the other to
 Each module **must** implement the abstract class of `MigrationModule` found in `migrator/types/migration_module.ts`. This class provides a migrate function that takes an extension as a parameter and returns either the modified extension or a migration error.
 In addition to this mandatory function a module can include any arbitrary amount of code, however keep in mind that `migrate` is always the main entry point.
 
-### Most important Scripts
+### Chrome Web Store Metadata Extraction
 
-- `yarn migrate` - Run migrator
+ExtPorter automatically extracts and stores Chrome Web Store metadata when loading extensions. This feature allows for better filtering, searching, and analysis of extensions.
+
+**How it works:**
+
+- When `find_extensions()` discovers extensions, it looks for CWS HTML files (e.g., `store.html`, `cws.html`)
+- The HTML parser (`migrator/utils/cws_parser.ts`) extracts metadata using CSS selectors
+- Extracted information is stored in the `cws_info` field of the Extension object
+- This data is persisted to MongoDB when extensions are saved
+
+**Extracted metadata includes:**
+
+- Extension description and short description
+- Rating and rating count
+- User count
+- Last update date
+- Version and size
+- Supported languages
+- Developer name, website, and contact info
+- Privacy policy URL
+
+**Supported HTML file names:**
+
+- `store.html` - Primary CWS HTML filename
+- `cws.html` - Chrome Web Store HTML
+- `metadata.html` - Metadata HTML
+- `info.html` - Info HTML
+- `extension.html` - Extension info HTML
+- Any other large HTML file (>10KB) that contains CWS data
+
+To include CWS metadata with your extensions, place a Chrome Web Store HTML file in each extension directory before running the migrator.
+
+### Most Important Scripts
+
+#### Docker Scripts
+
+- `yarn docker:up` - Start all services (server, MongoDB, Mongo Express)
+- `yarn docker:down` - Stop all services
+- `yarn docker:logs` - View server logs
+- `yarn docker:logs:all` - View all container logs
+- `yarn docker:rebuild` - Rebuild and restart containers
+
+#### Development Scripts
+
+- `yarn dev` - Start server and client together (development mode)
+- `yarn server` - Run migration server
+- `yarn server:watch` - Run server with auto-reload
+- `yarn client` - Run Rust client
+- `yarn client:watch` - Run Rust client with auto-reload
+- `yarn ext` - Run TypeScript client
 - `yarn test:full` - Build, Lint and Test. Do this before pushing
 - `yarn debug` - Run the migrator with debugger support
 - `yarn build` - Build TypeScript to JavaScript
 - `yarn test` - Run test suite
 - `yarn lint` - Run ESLint
 - `yarn clean` - Clean output directory and database
-- `yarn db:shell` - Connect to MongoDB shell
-- `yarn db:admin` - Open MongoDB admin interface
 
 For more scripts look in `package.json`.
 
@@ -256,6 +486,7 @@ For more scripts look in `package.json`.
 - **Stop database:** `yarn db:down`
 - **View logs:** `yarn db:logs`
 - **Admin interface:** `yarn db:admin` (opens http://localhost:8081)
+- **Shell access:** `yarn db:shell`
 
 ### Testing
 

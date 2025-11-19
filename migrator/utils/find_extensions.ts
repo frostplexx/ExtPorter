@@ -8,6 +8,7 @@ import { logger } from './logger';
 import JSON5 from 'json5';
 import crypto from 'crypto';
 import { extensionUtils } from './extension_utils';
+import { findAndParseCWSInfo } from './cws_parser';
 
 /**
  * Finds all unpacked extensions given a path. Can be pointed to a single extension directory or a directory containing multiple extensions.
@@ -62,6 +63,17 @@ function isChromeApp(manifest: any): boolean {
 }
 
 /**
+ * Checks if a manifest represents a theme extension
+ * Theme extensions have a "theme" key in their manifest and only contain visual customizations
+ * They do not contain executable code and cannot be migrated to MV3
+ * @param{any} manifest - The parsed manifest object
+ * @returns{boolean} true if this is a theme extension, false otherwise
+ */
+function isThemeExtension(manifest: any): boolean {
+    return !!(manifest && typeof manifest === 'object' && 'theme' in manifest);
+}
+
+/**
  * Loads and parses all the manifest.jsons given a list of paths
  * @param{string[]} manifest_paths
  * @returns{Extension[]} list of extensions
@@ -76,15 +88,27 @@ function get_manifest(manifest_paths: string[], includes_mv3: boolean): Extensio
             const manifestContent = manifestMMapFile.getContent();
 
             const json = JSON5.parse(manifestContent) as any;
-            
+
             // Skip Chrome Apps - they are deprecated and cannot be migrated
             if (isChromeApp(json)) {
-                logger.info(null, `Skipping Chrome App (deprecated): ${json['name'] || 'Unknown'}`, {
+                logger.info(
+                    null,
+                    `Skipping Chrome App (deprecated): ${json['name'] || 'Unknown'}`,
+                    {
+                        manifest_path: manifestPath,
+                    }
+                );
+                continue;
+            }
+
+            // Skip theme extensions - they only contain visual customizations and no executable code
+            if (isThemeExtension(json)) {
+                logger.info(null, `Skipping theme extension: ${json['name'] || 'Unknown'}`, {
                     manifest_path: manifestPath,
                 });
                 continue;
             }
-            
+
             if (json['manifest_version'] == 2 || includes_mv3) {
                 // logger.info(`Found valid Manifest V2 extension: ${json["name"] || 'Unknown'}`);
                 const extensionDir = path.dirname(manifestPath);
@@ -109,14 +133,19 @@ function get_manifest(manifest_paths: string[], includes_mv3: boolean): Extensio
                     return [];
                 }
 
+                // Parse CWS information from HTML file if available
+                const cwsInfo = findAndParseCWSInfo(extensionDir);
+
                 const extension: Extension = {
                     id: id,
                     name: extensionName,
                     manifest_v2_path: extensionDir,
                     manifest: json,
                     files: files,
-                    isNewTabExtension: extensionUtils.isNewTabExtension({ manifest: json } as Extension),
-                    isThemeExtension: extensionUtils.isThemeExtension({ manifest: json } as Extension),
+                    isNewTabExtension: extensionUtils.isNewTabExtension({
+                        manifest: json,
+                    } as Extension),
+                    cws_info: cwsInfo || undefined,
                 };
 
                 extensions.push(extension);

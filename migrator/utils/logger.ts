@@ -123,7 +123,6 @@ function formatLog(
                       path: extension.manifest_v2_path,
                       name: extension.name,
                       isNewTabExtension: extension.isNewTabExtension || false,
-                      isThemeExtension: extension.isThemeExtension || false,
                   }
                 : '',
         message: truncatedMessage.toLowerCase(),

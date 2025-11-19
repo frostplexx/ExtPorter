@@ -517,4 +517,111 @@ export class Database {
         if (logs.length === 0) return;
         return this.upsertMany(Collections.LOGS, logs, 'time');
     }
+
+    /**
+     * Get all extensions from the database
+     */
+    async getAllExtensions() {
+        return this.find(Collections.EXTENSIONS);
+    }
+
+    /**
+     * Get all extensions with statistics, pre-sorted by interestingness
+     */
+    async getExtensionsWithStats() {
+        return this.enqueueOperation(async () => {
+            if (!this.database) throw new Error('Database not initialized');
+
+            const extensionsCollection = this.database.collection(Collections.EXTENSIONS);
+
+            // Fetch all extensions sorted by interestingness (descending, nulls last)
+            const extensions = await extensionsCollection
+                .find({})
+                .sort({ interestingness_score: -1 })
+                .toArray();
+
+            // Calculate statistics
+            const total = extensions.length;
+            const with_mv3 = extensions.filter((e) => e.mv3_extension_id != null).length;
+            const with_mv2_only = total - with_mv3;
+            const failed = extensions.filter(
+                (e) => e.tags && Array.isArray(e.tags) && e.tags.includes('migration-failed')
+            ).length;
+
+            // Calculate average interestingness score
+            const scores = extensions
+                .map((e) => e.interestingness_score)
+                .filter((score): score is number => typeof score === 'number' && !isNaN(score));
+            const avg_score =
+                scores.length > 0 ? scores.reduce((a, b) => a + b, 0) / scores.length : 0;
+
+            return {
+                extensions,
+                stats: {
+                    total,
+                    with_mv3,
+                    with_mv2_only,
+                    failed,
+                    avg_score,
+                },
+            };
+        });
+    }
+
+    /**
+     * Get list of all collections with their document counts
+     */
+    async getCollections() {
+        return this.enqueueOperation(async () => {
+            if (!this.database) throw new Error('Database not initialized');
+
+            const collections = await this.database.listCollections().toArray();
+            const result = await Promise.all(
+                collections.map(async (col) => ({
+                    name: col.name,
+                    count: await this.database!.collection(col.name).countDocuments(),
+                }))
+            );
+            return result;
+        });
+    }
+
+    /**
+     * Query a specific collection
+     */
+    async queryCollection(collectionName: string, query: any = {}, limit: number = 10) {
+        return this.enqueueOperation(async () => {
+            if (!this.database) throw new Error('Database not initialized');
+            return await this.database
+                .collection(collectionName)
+                .find(query)
+                .limit(limit)
+                .toArray();
+        });
+    }
+
+    /**
+     * Count documents in a collection
+     */
+    async countDocuments(collectionName: string, query: any = {}) {
+        return this.enqueueOperation(async () => {
+            if (!this.database) throw new Error('Database not initialized');
+            return await this.database.collection(collectionName).countDocuments(query);
+        });
+    }
+
+    /**
+     * Get logs with optional limit
+     */
+    async getLogs(limit: number = 50) {
+        return this.enqueueOperation(async () => {
+            if (!this.database) throw new Error('Database not initialized');
+            return await this.database
+                .collection(Collections.LOGS)
+                .find({})
+                .sort({ time: -1 })
+                .limit(limit)
+                .toArray();
+        });
+    }
 }
