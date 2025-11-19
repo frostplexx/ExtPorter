@@ -28,33 +28,41 @@ of Chrome extension migration in the face of Google's deprecation of Manifest V2
 
 ## Prerequisites
 
-### Server Requirements
+### Using Docker (Recommended for Production)
 
-#### When using nix
+- Docker & Docker Compose
+- Rust toolchain (for the client only)
+    - `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`
+
+### Development Setup
+
+#### Server Requirements (Bare Metal)
+
+**When using nix:**
 
 - [Nix](https://nixos.org/)
 - [Flakes enabled](https://nixos.wiki/wiki/flakes)
 - Docker & Docker Compose
 - (optional) [direnv](https://direnv.net/)
 
-#### If you are not using nix
+**If you are not using nix:**
 
 - Node.js (v18+)
 - yarn
 - Docker & Docker Compose
 - Git
+- Chrome 138 AND Chrome 141 (for testing)
 - (optional) [sshpass](https://linux.die.net/man/1/sshpass)
 - (optional) [ollama](https://ollama.com/)
 
-### Client Requirements
+#### Client Requirements
 
-#### Rust Client (Recommended)
+**Rust Client (Recommended):**
 
 - Rust toolchain (cargo, rustc)
 - Cargo (comes with Rust)
-- Chrome 138 AND Chrome 141
 
-#### TypeScript Client (Advanced Features)
+**TypeScript Client (Advanced Features):**
 
 - Node.js (v18+)
 - yarn (installed with server dependencies)
@@ -62,9 +70,64 @@ of Chrome extension migration in the face of Google's deprecation of Manifest V2
 
 ## Installation
 
-### Server Setup
+### Quick Start with Docker (Recommended)
 
-#### Bare metal
+The easiest way to run ExtPorter is using Docker for the server and a native client.
+
+1. **Clone the repository**
+
+    ```bash
+    git clone https://github.com/frostplexx/ExtPorter.git
+    cd ExtPorter
+    ```
+
+2. **Set up environment**
+
+    ```bash
+    cp .env.example .env
+    # Edit .env with your configuration
+    ```
+
+3. **Create required directories**
+
+    ```bash
+    mkdir -p extensions output logs
+    ```
+
+    Place your unpacked Chrome extensions in the `extensions/` directory.
+
+4. **Start the server and database**
+
+    ```bash
+    docker-compose up -d
+    ```
+
+    This will start:
+    - Migration server on `ws://localhost:8080` (WebSocket)
+    - MongoDB on `localhost:27017`
+    - Mongo Express admin UI on `http://localhost:8081`
+
+5. **Install and run the Rust client**
+
+    ```bash
+    # Install Rust if not already installed
+    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+
+    # Run the client (it will connect to localhost:8080)
+    cargo run --manifest-path ext_analyzer/Cargo.toml
+    ```
+
+6. **Stop the server**
+
+    ```bash
+    docker-compose down
+    ```
+
+### Development Setup (Bare Metal)
+
+For active development, you may want to run the server locally instead of in Docker.
+
+#### Server Setup
 
 1. **Clone the repository**
 
@@ -102,9 +165,9 @@ of Chrome extension migration in the face of Google's deprecation of Manifest V2
     ```
     (This should run automatically if you are using direnv)
 
-### Client Setup
+#### Client Setup
 
-#### Rust Client (Recommended)
+**Rust Client (Recommended):**
 
 1. **Install Rust** (if not already installed)
 
@@ -126,7 +189,7 @@ of Chrome extension migration in the face of Google's deprecation of Manifest V2
 
 The Rust client will be compiled and ready to use with `yarn client` or `cargo run --manifest-path ext_analyzer/Cargo.toml`.
 
-#### TypeScript Client (Advanced Features)
+**TypeScript Client (Advanced Features):**
 
 The TypeScript client is already available after completing the server setup. No additional compilation needed.
 
@@ -134,11 +197,33 @@ The TypeScript client is already available after completing the server setup. No
 
 ## Usage
 
-Make sure that the environment is Initialized before running any commands by doing `yarn env:init`!
-
 ### Starting the Server and Client
 
-#### Quick Start (Recommended)
+#### Using Docker (Production)
+
+If you're using Docker, the server is already running after `docker-compose up -d`. Simply connect with a client:
+
+```bash
+# Run the Rust client
+cargo run --manifest-path ext_analyzer/Cargo.toml
+
+# Or if you have yarn installed locally
+yarn client
+```
+
+The client will automatically connect to the WebSocket server at `ws://localhost:8080`.
+
+To view server logs:
+
+```bash
+docker-compose logs -f migrator-server
+```
+
+#### Development (Bare Metal)
+
+Make sure that the environment is initialized before running any commands by doing `yarn env:init`!
+
+**Quick Start:**
 
 Start both server and client together with automatic cleanup:
 
@@ -156,7 +241,7 @@ Both methods will:
 - Launch the Rust client in the foreground
 - Automatically terminate the server when the client exits
 
-#### Manual Start
+**Manual Start:**
 
 Start components separately:
 
@@ -368,17 +453,30 @@ ExtPorter automatically extracts and stores Chrome Web Store metadata when loadi
 
 To include CWS metadata with your extensions, place a Chrome Web Store HTML file in each extension directory before running the migrator.
 
-### Most important Scripts
+### Most Important Scripts
 
-- `yarn migrate` - Run migrator
+#### Docker Scripts
+
+- `yarn docker:up` - Start all services (server, MongoDB, Mongo Express)
+- `yarn docker:down` - Stop all services
+- `yarn docker:logs` - View server logs
+- `yarn docker:logs:all` - View all container logs
+- `yarn docker:rebuild` - Rebuild and restart containers
+
+#### Development Scripts
+
+- `yarn dev` - Start server and client together (development mode)
+- `yarn server` - Run migration server
+- `yarn server:watch` - Run server with auto-reload
+- `yarn client` - Run Rust client
+- `yarn client:watch` - Run Rust client with auto-reload
+- `yarn ext` - Run TypeScript client
 - `yarn test:full` - Build, Lint and Test. Do this before pushing
 - `yarn debug` - Run the migrator with debugger support
 - `yarn build` - Build TypeScript to JavaScript
 - `yarn test` - Run test suite
 - `yarn lint` - Run ESLint
 - `yarn clean` - Clean output directory and database
-- `yarn db:shell` - Connect to MongoDB shell
-- `yarn db:admin` - Open MongoDB admin interface
 
 For more scripts look in `package.json`.
 
@@ -388,6 +486,7 @@ For more scripts look in `package.json`.
 - **Stop database:** `yarn db:down`
 - **View logs:** `yarn db:logs`
 - **Admin interface:** `yarn db:admin` (opens http://localhost:8081)
+- **Shell access:** `yarn db:shell`
 
 ### Testing
 

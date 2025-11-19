@@ -19,8 +19,10 @@ pids
 
 # Output directories
 output/
+tmp/
 
 # Environment files
+.env
 .env.local
 .env.development.local
 .env.test.local
@@ -45,6 +47,7 @@ Thumbs.db
 # Git
 .git/
 .gitignore
+.github/
 
 # Docker
 Dockerfile
@@ -52,11 +55,27 @@ Dockerfile
 docker-compose*.yml
 
 # Documentation
-README.md
 *.md
 
-# Test extensions (if any)
+# Test extensions
 extensions/
+
+# Tests
+tests/
+
+# Rust client (not needed in server container)
+ext_analyzer/
+
+# Python scripts (not needed in server container)
+start.py
+
+# Development scripts
+scripts/dev.sh
+
+# Nix files
+.envrc
+flake.nix
+flake.lock
 
 # Claude
 .claude/
