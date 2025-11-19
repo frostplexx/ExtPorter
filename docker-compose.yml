@@ -7,17 +7,15 @@ services:
         restart: unless-stopped
         ports:
             - '8080:8080' # Expose WebSocket server for client connections
+        env_file:
+            - .env
         environment:
-            - LOG_LEVEL=${LOG_LEVEL:-info}
-            - MONGODB_URI=${MONGODB_URI_DOCKER:-mongodb://admin:password@mongodb:27017/migrator}
-            - DB_NAME=${DB_NAME:-migrator}
-            - INPUT_DIR=${INPUT_DIR:-/app/extensions}
-            - OUTPUT_DIR=${OUTPUT_DIR:-/app/output}
+            # Override specific variables for Docker environment
+            - MONGODB_URI=mongodb://admin:password@mongodb:27017/migrator?authSource=admin
         volumes:
             - ./output:/app/output
             - ./logs:/app/logs
             - ./extensions:/app/extensions:ro
-            - ./.env:/app/.env:ro # Mount .env file for additional configuration
         depends_on:
             - mongodb
         networks:
