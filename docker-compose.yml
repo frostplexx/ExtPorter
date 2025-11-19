@@ -8,11 +8,11 @@ services:
         ports:
             - '8080:8080' # Expose WebSocket server for client connections
         environment:
-            - LOG_LEVEL=info
-            - MONGODB_URI=mongodb://admin:password@mongodb:27017/migrator
-            - DB_NAME=migrator
-            - INPUT_DIR=/app/extensions
-            - OUTPUT_DIR=/app/output
+            - LOG_LEVEL=${LOG_LEVEL:-info}
+            - MONGODB_URI=${MONGODB_URI_DOCKER:-mongodb://admin:password@mongodb:27017/migrator}
+            - DB_NAME=${DB_NAME:-migrator}
+            - INPUT_DIR=${INPUT_DIR:-/app/extensions}
+            - OUTPUT_DIR=${OUTPUT_DIR:-/app/output}
         volumes:
             - ./output:/app/output
             - ./logs:/app/logs
@@ -43,7 +43,6 @@ services:
             - ./mongo-init.js:/docker-entrypoint-initdb.d/mongo-init.js:ro
         networks:
             - migrator-network
-
 
 volumes:
     mongodb_data:
