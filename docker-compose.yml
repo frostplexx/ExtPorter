@@ -15,11 +15,11 @@ services:
             # Override specific variables for Docker environment
             - MONGODB_URI=mongodb://admin:password@mongodb:27017/migrator?authSource=admin
         volumes:
-            - ./logs:/app/logs:z
+            - ./logs:/app/logs
             # Mount the actual paths from .env file
-            # :Z flag for private SELinux relabeling (use for dirs outside project)
-            - ${INPUT_DIR:-./extensions}:${INPUT_DIR:-./extensions}:ro,z
-            - ${OUTPUT_DIR:-./output}:${OUTPUT_DIR:-./output}:Z
+            # No SELinux labels since we use label=disable
+            - ${INPUT_DIR:-./extensions}:${INPUT_DIR:-./extensions}:ro
+            - ${OUTPUT_DIR:-./output}:${OUTPUT_DIR:-./output}
         depends_on:
             - mongodb
         networks:
