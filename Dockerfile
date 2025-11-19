@@ -13,17 +13,17 @@ RUN apt-get update && apt-get install -y \
 # Copy package files
 COPY package*.json yarn.lock ./
 
-# Install dependencies
-RUN npm install --production=false
+# Install dependencies (use yarn instead of npm)
+RUN yarn install --frozen-lockfile
 
-# Copy TypeScript configuration
+# Copy TypeScript configuration and eslint config
 COPY tsconfig.json ./
+COPY eslint.config.mjs ./
+COPY prettier.config.js ./
 
-# Copy source code
-COPY src/ ./src/
-
-# Build the application
-RUN npm run build
+# Copy all source code
+COPY migrator/ ./migrator/
+COPY scripts/ ./scripts/
 
 # Create directories that the application expects
 RUN mkdir -p logs output
@@ -35,8 +35,11 @@ USER pptruser
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome-stable
 
-# Expose any ports if needed (this app doesn't seem to have a web server)
-# EXPOSE 3000
+# Set Node.js memory options
+ENV NODE_OPTIONS="--max-old-space-size=8192 --max-semi-space-size=512 --expose-gc"
 
-# Default command
-CMD ["npm", "start"]
+# Expose WebSocket server port
+EXPOSE 8080
+
+# Default command - start the migration server
+CMD ["yarn", "server"]
