@@ -15,7 +15,7 @@ services:
         volumes:
             - ./logs:/app/logs
             # Mount the actual paths from .env file
-            - ${INPUT_DIR:-./extensions}:${INPUT_DIR:-./extensions}:ro
+            - ${INPUT_DIR:-./extensions}:${INPUT_DIR:-./extensions}
             - ${OUTPUT_DIR:-./output}:${OUTPUT_DIR:-./output}
         depends_on:
             - mongodb
