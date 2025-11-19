@@ -310,12 +310,6 @@ impl App {
         if self.state.message_scroll_offset > 0 {
             self.state.message_scroll_offset += 1;
         }
-
-        self.state.messages.push(Message {
-            msg_type: MessageType::System,
-            content: "Disconnected from Migration Server".to_string(),
-            timestamp: chrono::Utc::now(),
-        });
     }
 
     pub fn handle_websocket_message(&mut self, msg: String) {
@@ -469,10 +463,14 @@ impl App {
             self.state.message_scroll_offset += 1;
         }
 
-        self.state.messages.push(Message {
-            msg_type: MessageType::System,
-            content: format!("Server Error: {}", err),
-            timestamp: chrono::Utc::now(),
-        });
+        // filter out no connection errors when e.g. Connection refused
+        // because thats already being shown in the tab bar
+        if !err.eq("IO error: Connection refused (os error 61)"){
+            self.state.messages.push(Message {
+                msg_type: MessageType::System,
+                content: format!("Server Error: {}", err),
+                timestamp: chrono::Utc::now(),
+            });
+        }
     }
 }
