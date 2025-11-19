@@ -174,10 +174,19 @@ export class DualChromeTester {
                     throw new Error(`Extension ${extension.name} does not have a manifest_v3_path`);
                 }
 
+                // Ensure paths point to directories, not manifest.json files
+                // (Some older database entries may have the full path to manifest.json)
+                const mv2Path = extension.manifest_v2_path.endsWith('manifest.json')
+                    ? extension.manifest_v2_path.replace(/\/manifest\.json$/, '')
+                    : extension.manifest_v2_path;
+                const mv3Path = extension.manifest_v3_path.endsWith('manifest.json')
+                    ? extension.manifest_v3_path.replace(/\/manifest\.json$/, '')
+                    : extension.manifest_v3_path;
+
                 this.mv2Browser = await puppeteer.launch({
                     ...commonOptions,
                     executablePath: this.getChromePath(false), // Chrome 138
-                    enableExtensions: [extension.manifest_v2_path],
+                    enableExtensions: [mv2Path],
                 });
 
                 // Inject blue border for MV2
@@ -188,7 +197,7 @@ export class DualChromeTester {
                 this.mv3Browser = await puppeteer.launch({
                     ...commonOptions,
                     executablePath: this.getChromePath(true), // Latest Chrome
-                    enableExtensions: [extension.manifest_v3_path],
+                    enableExtensions: [mv3Path],
                 });
 
                 // Inject red border for MV3
