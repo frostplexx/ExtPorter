@@ -17,9 +17,9 @@ services:
         volumes:
             - ./logs:/app/logs:z
             # Mount the actual paths from .env file
-            # :z flag allows SELinux to relabel for container access
-            - ${INPUT_DIR:-./extensions}:${INPUT_DIR:-./extensions}:z
-            - ${OUTPUT_DIR:-./output}:${OUTPUT_DIR:-./output}:z
+            # :Z flag for private SELinux relabeling (use for dirs outside project)
+            - ${INPUT_DIR:-./extensions}:${INPUT_DIR:-./extensions}:ro,z
+            - ${OUTPUT_DIR:-./output}:${OUTPUT_DIR:-./output}:Z
         depends_on:
             - mongodb
         networks:
@@ -27,6 +27,7 @@ services:
         # Add security options for Chrome/Puppeteer
         security_opt:
             - seccomp:unconfined
+            - label=disable
         # Optionally add shared memory size for Chrome
         shm_size: 2gb
 
