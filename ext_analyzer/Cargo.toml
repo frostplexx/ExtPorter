@@ -12,7 +12,7 @@ crossterm = "0.28"
 
 # Async runtime and utilities
 tokio = { version = "1.42", features = ["full"] }
-tokio-tungstenite = "0.24"
+tokio-tungstenite = "0.28"
 futures-util = "0.3"
 
 # Serialization
