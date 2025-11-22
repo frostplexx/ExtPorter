@@ -20,7 +20,13 @@ impl SettingsTab {
 }
 
 impl super::Tab for SettingsTab {
-    fn render(&mut self, f: &mut Frame, area: ratatui::layout::Rect, _state: &AppState) {
+    fn render(
+        &mut self,
+        f: &mut Frame,
+        area: ratatui::layout::Rect,
+        _state: &AppState,
+        _tx: mpsc::UnboundedSender<AppEvent>,
+    ) {
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
@@ -129,5 +135,9 @@ impl super::Tab for SettingsTab {
         _tx: mpsc::UnboundedSender<AppEvent>,
     ) -> Result<()> {
         Ok(())
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
     }
 }

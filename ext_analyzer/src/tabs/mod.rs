@@ -8,11 +8,12 @@ use crate::app::{AppEvent, AppState};
 pub mod analyzer;
 pub mod database;
 pub mod explorer;
+pub mod image_handler;
 pub mod migrator;
 pub mod settings;
 
 pub trait Tab: Send {
-    fn render(&mut self, f: &mut Frame, area: ratatui::layout::Rect, state: &AppState);
+    fn render(&mut self, f: &mut Frame, area: ratatui::layout::Rect, state: &AppState, tx: mpsc::UnboundedSender<AppEvent>);
     fn handle_input(
         &mut self,
         key: KeyEvent,
@@ -25,4 +26,7 @@ pub trait Tab: Send {
     fn handles_esc(&self) -> bool {
         false
     }
+
+    /// Allows downcasting to concrete tab types
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any;
 }
