@@ -10,7 +10,6 @@ pub mod database;
 pub mod explorer;
 pub mod image_handler;
 pub mod migrator;
-pub mod settings;
 
 pub trait Tab: Send {
     fn render(&mut self, f: &mut Frame, area: ratatui::layout::Rect, state: &AppState, tx: mpsc::UnboundedSender<AppEvent>);
