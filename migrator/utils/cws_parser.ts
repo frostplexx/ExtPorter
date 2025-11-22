@@ -59,59 +59,80 @@ export function parseCWSHtml(htmlPath: string): CWSInfo | null {
         const images: string[] = [];
 
         // Try various selectors for images
-        // 1. Open Graph image (usually the icon)
-        $('meta[property="og:image"]').each((_, elem) => {
-            const imgUrl = $(elem).attr('content');
-            if (imgUrl) images.push(imgUrl.trim());
+        // 1. Open Graph image (usually the icon) - skip this as it's not a screenshot
+        // $('meta[property="og:image"]').each((_, elem) => {
+        //     const imgUrl = $(elem).attr('content');
+        //     if (imgUrl) images.push(imgUrl.trim());
+        // });
+
+        // 2. Modern CWS: Look for media carousel items with data-media-url attribute
+        $('[data-media-url]').each((_, elem) => {
+            const mediaUrl = $(elem).attr('data-media-url');
+            const isVideo = $(elem).attr('data-is-video') === 'true';
+
+            // Skip videos, only add image URLs
+            if (mediaUrl && !isVideo) {
+                images.push(mediaUrl.trim());
+            }
         });
 
-        // 2. Screenshot carousel images
-        $('.F-N-i-W-j img').each((_, elem) => {
+        // 3. Modern CWS: Look for carousel images with specific classes
+        $('.LAhvXe[src]:not([src*="data:image/gif"])').each((_, elem) => {
             const imgUrl = $(elem).attr('src');
-            if (imgUrl) images.push(imgUrl.trim());
-        });
-
-        // 3. Screenshot section images
-        $('.e-f-s-na-Xb img, .screenshot img').each((_, elem) => {
-            const imgUrl = $(elem).attr('src');
-            if (imgUrl) images.push(imgUrl.trim());
-        });
-
-        // 4. Additional selectors for modern Chrome Web Store
-        $('img[src*="chrome.google.com/webstore"]').each((_, elem) => {
-            const imgUrl = $(elem).attr('src');
-            if (imgUrl && !imgUrl.includes('icon')) {
+            if (imgUrl && !imgUrl.startsWith('data:')) {
                 images.push(imgUrl.trim());
             }
         });
 
-        // 5. Look for images in common screenshot containers
+        // 4. Screenshot carousel images (legacy selectors)
+        $('.F-N-i-W-j img').each((_, elem) => {
+            const imgUrl = $(elem).attr('src');
+            if (imgUrl && !imgUrl.startsWith('data:')) images.push(imgUrl.trim());
+        });
+
+        // 5. Screenshot section images (legacy selectors)
+        $('.e-f-s-na-Xb img, .screenshot img').each((_, elem) => {
+            const imgUrl = $(elem).attr('src');
+            if (imgUrl && !imgUrl.startsWith('data:')) images.push(imgUrl.trim());
+        });
+
+        // 6. Look for images in common screenshot containers
         $('.webstore-screenshots img, [class*="screenshot"] img, [class*="Screenshot"] img').each(
             (_, elem) => {
                 const imgUrl = $(elem).attr('src');
-                if (imgUrl) images.push(imgUrl.trim());
+                if (imgUrl && !imgUrl.startsWith('data:')) images.push(imgUrl.trim());
             }
         );
 
-        // Remove duplicates
-        if (images.length > 0) {
-            cwsInfo.images = [...new Set(images)];
+        // Remove duplicates and filter out placeholders
+        const filteredImages = [...new Set(images)].filter(
+            (url) => !url.includes('data:image') && !url.includes('icon')
+        );
+
+        if (filteredImages.length > 0) {
+            cwsInfo.images = filteredImages;
             logger.debug(null, `Extracted ${cwsInfo.images.length} unique images from CWS HTML`);
         } else {
             logger.debug(null, 'No images found in CWS HTML');
         }
 
-        // Extract description
-        const description =
-            $('meta[name="description"]').attr('content') ||
+        // Extract full description from Overview section
+        // The full description is typically in the Overview section with class .JJ3H1e
+        const fullDescription =
+            $('.JJ3H1e').text() ||
+            $('.JJ3H1e.JpY6Fd').text() ||
             $('.C-b-p-j-D').text() ||
             $('.e-f-b-L').text();
-        if (description) {
-            cwsInfo.description = description.trim();
+        if (fullDescription) {
+            cwsInfo.description = fullDescription.trim();
         }
 
         // Extract short description (usually in meta tag or summary section)
-        const shortDescription = $('.C-b-p-j-Oa').text() || $('.a-u-M').first().text();
+        // This is typically the brief description shown in search results
+        const shortDescription =
+            $('meta[name="description"]').attr('content') ||
+            $('.C-b-p-j-Oa').text() ||
+            $('.a-u-M').first().text();
         if (shortDescription) {
             cwsInfo.short_description = shortDescription.trim();
         }
@@ -138,9 +159,20 @@ export function parseCWSHtml(htmlPath: string): CWSInfo | null {
             }
         }
 
-        // Extract user count
-        const userCount =
-            $('.e-f-ih').text() || $('.F-u-j').text() || $('[aria-label*="user"]').text();
+        // Extract user count (downloads)
+        // For themes, the structure is: <div class="F9iKBc"><a>Theme</a>32 users</div>
+        // We need to clone the element, remove any anchor tags, and then get the text
+        let userCount = '';
+        const userCountElem = $('.F9iKBc').first();
+        if (userCountElem.length > 0) {
+            const clonedElem = userCountElem.clone();
+            clonedElem.find('a').remove(); // Remove category links
+            userCount = clonedElem.text();
+        } else {
+            // Fallback to legacy selectors
+            userCount =
+                $('.e-f-ih').text() || $('.F-u-j').text() || $('[aria-label*="user"]').text();
+        }
         if (userCount) {
             cwsInfo.user_count = userCount.trim();
         }

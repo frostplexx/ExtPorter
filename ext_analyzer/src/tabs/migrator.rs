@@ -1,21 +1,26 @@
 use anyhow::Result;
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{
-    layout::{Constraint, Direction, Layout},
-    style::{Color, Modifier, Style},
+    layout::{Alignment, Constraint, Direction, Layout},
+    style::{Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Paragraph},
+    widgets::{Block, Borders, Clear, Paragraph},
     Frame,
 };
 use tokio::sync::mpsc;
+use tui_textarea::TextArea;
 
 use crate::app::{AppEvent, AppState, Message, MessageType};
 
-pub struct MigratorTab;
+pub struct MigratorTab {
+    confirmation_dialog: Option<TextArea<'static>>,
+}
 
 impl MigratorTab {
     pub fn new() -> Self {
-        Self
+        Self {
+            confirmation_dialog: None,
+        }
     }
 }
 
@@ -53,17 +58,17 @@ impl super::Tab for MigratorTab {
             .take(end_idx - start_idx)
             .map(|msg| {
                 let (prefix, color) = match msg.msg_type {
-                    MessageType::Sent => ("[INFO]", Color::Magenta),
-                    MessageType::Received => ("[INFO]", Color::Magenta),
+                    MessageType::Sent => ("[INFO]", state.theme.msg_info),
+                    MessageType::Received => ("[INFO]", state.theme.msg_info),
                     MessageType::System => {
                         if msg.content.starts_with('⚠') || msg.content.contains("[ERROR]") {
-                            ("", Color::Red)
+                            ("", state.theme.msg_error)
                         } else if msg.content.contains("[WARNING]") {
-                            ("", Color::Yellow)
+                            ("", state.theme.msg_warning)
                         } else if msg.content.contains("[INFO]") {
-                            ("", Color::Cyan)
+                            ("", state.theme.msg_system_info)
                         } else {
-                            ("", Color::White)
+                            ("", state.theme.msg_default)
                         }
                     }
                 };
@@ -102,15 +107,15 @@ impl super::Tab for MigratorTab {
         };
 
         let status_text = if is_running {
-            Span::styled("● Running", Style::default().fg(Color::Green))
+            Span::styled("● Running", Style::default().fg(state.theme.status_running))
         } else {
-            Span::styled("○ Stopped", Style::default().fg(Color::Red))
+            Span::styled("○ Stopped", Style::default().fg(state.theme.status_stopped))
         };
 
         let scroll_indicator = if state.message_scroll_offset > 0 {
             Span::styled(
                 format!(" ↑{}", state.message_scroll_offset),
-                Style::default().fg(Color::Yellow),
+                Style::default().fg(state.theme.scroll_indicator),
             )
         } else {
             Span::raw("")
@@ -128,9 +133,43 @@ impl super::Tab for MigratorTab {
         ]);
 
         let footer_widget =
-            Paragraph::new(footer).style(Style::default().bg(Color::Rgb(88, 70, 120)));
+            Paragraph::new(footer).style(Style::default().bg(state.theme.footer_background));
 
         f.render_widget(footer_widget, chunks[1]);
+
+        // Render confirmation dialog if active
+        if let Some(ref textarea) = self.confirmation_dialog {
+            // Create a centered popup with fixed height (3 lines: border + text + border)
+            let popup_width = (f.area().width as f32 * 0.4) as u16;
+            let popup_height = 3;
+
+            let popup_area = ratatui::layout::Rect {
+                x: (f.area().width.saturating_sub(popup_width)) / 2,
+                y: (f.area().height.saturating_sub(popup_height)) / 2,
+                width: popup_width,
+                height: popup_height,
+            };
+
+            // Clear the area behind the popup
+            f.render_widget(Clear, popup_area);
+
+            // Create outer block with border
+            let block = Block::default()
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(state.theme.dialog_border));
+
+            let inner_area = block.inner(popup_area);
+            f.render_widget(block, popup_area);
+
+            // Single line with instruction text and input field combined
+            let text = format!(
+                "Enter 'ExtPorter' to confirm: {}",
+                textarea.lines().join("")
+            );
+            let paragraph =
+                Paragraph::new(Line::from(Span::raw(text))).alignment(Alignment::Center);
+            f.render_widget(paragraph, inner_area);
+        }
     }
 
     fn handle_input(
@@ -139,6 +178,54 @@ impl super::Tab for MigratorTab {
         state: &mut AppState,
         tx: mpsc::UnboundedSender<AppEvent>,
     ) -> Result<()> {
+        // If confirmation dialog is active, handle its input
+        if let Some(ref mut textarea) = self.confirmation_dialog {
+            match key.code {
+                KeyCode::Esc => {
+                    // Cancel confirmation
+                    self.confirmation_dialog = None;
+                    state.messages.push(Message {
+                        msg_type: MessageType::System,
+                        content: "[INFO] Migration start cancelled".to_string(),
+                        timestamp: chrono::Utc::now(),
+                    });
+                    state.message_scroll_offset = 0;
+                }
+                KeyCode::Enter => {
+                    // Check if input matches "ExtPorter"
+                    let input_text = textarea.lines().join("");
+                    if input_text == "ExtPorter" {
+                        // Close dialog
+                        self.confirmation_dialog = None;
+
+                        // Send start command to server
+                        let _ = tx.send(AppEvent::SendWebSocketMessage("start".to_string()));
+                        state.messages.push(Message {
+                            msg_type: MessageType::System,
+                            content: "[INFO] Sending start command to server...".to_string(),
+                            timestamp: chrono::Utc::now(),
+                        });
+                        state.message_scroll_offset = 0;
+                    } else {
+                        // Wrong input - show error and keep dialog open
+                        state.messages.push(Message {
+                            msg_type: MessageType::System,
+                            content: "[WARNING] Incorrect confirmation text. Please type 'ExtPorter' exactly.".to_string(),
+                            timestamp: chrono::Utc::now(),
+                        });
+                        // Clear the input field
+                        *textarea = TextArea::default();
+                    }
+                }
+                _ => {
+                    // Pass other keys to the textarea
+                    textarea.input(key);
+                }
+            }
+            return Ok(());
+        }
+
+        // Normal input handling when dialog is not active
         match key.code {
             KeyCode::Up => {
                 // Scroll up (view older messages)
@@ -176,15 +263,8 @@ impl super::Tab for MigratorTab {
             }
             KeyCode::Char('s') => {
                 if !state.migration_running {
-                    // Send start command to server
-                    let _ = tx.send(AppEvent::SendWebSocketMessage("start".to_string()));
-                    state.messages.push(Message {
-                        msg_type: MessageType::System,
-                        content: "[INFO] Sending start command to server...".to_string(),
-                        timestamp: chrono::Utc::now(),
-                    });
-                    // Auto-scroll to bottom when new message arrives
-                    state.message_scroll_offset = 0;
+                    // Show confirmation dialog
+                    self.confirmation_dialog = Some(TextArea::default());
                 } else {
                     state.messages.push(Message {
                         msg_type: MessageType::System,
@@ -219,5 +299,10 @@ impl super::Tab for MigratorTab {
 
     fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
         self
+    }
+
+    fn handles_esc(&self) -> bool {
+        // Return true if the confirmation dialog is active
+        self.confirmation_dialog.is_some()
     }
 }

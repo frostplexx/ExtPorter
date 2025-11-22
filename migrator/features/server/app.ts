@@ -314,6 +314,7 @@ export class MigrationServer {
             const { InterestingnessScorer } = await import(
                 '../../modules/interestingenss_scorer/index.js'
             );
+            const { ListenerAnalyzer } = await import('../../modules/listener_analyzer/index.js');
             const { BridgeInjector } = await import('../../modules/bridge_injector/index.js');
             const { OffscreenDocumentMigrator } = await import(
                 '../../modules/offscreen_documents/index.js'
@@ -350,6 +351,7 @@ export class MigrationServer {
                 RenameAPIS.migrate,
                 BridgeInjector.migrate,
                 OffscreenDocumentMigrator.migrate,
+                ListenerAnalyzer.migrate, // Extract event listeners
                 InterestingnessScorer.migrate,
                 WriteMigrated.migrate,
             ];

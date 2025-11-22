@@ -2,7 +2,7 @@ use anyhow::Result;
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{
     layout::{Constraint, Direction, Layout},
-    style::{Color, Modifier, Style},
+    style::{Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, Paragraph},
     Frame,
@@ -19,7 +19,6 @@ pub struct AnalyzerTab {
     mv2_browser_running: bool,
     mv3_browser_running: bool,
     event_count: u32,
-    registered_listeners: Vec<String>,
     image_handler: ImageHandler,
     last_displayed_ext_id: Option<String>,
     // Store image protocols for rendering (dynamic number based on available images)
@@ -41,11 +40,6 @@ impl AnalyzerTab {
             mv2_browser_running: false,
             mv3_browser_running: false,
             event_count: 0,
-            registered_listeners: vec![
-                "contextMenus".to_string(),
-                "onClick".to_string(),
-                "onBeforeRequest".to_string(),
-            ],
             image_handler: ImageHandler::new(),
             last_displayed_ext_id: None,
             image_protocols: Vec::new(),
@@ -170,15 +164,15 @@ impl AnalyzerTab {
                     "○ Stopped"
                 },
                 Style::default().fg(if self.mv2_browser_running {
-                    Color::Green
+                    state.theme.status_running
                 } else {
-                    Color::Red
+                    state.theme.status_stopped
                 }),
             )),
             Line::from(Span::raw("")),
             Line::from(Span::styled(
                 format!("Events: {}", self.event_count),
-                Style::default().fg(Color::Gray),
+                Style::default().fg(state.theme.analyzer_event_count),
             )),
         ];
 
@@ -186,7 +180,7 @@ impl AnalyzerTab {
             Block::default()
                 .borders(Borders::ALL)
                 .title("V2")
-                .border_style(Style::default().fg(Color::Blue)),
+                .border_style(Style::default().fg(state.theme.analyzer_v2_border)),
         );
 
         f.render_widget(v2_panel, left_chunks[0]);
@@ -200,15 +194,15 @@ impl AnalyzerTab {
                     "○ Stopped"
                 },
                 Style::default().fg(if self.mv3_browser_running {
-                    Color::Green
+                    state.theme.status_running
                 } else {
-                    Color::Red
+                    state.theme.status_stopped
                 }),
             )),
             Line::from(Span::raw("")),
             Line::from(Span::styled(
                 format!("Events: {}", self.event_count),
-                Style::default().fg(Color::Gray),
+                Style::default().fg(state.theme.analyzer_event_count),
             )),
         ];
 
@@ -216,7 +210,7 @@ impl AnalyzerTab {
             Block::default()
                 .borders(Borders::ALL)
                 .title("V3")
-                .border_style(Style::default().fg(Color::Red)),
+                .border_style(Style::default().fg(state.theme.analyzer_v3_border)),
         );
 
         f.render_widget(v3_panel, left_chunks[1]);
@@ -242,7 +236,7 @@ impl AnalyzerTab {
             let name_text = Paragraph::new(Line::from(vec![Span::styled(
                 name_display,
                 Style::default()
-                    .fg(Color::Cyan)
+                    .fg(state.theme.analyzer_ext_name)
                     .add_modifier(Modifier::BOLD),
             )]))
             .block(Block::default().borders(Borders::ALL));
@@ -285,31 +279,31 @@ impl AnalyzerTab {
                                 Line::from(Span::styled(
                                     "  ▄▄▄",
                                     Style::default().fg(if has_image {
-                                        Color::Cyan
+                                        state.theme.analyzer_image_placeholder
                                     } else {
-                                        Color::Gray
+                                        state.theme.text_muted
                                     }),
                                 )),
                                 Line::from(Span::styled(
                                     " █░░░█",
                                     Style::default().fg(if has_image {
-                                        Color::Cyan
+                                        state.theme.analyzer_image_placeholder
                                     } else {
-                                        Color::Gray
+                                        state.theme.text_muted
                                     }),
                                 )),
                                 Line::from(Span::styled(
                                     " ▀▀▀▀▀",
                                     Style::default().fg(if has_image {
-                                        Color::Cyan
+                                        state.theme.analyzer_image_placeholder
                                     } else {
-                                        Color::Gray
+                                        state.theme.text_muted
                                     }),
                                 )),
                                 Line::from(Span::raw("")),
                                 Line::from(Span::styled(
                                     format!("Loading..."),
-                                    Style::default().fg(Color::DarkGray),
+                                    Style::default().fg(state.theme.analyzer_image_loading),
                                 )),
                             ];
 
@@ -324,7 +318,9 @@ impl AnalyzerTab {
                 } else {
                     let no_images = Paragraph::new(vec![Line::from(Span::styled(
                         "No screenshots available",
-                        Style::default().fg(Color::Gray).add_modifier(Modifier::DIM),
+                        Style::default()
+                            .fg(state.theme.text_muted)
+                            .add_modifier(Modifier::DIM),
                     ))])
                     .block(Block::default().borders(Borders::ALL).title("Images"));
                     f.render_widget(no_images, center_chunks[1]);
@@ -332,7 +328,9 @@ impl AnalyzerTab {
             } else {
                 let no_cws = Paragraph::new(vec![Line::from(Span::styled(
                     "No CWS data available",
-                    Style::default().fg(Color::Gray).add_modifier(Modifier::DIM),
+                    Style::default()
+                        .fg(state.theme.text_muted)
+                        .add_modifier(Modifier::DIM),
                 ))])
                 .block(Block::default().borders(Borders::ALL).title("Images"));
                 f.render_widget(no_cws, center_chunks[1]);
@@ -356,13 +354,19 @@ impl AnalyzerTab {
                         Span::styled(
                             "Rating: ",
                             Style::default()
-                                .fg(Color::Yellow)
+                                .fg(state.theme.analyzer_rating)
                                 .add_modifier(Modifier::BOLD),
                         ),
-                        Span::styled(format!("{:.1}", rating), Style::default().fg(Color::Yellow)),
+                        Span::styled(
+                            format!("{:.1}", rating),
+                            Style::default().fg(state.theme.analyzer_rating),
+                        ),
                         Span::raw(" "),
-                        Span::styled(stars, Style::default().fg(Color::Yellow)),
-                        Span::styled(rating_count_text, Style::default().fg(Color::Gray)),
+                        Span::styled(stars, Style::default().fg(state.theme.analyzer_rating)),
+                        Span::styled(
+                            rating_count_text,
+                            Style::default().fg(state.theme.text_muted),
+                        ),
                     ]));
                     metadata_lines.push(Line::from(Span::raw("")));
                 }
@@ -373,7 +377,7 @@ impl AnalyzerTab {
                         Span::styled(
                             "Users: ",
                             Style::default()
-                                .fg(Color::Green)
+                                .fg(state.theme.analyzer_user_count)
                                 .add_modifier(Modifier::BOLD),
                         ),
                         Span::raw(users),
@@ -392,7 +396,7 @@ impl AnalyzerTab {
                     Span::styled(
                         "Version: ",
                         Style::default()
-                            .fg(Color::Cyan)
+                            .fg(state.theme.analyzer_version_label)
                             .add_modifier(Modifier::BOLD),
                     ),
                     Span::raw(version_text),
@@ -403,7 +407,7 @@ impl AnalyzerTab {
                         Span::styled(
                             "Size: ",
                             Style::default()
-                                .fg(Color::Cyan)
+                                .fg(state.theme.analyzer_version_label)
                                 .add_modifier(Modifier::BOLD),
                         ),
                         Span::raw(size),
@@ -411,13 +415,13 @@ impl AnalyzerTab {
                 }
                 metadata_lines.push(Line::from(Span::raw("")));
 
-                // Description
-                if let Some(ref desc) = cws.short_description.as_ref().or(cws.description.as_ref())
+                // Description - prioritize full description over short description
+                if let Some(ref desc) = cws.description.as_ref().or(cws.short_description.as_ref())
                 {
                     metadata_lines.push(Line::from(Span::styled(
                         "Description:",
                         Style::default()
-                            .fg(Color::Magenta)
+                            .fg(state.theme.analyzer_description_label)
                             .add_modifier(Modifier::BOLD),
                     )));
                     metadata_lines.push(Line::from(Span::raw(desc.as_str())));
@@ -430,7 +434,7 @@ impl AnalyzerTab {
                         Span::styled(
                             "Developer: ",
                             Style::default()
-                                .fg(Color::Blue)
+                                .fg(state.theme.analyzer_developer_label)
                                 .add_modifier(Modifier::BOLD),
                         ),
                         Span::raw(developer),
@@ -443,7 +447,7 @@ impl AnalyzerTab {
                         Span::styled(
                             "Last Updated: ",
                             Style::default()
-                                .fg(Color::Gray)
+                                .fg(state.theme.analyzer_last_updated_label)
                                 .add_modifier(Modifier::BOLD),
                         ),
                         Span::raw(updated),
@@ -453,7 +457,7 @@ impl AnalyzerTab {
                 // Show basic info without CWS data
                 metadata_lines.push(Line::from(Span::styled(
                     "No Chrome Web Store metadata available",
-                    Style::default().fg(Color::Yellow),
+                    Style::default().fg(state.theme.analyzer_no_cws_warning),
                 )));
                 metadata_lines.push(Line::from(Span::raw("")));
 
@@ -462,7 +466,7 @@ impl AnalyzerTab {
                         Span::styled(
                             "Version: ",
                             Style::default()
-                                .fg(Color::Cyan)
+                                .fg(state.theme.analyzer_version_label)
                                 .add_modifier(Modifier::BOLD),
                         ),
                         Span::raw(version),
@@ -481,29 +485,58 @@ impl AnalyzerTab {
         } else {
             let no_ext = Paragraph::new(vec![Line::from(Span::styled(
                 "No extension selected",
-                Style::default().fg(Color::Gray).add_modifier(Modifier::DIM),
+                Style::default()
+                    .fg(state.theme.text_muted)
+                    .add_modifier(Modifier::DIM),
             ))])
             .block(Block::default().borders(Borders::ALL).title("Extension"));
             f.render_widget(no_ext, main_chunks[1]);
         };
 
         // RIGHT PANEL: Registered Listeners
-        let listener_items: Vec<Line> = self
-            .registered_listeners
-            .iter()
-            .map(|listener| {
-                Line::from(vec![
-                    Span::raw("  • "),
-                    Span::styled(listener, Style::default().fg(Color::Yellow)),
-                ])
-            })
-            .collect();
+        let listener_items: Vec<Line> = if let Some(ext) = selected_ext {
+            if ext.event_listeners.is_empty() {
+                vec![Line::from(Span::styled(
+                    "No event listeners found",
+                    Style::default()
+                        .fg(state.theme.text_muted)
+                        .add_modifier(Modifier::DIM),
+                ))]
+            } else {
+                ext.event_listeners
+                    .iter()
+                    .map(|listener| {
+                        Line::from(vec![
+                            Span::raw("  • "),
+                            Span::styled(
+                                &listener.api,
+                                Style::default().fg(state.theme.analyzer_listener_api),
+                            ),
+                            Span::raw(" "),
+                            Span::styled(
+                                format!("({})", listener.file),
+                                Style::default()
+                                    .fg(state.theme.analyzer_listener_file)
+                                    .add_modifier(Modifier::DIM),
+                            ),
+                        ])
+                    })
+                    .collect()
+            }
+        } else {
+            vec![Line::from(Span::styled(
+                "No extension selected",
+                Style::default()
+                    .fg(state.theme.text_muted)
+                    .add_modifier(Modifier::DIM),
+            ))]
+        };
 
         let listeners_panel = Paragraph::new(listener_items).block(
             Block::default()
                 .borders(Borders::ALL)
                 .title("Registered Listeners")
-                .border_style(Style::default().fg(Color::Magenta)),
+                .border_style(Style::default().fg(state.theme.analyzer_listeners_border)),
         );
 
         f.render_widget(listeners_panel, main_chunks[2]);
@@ -511,12 +544,15 @@ impl AnalyzerTab {
         // Bottom status bar - event data counter
         let status_text = if let Some(ext) = selected_ext {
             Line::from(vec![
-                Span::styled("Extension ID: ", Style::default().fg(Color::Cyan)),
+                Span::styled(
+                    "Extension ID: ",
+                    Style::default().fg(state.theme.analyzer_ext_name),
+                ),
                 Span::raw(&ext.id),
-                Span::styled(" • ", Style::default().fg(Color::Gray)),
+                Span::styled(" • ", Style::default().fg(state.theme.text_muted)),
                 Span::styled(
                     format!("Events Logged: {}", self.event_count),
-                    Style::default().fg(Color::Green),
+                    Style::default().fg(state.theme.status_running),
                 ),
             ])
         } else {
@@ -526,7 +562,7 @@ impl AnalyzerTab {
         let status = Paragraph::new(status_text).block(
             Block::default()
                 .borders(Borders::ALL)
-                .border_style(Style::default().fg(Color::DarkGray)),
+                .border_style(Style::default().fg(state.theme.analyzer_status_border)),
         );
 
         f.render_widget(status, chunks[1]);

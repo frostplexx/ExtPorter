@@ -10,6 +10,7 @@ use tokio::sync::{mpsc, Mutex};
 
 mod app;
 mod tabs;
+mod theme;
 mod websocket;
 
 use app::{App, AppEvent};

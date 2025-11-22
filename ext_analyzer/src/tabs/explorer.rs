@@ -2,7 +2,7 @@ use anyhow::Result;
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{
     layout::{Constraint, Direction, Layout},
-    style::{Color, Modifier, Style},
+    style::{Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, List, ListItem, Paragraph},
     Frame,
@@ -232,15 +232,21 @@ impl ExplorerTab {
 
         // Statistics bar - use pre-calculated stats from server
         let stats = Paragraph::new(Line::from(vec![
-            Span::styled("Total:", Style::default().fg(Color::Cyan)),
+            Span::styled("Total:", Style::default().fg(state.theme.stats_total)),
             Span::raw(format!(" {} ", state.extension_stats.total)),
-            Span::styled("• MV3:", Style::default().fg(Color::Green)),
+            Span::styled("• MV3:", Style::default().fg(state.theme.stats_mv3)),
             Span::raw(format!(" {} ", state.extension_stats.with_mv3)),
-            Span::styled("• MV2 Only:", Style::default().fg(Color::Yellow)),
+            Span::styled(
+                "• MV2 Only:",
+                Style::default().fg(state.theme.stats_mv2_only),
+            ),
             Span::raw(format!(" {} ", state.extension_stats.with_mv2_only)),
-            Span::styled("• Failed:", Style::default().fg(Color::Red)),
+            Span::styled("• Failed:", Style::default().fg(state.theme.stats_failed)),
             Span::raw(format!(" {} ", state.extension_stats.failed)),
-            Span::styled("• Avg Score:", Style::default().fg(Color::Magenta)),
+            Span::styled(
+                "• Avg Score:",
+                Style::default().fg(state.theme.stats_avg_score),
+            ),
             Span::raw(format!(" {:.1}", state.extension_stats.avg_score)),
         ]));
 
@@ -255,7 +261,7 @@ impl ExplorerTab {
 
         // Show cursor only when search is focused
         let cursor = if self.search_focused {
-            Span::styled("█", Style::default().fg(Color::White))
+            Span::styled("█", Style::default().fg(state.theme.search_cursor))
         } else {
             Span::raw(" ")
         };
@@ -263,18 +269,21 @@ impl ExplorerTab {
         // Different border style based on focus
         let border_style = if self.search_focused {
             Style::default()
-                .fg(Color::Yellow)
+                .fg(state.theme.search_border_active)
                 .add_modifier(Modifier::BOLD)
         } else {
-            Style::default().fg(Color::Gray)
+            Style::default().fg(state.theme.search_border_inactive)
         };
 
         let search_bar = Paragraph::new(Line::from(vec![
-            Span::styled("Search: ", Style::default().fg(Color::Gray)),
+            Span::styled("Search: ", Style::default().fg(state.theme.search_label)),
             Span::raw(&self.search_query),
             cursor,
-            Span::styled(" • Sort by: ", Style::default().fg(Color::Gray)),
-            Span::styled(sort_text, Style::default().fg(Color::Cyan)),
+            Span::styled(
+                " • Sort by: ",
+                Style::default().fg(state.theme.search_label),
+            ),
+            Span::styled(sort_text, Style::default().fg(state.theme.stats_total)),
         ]))
         .block(
             Block::default()
@@ -375,18 +384,18 @@ impl ExplorerTab {
                 let is_failed = ext.tags.contains(&"migration-failed".to_string());
 
                 let mv3_indicator = if has_mv3 {
-                    Span::styled(" ✓", Style::default().fg(Color::Green))
+                    Span::styled(" ✓", Style::default().fg(state.theme.item_mv3_indicator))
                 } else if is_failed {
-                    Span::styled(" ✗", Style::default().fg(Color::Red))
+                    Span::styled(" ✗", Style::default().fg(state.theme.item_failed_indicator))
                 } else {
                     Span::raw("")
                 };
 
                 let style = if is_selected {
                     Style::default()
-                        .fg(Color::Cyan)
+                        .fg(state.theme.item_selected_fg)
                         .add_modifier(Modifier::BOLD)
-                        .bg(Color::Blue)
+                        .bg(state.theme.item_selected_bg)
                 } else {
                     Style::default()
                 };
@@ -421,7 +430,7 @@ impl ExplorerTab {
                     Span::styled(
                         "Name: ",
                         Style::default()
-                            .fg(Color::Cyan)
+                            .fg(state.theme.detail_label)
                             .add_modifier(Modifier::BOLD),
                     ),
                     Span::raw(&ext.name),
@@ -430,7 +439,7 @@ impl ExplorerTab {
                     Span::styled(
                         "ID: ",
                         Style::default()
-                            .fg(Color::Cyan)
+                            .fg(state.theme.detail_label)
                             .add_modifier(Modifier::BOLD),
                     ),
                     Span::raw(&ext.id),
@@ -439,7 +448,7 @@ impl ExplorerTab {
                     Span::styled(
                         "Version: ",
                         Style::default()
-                            .fg(Color::Cyan)
+                            .fg(state.theme.detail_label)
                             .add_modifier(Modifier::BOLD),
                     ),
                     Span::raw(ext.version.as_deref().unwrap_or("N/A")),
@@ -448,7 +457,7 @@ impl ExplorerTab {
                     Span::styled(
                         "MV3 ID: ",
                         Style::default()
-                            .fg(Color::Cyan)
+                            .fg(state.theme.detail_label)
                             .add_modifier(Modifier::BOLD),
                     ),
                     Span::raw(ext.mv3_extension_id.as_deref().unwrap_or("N/A")),
@@ -457,16 +466,16 @@ impl ExplorerTab {
                     Span::styled(
                         "Interestingness: ",
                         Style::default()
-                            .fg(Color::Cyan)
+                            .fg(state.theme.detail_label)
                             .add_modifier(Modifier::BOLD),
                     ),
                     if let Some(score) = ext.interestingness {
                         let color = if score > 80.0 {
-                            Color::Green
+                            state.theme.score_high
                         } else if score > 50.0 {
-                            Color::Yellow
+                            state.theme.score_medium
                         } else {
-                            Color::Red
+                            state.theme.score_low
                         };
                         Span::styled(format!("{:.1}", score), Style::default().fg(color))
                     } else {
@@ -477,11 +486,11 @@ impl ExplorerTab {
                 Line::from(vec![Span::styled(
                     "Tags: ",
                     Style::default()
-                        .fg(Color::Cyan)
+                        .fg(state.theme.detail_label)
                         .add_modifier(Modifier::BOLD),
                 )]),
                 Line::from(if ext.tags.is_empty() {
-                    Span::styled("No tags", Style::default().fg(Color::Gray))
+                    Span::styled("No tags", Style::default().fg(state.theme.text_muted))
                 } else {
                     Span::raw(ext.tags.join(", "))
                 }),
@@ -492,11 +501,14 @@ impl ExplorerTab {
                 if selected_id == &ext.id {
                     lines.push(Line::from(""));
                     lines.push(Line::from(vec![
-                        Span::styled("⚡ ", Style::default().fg(Color::Yellow)),
+                        Span::styled(
+                            "⚡ ",
+                            Style::default().fg(state.theme.analyzer_loaded_indicator),
+                        ),
                         Span::styled(
                             "Loaded in Analyzer",
                             Style::default()
-                                .fg(Color::Yellow)
+                                .fg(state.theme.analyzer_loaded_indicator)
                                 .add_modifier(Modifier::BOLD),
                         ),
                     ]));
@@ -507,7 +519,9 @@ impl ExplorerTab {
         } else {
             vec![Line::from(Span::styled(
                 "Select an extension to view details",
-                Style::default().fg(Color::Gray).add_modifier(Modifier::DIM),
+                Style::default()
+                    .fg(state.theme.text_muted)
+                    .add_modifier(Modifier::DIM),
             ))]
         };
 

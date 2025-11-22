@@ -1,5 +1,12 @@
 import { LazyFile } from './abstract_file';
 
+export interface EventListener {
+    api: string; // e.g., "chrome.runtime.onMessage"
+    file: string; // File path where listener was found
+    line?: number; // Line number (if available)
+    code_snippet?: string; // Short snippet of the listener code
+}
+
 export interface Extension {
     id: string;
     name: string;
@@ -28,6 +35,7 @@ export interface Extension {
         webRequest_to_dnr_migrations: number;
     };
     tags?: string[]; // Store tag names as enum string names (e.g., 'MANIFEST_MIGRATED') for readability in MongoDB
+    event_listeners?: EventListener[]; // Extracted event listeners from static analysis
     fakeium_validation?: {
         enabled: boolean;
         is_equivalent: boolean;

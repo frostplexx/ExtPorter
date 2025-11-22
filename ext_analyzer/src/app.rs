@@ -11,9 +11,9 @@ use tokio::sync::mpsc;
 
 use crate::{
     tabs::{
-        analyzer::AnalyzerTab, database::DatabaseTab, explorer::ExplorerTab, migrator::MigratorTab,
-        settings::SettingsTab, Tab,
+        analyzer::AnalyzerTab, database::DatabaseTab, explorer::ExplorerTab, migrator::MigratorTab, Tab,
     },
+    theme::ColorScheme,
     websocket::WebSocketSender,
 };
 
@@ -52,6 +52,7 @@ pub struct AppState {
     pub recent_message_count: usize,
     pub burst_window_start: Option<std::time::Instant>,
     pub selected_extension_id: Option<String>,
+    pub theme: ColorScheme,
 }
 
 #[derive(Debug, Clone)]
@@ -103,6 +104,16 @@ pub struct CwsInfo {
 }
 
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
+pub struct EventListener {
+    pub api: String,
+    pub file: String,
+    #[serde(default)]
+    pub line: Option<u32>,
+    #[serde(default)]
+    pub code_snippet: Option<String>,
+}
+
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
 pub struct Extension {
     pub id: String,
     pub name: String,
@@ -126,6 +137,8 @@ pub struct Extension {
     pub manifest_v3_path: Option<String>,
     #[serde(default)]
     pub cws_info: Option<CwsInfo>,
+    #[serde(default)]
+    pub event_listeners: Vec<EventListener>,
 }
 
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize, Default)]
@@ -167,6 +180,7 @@ impl App {
             recent_message_count: 0,
             burst_window_start: None,
             selected_extension_id: None,
+            theme: ColorScheme::default(),
         };
 
         let tabs: Vec<Box<dyn Tab>> = vec![
@@ -174,7 +188,6 @@ impl App {
             Box::new(ExplorerTab::new()),
             Box::new(AnalyzerTab::new()),
             Box::new(DatabaseTab::new()),
-            Box::new(SettingsTab::new()),
         ];
 
         Self {
@@ -214,17 +227,17 @@ impl App {
             ])
             .split(area);
 
-        let tab_names = vec!["Migrator", "Explorer", "Analyzer", "Database", "About"];
+        let tab_names = vec!["Migrator", "Explorer", "Analyzer", "Database"];
         let titles: Vec<Line> = tab_names
             .iter()
             .enumerate()
             .map(|(i, name)| {
                 let style = if i == self.active_tab {
                     Style::default()
-                        .fg(Color::Cyan)
+                        .fg(self.state.theme.tab_active)
                         .add_modifier(Modifier::BOLD)
                 } else {
-                    Style::default().fg(Color::White)
+                    Style::default().fg(self.state.theme.tab_inactive)
                 };
                 Line::from(vec![
                     Span::raw(format!("{}:", i + 1)),
@@ -237,13 +250,13 @@ impl App {
             .block(
                 Block::default()
                     .borders(Borders::ALL)
-                    .title("ExtPorter [Ctrl+C or Ctrl+Q: Quit]"),
+                    .title("ExtPorter"),
             )
             .select(self.active_tab)
             .style(Style::default())
             .highlight_style(
                 Style::default()
-                    .fg(Color::Cyan)
+                    .fg(self.state.theme.tab_active)
                     .add_modifier(Modifier::BOLD),
             );
 
@@ -260,12 +273,12 @@ impl App {
             };
 
         let (status_text, status_color) = match self.state.ws_connection_state {
-            ConnectionState::Connected => ("●", Color::Green),
+            ConnectionState::Connected => ("●", self.state.theme.connection_active),
             ConnectionState::Connecting if should_show_connecting || !self.state.ws_connected => {
-                ("◐", Color::Rgb(255, 165, 0)) // Half-filled dot, orange
+                ("◐", self.state.theme.connection_connecting)
             }
-            ConnectionState::Connecting => ("●", Color::Green), // Fallback to connected if delay passed
-            ConnectionState::Disconnected => ("●", Color::Red),
+            ConnectionState::Connecting => ("●", self.state.theme.connection_active), // Fallback to connected if delay passed
+            ConnectionState::Disconnected => ("●", self.state.theme.connection_disconnected),
         };
 
         let connection_status = Paragraph::new(Line::from(vec![

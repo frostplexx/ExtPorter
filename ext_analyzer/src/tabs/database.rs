@@ -2,7 +2,7 @@ use anyhow::Result;
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{
     layout::{Constraint, Direction, Layout},
-    style::{Color, Modifier, Style},
+    style::{Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, Paragraph},
     Frame,
@@ -47,9 +47,15 @@ impl super::Tab for DatabaseTab {
 
         // Database status
         let db_status = if state.db_connected {
-            Span::styled("connected", Style::default().fg(Color::Green))
+            Span::styled(
+                "connected",
+                Style::default().fg(state.theme.database_connected),
+            )
         } else {
-            Span::styled("disconnected", Style::default().fg(Color::Red))
+            Span::styled(
+                "disconnected",
+                Style::default().fg(state.theme.database_disconnected),
+            )
         };
 
         let mode_text = match self.view_mode {
@@ -58,13 +64,13 @@ impl super::Tab for DatabaseTab {
         };
 
         let status = Paragraph::new(Line::from(vec![
-            Span::styled("Database:", Style::default().fg(Color::Cyan)),
+            Span::styled("Database:", Style::default().fg(state.theme.database_label)),
             Span::raw(" "),
             db_status,
             Span::raw(" • "),
-            Span::styled("Mode:", Style::default().fg(Color::Cyan)),
+            Span::styled("Mode:", Style::default().fg(state.theme.database_label)),
             Span::raw(" "),
-            Span::styled(mode_text, Style::default().fg(Color::Magenta)),
+            Span::styled(mode_text, Style::default().fg(state.theme.database_mode)),
         ]));
 
         f.render_widget(status, chunks[0]);
@@ -85,7 +91,7 @@ impl super::Tab for DatabaseTab {
             Block::default()
                 .borders(Borders::ALL)
                 .title("Collections")
-                .border_style(Style::default().fg(Color::Gray)),
+                .border_style(Style::default().fg(state.theme.database_border)),
         );
 
         f.render_widget(collections, main_chunks[0]);
@@ -93,22 +99,29 @@ impl super::Tab for DatabaseTab {
         // Query/Results panel (right)
         let query_text = vec![
             Line::from(vec![
-                Span::styled("Query: ", Style::default().fg(Color::Gray)),
-                Span::styled("{}", Style::default().fg(Color::Cyan)),
+                Span::styled(
+                    "Query: ",
+                    Style::default().fg(state.theme.database_query_label),
+                ),
+                Span::styled("{}", Style::default().fg(state.theme.database_query_text)),
             ]),
             Line::from(""),
             Line::from(Span::styled(
                 "Database querying functionality is available in TypeScript version.",
-                Style::default().fg(Color::Yellow),
+                Style::default().fg(state.theme.database_info_message),
             )),
             Line::from(""),
             Line::from(Span::styled(
                 "This Rust client provides a streamlined interface focused on",
-                Style::default().fg(Color::Gray).add_modifier(Modifier::DIM),
+                Style::default()
+                    .fg(state.theme.database_info_dim)
+                    .add_modifier(Modifier::DIM),
             )),
             Line::from(Span::styled(
                 "core migration monitoring and extension browsing.",
-                Style::default().fg(Color::Gray).add_modifier(Modifier::DIM),
+                Style::default()
+                    .fg(state.theme.database_info_dim)
+                    .add_modifier(Modifier::DIM),
             )),
         ];
 
@@ -116,7 +129,7 @@ impl super::Tab for DatabaseTab {
             Block::default()
                 .borders(Borders::ALL)
                 .title("Query & Results")
-                .border_style(Style::default().fg(Color::Gray)),
+                .border_style(Style::default().fg(state.theme.database_border)),
         );
 
         f.render_widget(query_panel, main_chunks[1]);
