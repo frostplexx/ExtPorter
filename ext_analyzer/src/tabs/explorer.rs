@@ -47,7 +47,13 @@ impl ExplorerTab {
 }
 
 impl super::Tab for ExplorerTab {
-    fn render(&mut self, f: &mut Frame, area: ratatui::layout::Rect, state: &AppState) {
+    fn render(
+        &mut self,
+        f: &mut Frame,
+        area: ratatui::layout::Rect,
+        state: &AppState,
+        _tx: mpsc::UnboundedSender<AppEvent>,
+    ) {
         self.render_list_mode(f, area, state);
     }
 
@@ -204,6 +210,10 @@ impl super::Tab for ExplorerTab {
             _ => {}
         }
         Ok(())
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
     }
 }
 

@@ -3,6 +3,7 @@ import { LazyFile } from './abstract_file';
 export interface Extension {
     id: string;
     name: string;
+    version?: string;
     manifest_v2_path: string;
     manifest: any;
     files: LazyFile[];
@@ -41,8 +42,10 @@ export interface Extension {
         duration_ms: number;
     };
     cws_info?: {
+        name?: string;
         description?: string;
         short_description?: string;
+        images?: string[];
         rating?: number;
         rating_count?: number;
         user_count?: string;

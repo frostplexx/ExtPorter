@@ -20,7 +20,13 @@ impl MigratorTab {
 }
 
 impl super::Tab for MigratorTab {
-    fn render(&mut self, f: &mut Frame, area: ratatui::layout::Rect, state: &AppState) {
+    fn render(
+        &mut self,
+        f: &mut Frame,
+        area: ratatui::layout::Rect,
+        state: &AppState,
+        _tx: mpsc::UnboundedSender<AppEvent>,
+    ) {
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([Constraint::Min(0), Constraint::Length(1)])
@@ -209,5 +215,9 @@ impl super::Tab for MigratorTab {
             _ => {}
         }
         Ok(())
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
     }
 }

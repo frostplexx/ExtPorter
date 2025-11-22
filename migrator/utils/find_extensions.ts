@@ -139,6 +139,7 @@ function get_manifest(manifest_paths: string[], includes_mv3: boolean): Extensio
                 const extension: Extension = {
                     id: id,
                     name: extensionName,
+                    version: json['version'] || cwsInfo?.version,
                     manifest_v2_path: extensionDir,
                     manifest: json,
                     files: files,

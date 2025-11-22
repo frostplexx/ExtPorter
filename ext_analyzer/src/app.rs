@@ -68,6 +68,40 @@ pub enum MessageType {
     System,
 }
 
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize, Default)]
+pub struct CwsInfo {
+    #[serde(default)]
+    pub name: Option<String>,
+    #[serde(default)]
+    pub description: Option<String>,
+    #[serde(default)]
+    pub short_description: Option<String>,
+    #[serde(default)]
+    pub images: Vec<String>,
+    #[serde(default)]
+    pub rating: Option<f64>,
+    #[serde(default)]
+    pub rating_count: Option<u64>,
+    #[serde(default)]
+    pub user_count: Option<String>,
+    #[serde(default)]
+    pub last_updated: Option<String>,
+    #[serde(default)]
+    pub version: Option<String>,
+    #[serde(default)]
+    pub size: Option<String>,
+    #[serde(default)]
+    pub languages: Vec<String>,
+    #[serde(default)]
+    pub developer: Option<String>,
+    #[serde(default)]
+    pub developer_address: Option<String>,
+    #[serde(default)]
+    pub developer_website: Option<String>,
+    #[serde(default)]
+    pub privacy_policy: Option<String>,
+}
+
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
 pub struct Extension {
     pub id: String,
@@ -90,6 +124,8 @@ pub struct Extension {
     pub manifest_v2_path: Option<String>,
     #[serde(default)]
     pub manifest_v3_path: Option<String>,
+    #[serde(default)]
+    pub cws_info: Option<CwsInfo>,
 }
 
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize, Default)]
@@ -161,7 +197,7 @@ impl App {
 
         // Render active tab
         if let Some(tab) = self.tabs.get_mut(self.active_tab) {
-            tab.render(f, chunks[1], &self.state);
+            tab.render(f, chunks[1], &self.state, self.tx.clone());
         }
     }
 
@@ -315,6 +351,7 @@ impl App {
     pub fn handle_websocket_message(&mut self, msg: String) {
         // Try to parse as JSON first for database responses
         if let Ok(json_msg) = serde_json::from_str::<serde_json::Value>(&msg) {
+            // Handle database responses
             if json_msg.get("type").and_then(|v| v.as_str()) == Some("db_response") {
                 if let Some(id) = json_msg.get("id").and_then(|v| v.as_str()) {
                     if id == "get_extensions" {
@@ -409,7 +446,27 @@ impl App {
 
         if msg.starts_with("MIGRATION_STATUS:") {
             if let Some(status) = msg.strip_prefix("MIGRATION_STATUS:") {
+                let was_running = self.state.migration_running;
                 self.state.migration_running = status.to_lowercase() == "running";
+
+                // If migration just stopped, auto-refresh extensions list
+                if was_running && !self.state.migration_running {
+                    // Request updated extensions list from database
+                    let extensions_request = r#"{"type":"db_query","id":"get_extensions","method":"getExtensionsWithStats","params":{}}"#;
+                    let _ = self.tx.send(AppEvent::SendWebSocketMessage(
+                        extensions_request.to_string(),
+                    ));
+
+                    // Add notification message
+                    if self.state.message_scroll_offset > 0 {
+                        self.state.message_scroll_offset += 1;
+                    }
+                    self.state.messages.push(Message {
+                        msg_type: MessageType::System,
+                        content: "🔄 Migration completed, refreshing extension list...".to_string(),
+                        timestamp: chrono::Utc::now(),
+                    });
+                }
             }
             return;
         }
@@ -465,7 +522,7 @@ impl App {
 
         // filter out no connection errors when e.g. Connection refused
         // because thats already being shown in the tab bar
-        if !err.eq("IO error: Connection refused (os error 61)"){
+        if !err.eq("IO error: Connection refused (os error 61)") {
             self.state.messages.push(Message {
                 msg_type: MessageType::System,
                 content: format!("Server Error: {}", err),

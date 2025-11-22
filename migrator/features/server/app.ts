@@ -186,6 +186,48 @@ export class MigrationServer {
                     // Not JSON, continue with legacy command handling
                 }
 
+                // Handle JSON commands for image downloads
+                try {
+                    const jsonMessage = JSON.parse(command);
+                    if (jsonMessage.type === 'download_image') {
+                        this.handleImageDownload(ws, jsonMessage).catch((error) => {
+                            console.error('Error in handleImageDownload:', error);
+                            ws.send(
+                                JSON.stringify({
+                                    type: 'image_response',
+                                    id: jsonMessage.id,
+                                    url: jsonMessage.url,
+                                    error: error.message || String(error),
+                                })
+                            );
+                        });
+                        return;
+                    }
+                } catch {
+                    // Not JSON, continue with legacy command handling
+                }
+
+                // Handle JSON commands for image downloads
+                try {
+                    const jsonMessage = JSON.parse(command);
+                    if (jsonMessage.type === 'download_image') {
+                        this.handleImageDownload(ws, jsonMessage).catch((error: Error) => {
+                            console.error('Error in handleImageDownload:', error);
+                            ws.send(
+                                JSON.stringify({
+                                    type: 'image_response',
+                                    id: jsonMessage.id,
+                                    url: jsonMessage.url,
+                                    error: error.message || String(error),
+                                })
+                            );
+                        });
+                        return;
+                    }
+                } catch {
+                    // Not JSON, continue with legacy command handling
+                }
+
                 // Handle migrator commands
                 if (command === 'start') {
                     console.log('Starting migration via start command...');
@@ -702,6 +744,101 @@ export class MigrationServer {
             const errorMessage = error instanceof Error ? error.message : String(error);
             ws.send(`ERROR closing browsers: ${errorMessage}`);
         }
+    }
+
+    // Handle image download requests
+    private async handleImageDownload(
+        ws: WebSocket,
+        message: { id: string; url: string; size?: number }
+    ): Promise<void> {
+        const { id, url, size = 1280 } = message;
+
+        try {
+            // Import required modules
+            const https = await import('https');
+            const http = await import('http');
+
+            // Convert to high resolution URL
+            const highResUrl = this.getHighResImageUrl(url, size);
+
+            const protocol = highResUrl.startsWith('https') ? https : http;
+
+            const options = {
+                headers: {
+                    'User-Agent':
+                        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
+                    Accept: 'image/webp,image/apng,image/*,*/*;q=0.8',
+                },
+                timeout: 15000,
+            };
+
+            // Download image
+            const imageData = await new Promise<Buffer>((resolve, reject) => {
+                const request = protocol.get(highResUrl, options, (response) => {
+                    // Follow redirects
+                    if (response.statusCode === 301 || response.statusCode === 302) {
+                        if (response.headers.location) {
+                            reject(new Error(`Redirect to: ${response.headers.location}`));
+                            return;
+                        }
+                    }
+
+                    if (response.statusCode !== 200) {
+                        reject(new Error(`HTTP ${response.statusCode}`));
+                        return;
+                    }
+
+                    const chunks: Buffer[] = [];
+                    response.on('data', (chunk) => chunks.push(chunk));
+                    response.on('end', () => resolve(Buffer.concat(chunks)));
+                    response.on('error', reject);
+                });
+
+                request.on('error', reject);
+                request.on('timeout', () => {
+                    request.destroy();
+                    reject(new Error('Request timeout'));
+                });
+            });
+
+            // Convert to base64
+            const base64Data = imageData.toString('base64');
+
+            // Send response
+            ws.send(
+                JSON.stringify({
+                    type: 'image_response',
+                    id,
+                    url,
+                    data: base64Data,
+                })
+            );
+        } catch (error) {
+            // Send error response
+            ws.send(
+                JSON.stringify({
+                    type: 'image_response',
+                    id,
+                    url,
+                    error: error instanceof Error ? error.message : String(error),
+                })
+            );
+        }
+    }
+
+    // Get high resolution image URL for googleusercontent
+    private getHighResImageUrl(url: string, size: number = 0): string {
+        // For Googleusercontent images, modify the size parameter
+        if (url.includes('googleusercontent.com')) {
+            // Remove existing size parameters and add high-res one
+            // Patterns like =s128, =w128, =h128, etc.
+            url = url.replace(/=[swh]\d+/g, '');
+            // Remove trailing parameters that might interfere
+            url = url.replace(/-rj-sc0x[0-9a-f]+$/, '');
+            // Add high resolution parameter
+            return `${url}=s${size}`;
+        }
+        return url;
     }
 
     // Close the server gracefully
