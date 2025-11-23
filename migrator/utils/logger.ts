@@ -155,13 +155,18 @@ function formatLog(
 }
 
 // Batch logging configuration
-const LOG_BATCH_SIZE = 25; // Reduced from 50 to prevent buffer overflow
+const LOG_BATCH_SIZE = 10; // Reduced to prevent overwhelming MongoDB
 const LOG_BATCH_INTERVAL = 5000; // 5 seconds
-const MAX_MONGODB_BATCH_SIZE = 10; // Single document inserts to avoid bulk write issues
+const MAX_MONGODB_BATCH_SIZE = 5; // Smaller batches to prevent connection exhaustion
 const MAX_LOG_ENTRY_SIZE = 15 * 1024 * 1024; // 15MB max per log entry (MongoDB limit is ~16MB)
 const MAX_META_SIZE = 10 * 1024 * 1024; // 10MB max for meta field
+const ERROR_LOG_RATE_LIMIT = 100; // Maximum error logs per interval
+const ERROR_LOG_RATE_INTERVAL = 1000; // 1 second interval for rate limiting
+
 let logBatch: any[] = [];
 let batchTimer: NodeJS.Timeout | null = null;
+let errorLogCount = 0;
+let lastErrorReset = Date.now();
 
 /**
  * Flush log batch to database in smaller chunks
@@ -242,6 +247,28 @@ function addLogToBatch(
     meta?: any
 ) {
     if (shouldLog(level)) {
+        // Rate limit ERROR logs to prevent cascading failures from flooding MongoDB
+        if (level === LogLevel.ERROR) {
+            const now = Date.now();
+            if (now - lastErrorReset > ERROR_LOG_RATE_INTERVAL) {
+                errorLogCount = 0;
+                lastErrorReset = now;
+            }
+
+            errorLogCount++;
+
+            // If we've exceeded the rate limit, drop the log (but still console.error it)
+            if (errorLogCount > ERROR_LOG_RATE_LIMIT) {
+                if (errorLogCount === ERROR_LOG_RATE_LIMIT + 1) {
+                    console.error(
+                        `[RATE LIMIT] Suppressing error logs to database (>${ERROR_LOG_RATE_LIMIT}/sec). Console logging continues.`
+                    );
+                }
+                // Don't add to batch - just return
+                return;
+            }
+        }
+
         // Check if database is shutting down
         if ((Database.shared as any).isShuttingDown) {
             console.error(

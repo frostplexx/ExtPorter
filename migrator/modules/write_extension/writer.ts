@@ -5,6 +5,55 @@ import { ExtFileType } from '../../types/ext_file_types';
 import { logger } from '../../utils/logger';
 
 export class Writer {
+    private static readonly MAX_CONCURRENT_FILE_WRITES = 20; // Limit concurrent file operations per extension
+    private static readonly MAX_GLOBAL_FILE_WRITES = 100; // Global limit across all extensions to prevent EMFILE
+
+    // Global semaphore to track and limit file operations across all extensions
+    private static globalFileWriteCount = 0;
+    private static waitQueue: (() => void)[] = [];
+
+    /**
+     * Acquire a global file write slot
+     * Blocks if MAX_GLOBAL_FILE_WRITES is exceeded until a slot becomes available
+     */
+    private static async acquireGlobalFileWriteSlot(): Promise<void> {
+        if (this.globalFileWriteCount < this.MAX_GLOBAL_FILE_WRITES) {
+            this.globalFileWriteCount++;
+            return;
+        }
+
+        // Wait in queue until a slot becomes available
+        return new Promise<void>((resolve) => {
+            this.waitQueue.push(resolve);
+        });
+    }
+
+    /**
+     * Release a global file write slot
+     * Allows the next waiting operation to proceed
+     */
+    private static releaseGlobalFileWriteSlot(): void {
+        this.globalFileWriteCount--;
+
+        // Wake up next waiting operation if any
+        const next = this.waitQueue.shift();
+        if (next) {
+            this.globalFileWriteCount++;
+            next();
+        }
+    }
+
+    /**
+     * Get current global file write statistics
+     */
+    static getGlobalWriteStats(): { active: number; waiting: number; limit: number } {
+        return {
+            active: this.globalFileWriteCount,
+            waiting: this.waitQueue.length,
+            limit: this.MAX_GLOBAL_FILE_WRITES,
+        };
+    }
+
     /**
      * Writes the manifest.json file for an extension
      * @param extension The extension
@@ -25,47 +74,97 @@ export class Writer {
     }
 
     /**
-     * Writes all extension files to disk
+     * Helper to process items in batches with concurrency limit
+     */
+    private static async processBatch<T>(
+        items: T[],
+        processor: (item: T) => Promise<void>,
+        concurrency: number
+    ): Promise<void> {
+
+        for (let i = 0; i < items.length; i += concurrency) {
+            const batch = items.slice(i, i + concurrency);
+            const batchPromises = batch.map((item) => processor(item));
+            await Promise.all(batchPromises);
+        }
+    }
+
+    /**
+     * Writes all extension files to disk with concurrency limiting
      * @param extension The extension
      * @param outputPath The output directory path
      */
     static async writeFiles(extension: Extension, outputPath: string): Promise<void> {
-        const writePromises = extension.files.map(async (file) => {
-            const filePath = path.join(outputPath, file.path);
-            const fileDir = path.dirname(filePath);
+        let errorCount = 0;
+        const maxErrorsToLog = 5; // Only log first 5 errors to prevent log flooding
 
-            try {
-                await fs.mkdir(fileDir, { recursive: true });
+        await this.processBatch(
+            extension.files,
+            async (file) => {
+                // Acquire global semaphore slot before writing
+                await this.acquireGlobalFileWriteSlot();
 
-                // Use text encoding only for recognized text file types, binary copy for everything else
-                if (
-                    file.filetype === ExtFileType.JS ||
-                    file.filetype === ExtFileType.CSS ||
-                    file.filetype === ExtFileType.HTML
-                ) {
-                    // Write text files with UTF-8 encoding
-                    const content = file.getContent();
-                    await fs.writeFile(filePath, content, 'utf8');
-                } else {
-                    // Write all other files (ExtFileType.OTHER) as binary to preserve data integrity
-                    const buffer = file.getBuffer();
-                    await fs.writeFile(filePath, buffer);
-                }
-            } catch (error) {
-                logger.error(extension, 'Failed to write file', {
-                    filePath: file.path,
-                    fileType: file.filetype,
-                    isTextFile:
+                try {
+                    const filePath = path.join(outputPath, file.path);
+                    const fileDir = path.dirname(filePath);
+
+                    await fs.mkdir(fileDir, { recursive: true });
+
+                    // Use text encoding only for recognized text file types, binary copy for everything else
+                    if (
                         file.filetype === ExtFileType.JS ||
                         file.filetype === ExtFileType.CSS ||
-                        file.filetype === ExtFileType.HTML,
-                    error: error instanceof Error ? error.message : String(error),
-                });
-                throw error;
-            }
-        });
+                        file.filetype === ExtFileType.HTML
+                    ) {
+                        // Write text files with UTF-8 encoding
+                        const content = file.getContent();
+                        await fs.writeFile(filePath, content, 'utf8');
+                    } else {
+                        // Write all other files (ExtFileType.OTHER) as binary to preserve data integrity
+                        const buffer = file.getBuffer();
+                        await fs.writeFile(filePath, buffer);
+                    }
+                } catch (error) {
+                    errorCount++;
 
-        await Promise.all(writePromises);
+                    // Only log first few errors to prevent log flooding and cascading failures
+                    if (errorCount <= maxErrorsToLog) {
+                        // Use console.error to avoid triggering logger's MongoDB writes
+                        console.error(
+                            `Failed to write file ${file.path}:`,
+                            error instanceof Error ? error.message : String(error)
+                        );
+
+                        if (errorCount === maxErrorsToLog) {
+                            console.error(
+                                `Suppressing further file write errors (too many failures)...`
+                            );
+                        }
+                    }
+
+                    // Don't throw - continue writing other files
+                    // throw error;
+                } finally {
+                    // CRITICAL: Close the file descriptor immediately after writing to prevent EMFILE
+                    // This must be in finally block to ensure it runs even if there's an error
+                    try {
+                        file.close();
+                    } catch (closeError) {
+                        // Ignore close errors
+                        logger.error(extension, closeError as any)
+                    }
+
+                    // Always release the semaphore slot
+                    this.releaseGlobalFileWriteSlot();
+                }
+            },
+            this.MAX_CONCURRENT_FILE_WRITES
+        );
+
+        // If all files failed, throw an error
+        if (errorCount === extension.files.length && errorCount > 0) {
+            throw new Error(`Failed to write all ${errorCount} files`);
+        }
     }
 
     /**
