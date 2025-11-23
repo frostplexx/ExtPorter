@@ -117,28 +117,28 @@ impl AnalyzerTab {
 
                 // Clear existing protocols and initialize based on number of images
                 if let Some(ref cws) = ext.cws_info {
-                    self.image_protocols = vec![None; cws.images.len()];
+                    self.image_protocols = vec![None; cws.images.screenshots.len()];
                 } else {
                     self.image_protocols.clear();
                 }
 
                 // Start downloading images if we have CWS info with images
                 if let Some(ref cws) = ext.cws_info {
-                    if !cws.images.is_empty() {
+                    if !cws.images.screenshots.is_empty() {
                         self.image_handler
-                            .start_downloading(ext.id.clone(), cws.images.clone());
+                            .start_downloading(ext.id.clone(), cws.images.screenshots.clone());
                     }
                 }
             } else {
                 // Same extension - check if we can create protocols for downloaded images
                 if let Some(ref cws) = ext.cws_info {
                     // Ensure we have enough protocol slots
-                    if self.image_protocols.len() < cws.images.len() {
-                        self.image_protocols.resize_with(cws.images.len(), || None);
+                    if self.image_protocols.len() < cws.images.screenshots.len() {
+                        self.image_protocols.resize_with(cws.images.screenshots.len(), || None);
                     }
 
                     // Try to create protocols for all images
-                    for (i, url) in cws.images.iter().enumerate() {
+                    for (i, url) in cws.images.screenshots.iter().enumerate() {
                         if i < self.image_protocols.len() && self.image_protocols[i].is_none() {
                             if let Some(protocol) = self.image_handler.create_protocol(url) {
                                 self.image_protocols[i] = Some(protocol);
@@ -227,11 +227,7 @@ impl AnalyzerTab {
                 .split(main_chunks[1]);
 
             // Extension name header
-            let name_display = if let Some(ref cws) = ext.cws_info {
-                cws.name.as_ref().unwrap_or(&ext.name)
-            } else {
-                &ext.name
-            };
+            let name_display = &ext.name;
 
             let name_text = Paragraph::new(Line::from(vec![Span::styled(
                 name_display,
@@ -244,7 +240,7 @@ impl AnalyzerTab {
 
             // Images area - show actual images or placeholders
             if let Some(ref cws) = ext.cws_info {
-                let image_count = cws.images.len();
+                let image_count = cws.images.screenshots.len();
 
                 if image_count > 0 {
                     // Create dynamic constraints - divide horizontal space equally among all images
@@ -273,7 +269,7 @@ impl AnalyzerTab {
                             f.render_stateful_widget(image_widget, inner, protocol);
                         } else {
                             // No protocol yet - show placeholder
-                            let has_image = i < cws.images.len();
+                            let has_image = i < cws.images.screenshots.len();
                             let icon_content = vec![
                                 Line::from(Span::raw("")),
                                 Line::from(Span::styled(
@@ -341,10 +337,8 @@ impl AnalyzerTab {
 
             if let Some(ref cws) = ext.cws_info {
                 // Rating with stars
-                if let Some(rating) = cws.rating {
-                    let stars = "★".repeat(rating.round() as usize)
-                        + &"☆".repeat(5 - rating.round() as usize);
-                    let rating_count_text = if let Some(count) = cws.rating_count {
+                if let Some(rating) = cws.details.rating.as_ref() {
+                    let rating_count_text = if let Some(count) = cws.details.rating_count.as_ref() {
                         format!(" ({} ratings)", count)
                     } else {
                         String::new()
@@ -362,7 +356,6 @@ impl AnalyzerTab {
                             Style::default().fg(state.theme.analyzer_rating),
                         ),
                         Span::raw(" "),
-                        Span::styled(stars, Style::default().fg(state.theme.analyzer_rating)),
                         Span::styled(
                             rating_count_text,
                             Style::default().fg(state.theme.text_muted),
@@ -372,7 +365,7 @@ impl AnalyzerTab {
                 }
 
                 // User count
-                if let Some(ref users) = cws.user_count {
+                if let Some(ref users) = cws.details.user_count {
                     metadata_lines.push(Line::from(vec![
                         Span::styled(
                             "Users: ",
@@ -387,6 +380,7 @@ impl AnalyzerTab {
 
                 // Version and size
                 let version_text = cws
+                    .details
                     .version
                     .as_ref()
                     .or(ext.version.as_ref())
@@ -402,7 +396,7 @@ impl AnalyzerTab {
                     Span::raw(version_text),
                 ]));
 
-                if let Some(ref size) = cws.size {
+                if let Some(ref size) = cws.details.size {
                     metadata_lines.push(Line::from(vec![
                         Span::styled(
                             "Size: ",
@@ -416,20 +410,17 @@ impl AnalyzerTab {
                 metadata_lines.push(Line::from(Span::raw("")));
 
                 // Description - prioritize full description over short description
-                if let Some(ref desc) = cws.description.as_ref().or(cws.short_description.as_ref())
-                {
                     metadata_lines.push(Line::from(Span::styled(
                         "Description:",
                         Style::default()
                             .fg(state.theme.analyzer_description_label)
                             .add_modifier(Modifier::BOLD),
                     )));
-                    metadata_lines.push(Line::from(Span::raw(desc.as_str())));
+                    metadata_lines.push(Line::from(Span::raw(cws.description.as_str())));
                     metadata_lines.push(Line::from(Span::raw("")));
-                }
 
                 // Developer info
-                if let Some(ref developer) = cws.developer {
+                if let Some(ref developer) = cws.details.developer {
                     metadata_lines.push(Line::from(vec![
                         Span::styled(
                             "Developer: ",
@@ -442,7 +433,7 @@ impl AnalyzerTab {
                 }
 
                 // Last updated
-                if let Some(ref updated) = cws.last_updated {
+                if let Some(ref updated) = cws.details.updated {
                     metadata_lines.push(Line::from(vec![
                         Span::styled(
                             "Last Updated: ",

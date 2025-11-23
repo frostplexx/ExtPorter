@@ -61,6 +61,7 @@ async fn connect_and_run(
     let extensions_request = r#"{"type":"db_query","id":"get_extensions","method":"getExtensionsWithStats","params":{}}"#;
     let _ = send_tx.send(extensions_request.to_string());
 
+
     loop {
         tokio::select! {
             // Handle incoming messages from WebSocket

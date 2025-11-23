@@ -3,248 +3,196 @@ import { readFileSync, existsSync } from 'fs';
 import path from 'path';
 import { logger } from './logger';
 
+//TODO: move
 /**
- * Interface for Chrome Web Store information extracted from HTML
+ * Extracted CWS data structure
  */
-export interface CWSInfo {
-    name?: string;
-    description?: string;
-    short_description?: string;
-    images?: string[];
-    rating?: number;
-    rating_count?: number;
-    user_count?: string;
-    last_updated?: string;
-    version?: string;
-    size?: string;
-    languages?: string[];
-    developer?: string;
-    developer_address?: string;
-    developer_website?: string;
-    privacy_policy?: string;
+export interface CWSData {
+    description: string;
+    images: {
+        logo?: string;
+        screenshots: string[];
+        videoThumbnails: string[];
+        videoEmbeds: string[];
+    };
+    details: {
+        version?: string;
+        updated?: string;
+        size?: string;
+        languages?: string[];
+        userCount?: string;
+        rating?: string;
+        ratingCount?: string;
+        website?: string;
+        developer?: string;
+    };
 }
 
 /**
- * Parses Chrome Web Store HTML file to extract extension metadata
- * @param htmlPath Path to the CWS HTML file
- * @returns CWSInfo object with extracted metadata, or null if parsing fails
+ * Parse Chrome Web Store HTML file and extract information
+ * @param path_to_html - Path to the HTML file
+ * @returns Extracted CWS data or null if parsing fails
  */
-export function parseCWSHtml(htmlPath: string): CWSInfo | null {
+export function parseCWSData(path_to_html: string): CWSData | null {
     try {
-        if (!existsSync(htmlPath)) {
-            logger.debug(null, `CWS HTML file not found: ${htmlPath}`);
+        // Check if file exists
+        if (!existsSync(path_to_html)) {
             return null;
         }
 
-        const htmlContent = readFileSync(htmlPath, 'utf-8');
-        const $ = cheerio.load(htmlContent);
+        // Load HTML file
+        const html = readFileSync(path_to_html, 'utf-8');
 
-        const cwsInfo: CWSInfo = {};
+        // Load HTML into cheerio
+        const $ = cheerio.load(html);
 
-        // Extract name/title
-        const name =
-            $('meta[property="og:title"]').attr('content') ||
-            $('h1').first().text() ||
-            $('title').text() ||
-            $('.e-f-w').text();
-        if (name) {
-            // Clean up the name by removing common CWS suffixes
-            let cleanName = name.trim();
-            cleanName = cleanName.replace(/\s*-\s*Chrome Web Store\s*$/i, '');
-            cleanName = cleanName.replace(/\s*\|\s*Chrome Web Store\s*$/i, '');
-            cwsInfo.name = cleanName.trim();
+        // === EXTRACTION LOGIC ===
+
+        // Extract the full long description from the Overview section
+        // The description is in the div with class "JJ3H1e JpY6Fd" inside section with class "RNnO5Nb"
+        let description = '';
+        const overviewSection = $('.RNnO5e .JJ3H1e.JpY6Fd');
+        if (overviewSection.length > 0) {
+            // Get all paragraph text
+            const paragraphs: string[] = [];
+            overviewSection.find('p').each((i, el) => {
+                const text = $(el).text().trim();
+                if (text) {
+                    paragraphs.push(text);
+                }
+            });
+            description = paragraphs.join('\n\n');
+        }
+
+        // Fallback to meta description if no overview found
+        if (!description) {
+            description = $('meta[name="description"]').attr('content') || '';
         }
 
         // Extract images
-        const images: string[] = [];
+        const images = {
+            screenshots: [] as string[],
+            videoThumbnails: [] as string[],
+            videoEmbeds: [] as string[],
+        };
 
-        // Try various selectors for images
-        // 1. Open Graph image (usually the icon) - skip this as it's not a screenshot
-        // $('meta[property="og:image"]').each((_, elem) => {
-        //     const imgUrl = $(elem).attr('content');
-        //     if (imgUrl) images.push(imgUrl.trim());
-        // });
+        // Get logo from og:image meta tag or item logo
+        const logo = $('meta[property="og:image"]').attr('content') ||
+            $('.rBxtY').attr('src') ||
+            undefined;
 
-        // 2. Modern CWS: Look for media carousel items with data-media-url attribute
-        $('[data-media-url]').each((_, elem) => {
-            const mediaUrl = $(elem).attr('data-media-url');
-            const isVideo = $(elem).attr('data-is-video') === 'true';
-
-            // Skip videos, only add image URLs
-            if (mediaUrl && !isVideo) {
-                images.push(mediaUrl.trim());
+        // Get screenshots from media carousel
+        // Screenshots are in elements with data-media-url attribute and data-is-video="false"
+        $('.d9kNsf[data-is-video="false"]').each((i, el) => {
+            const mediaUrl = $(el).attr('data-media-url');
+            if (mediaUrl && !images.screenshots.includes(mediaUrl)) {
+                images.screenshots.push(mediaUrl);
             }
         });
 
-        // 3. Modern CWS: Look for carousel images with specific classes
-        $('.LAhvXe[src]:not([src*="data:image/gif"])').each((_, elem) => {
-            const imgUrl = $(elem).attr('src');
-            if (imgUrl && !imgUrl.startsWith('data:')) {
-                images.push(imgUrl.trim());
+        // Get video thumbnails
+        $('img[alt*="video thumbnail"], img.LAhvXe[srcset*="youtube"]').each((i, el) => {
+            const srcset = $(el).attr('srcset');
+            if (srcset && srcset.includes('youtube')) {
+                const url = srcset.split(' ')[0]; // Get first URL from srcset
+                if (!images.videoThumbnails.includes(url)) {
+                    images.videoThumbnails.push(url);
+                }
             }
         });
 
-        // 4. Screenshot carousel images (legacy selectors)
-        $('.F-N-i-W-j img').each((_, elem) => {
-            const imgUrl = $(elem).attr('src');
-            if (imgUrl && !imgUrl.startsWith('data:')) images.push(imgUrl.trim());
+        // Get video embeds
+        $('.d9kNsf[data-is-video="true"]').each((i, el) => {
+            const mediaUrl = $(el).attr('data-media-url');
+            if (mediaUrl && mediaUrl.includes('youtube') && !images.videoEmbeds.includes(mediaUrl)) {
+                images.videoEmbeds.push(mediaUrl);
+            }
         });
 
-        // 5. Screenshot section images (legacy selectors)
-        $('.e-f-s-na-Xb img, .screenshot img').each((_, elem) => {
-            const imgUrl = $(elem).attr('src');
-            if (imgUrl && !imgUrl.startsWith('data:')) images.push(imgUrl.trim());
+        // Extract details section information
+        const details: CWSData['details'] = {};
+
+        // Version
+        $('.ZbWJPd.ecmXy .N3EXSc').each((i, el) => {
+            details.version = $(el).text().trim();
         });
 
-        // 6. Look for images in common screenshot containers
-        $('.webstore-screenshots img, [class*="screenshot"] img, [class*="Screenshot"] img').each(
-            (_, elem) => {
-                const imgUrl = $(elem).attr('src');
-                if (imgUrl && !imgUrl.startsWith('data:')) images.push(imgUrl.trim());
+        // Updated date - look for the "Updated" label and get the next div
+        $('.ZbWJPd.uBIrad').each((i, el) => {
+            const label = $(el).find('.nws2nb').text().trim();
+            if (label === 'Updated') {
+                // Get the sibling div that's not .nws2nb
+                const dateDiv = $(el).find('div').not('.nws2nb').first();
+                details.updated = dateDiv.text().trim();
             }
-        );
-
-        // Remove duplicates and filter out placeholders
-        const filteredImages = [...new Set(images)].filter(
-            (url) => !url.includes('data:image') && !url.includes('icon')
-        );
-
-        if (filteredImages.length > 0) {
-            cwsInfo.images = filteredImages;
-            logger.debug(null, `Extracted ${cwsInfo.images.length} unique images from CWS HTML`);
-        } else {
-            logger.debug(null, 'No images found in CWS HTML');
-        }
-
-        // Extract full description from Overview section
-        // The full description is typically in the Overview section with class .JJ3H1e
-        const fullDescription =
-            $('.JJ3H1e').text() ||
-            $('.JJ3H1e.JpY6Fd').text() ||
-            $('.C-b-p-j-D').text() ||
-            $('.e-f-b-L').text();
-        if (fullDescription) {
-            cwsInfo.description = fullDescription.trim();
-        }
-
-        // Extract short description (usually in meta tag or summary section)
-        // This is typically the brief description shown in search results
-        const shortDescription =
-            $('meta[name="description"]').attr('content') ||
-            $('.C-b-p-j-Oa').text() ||
-            $('.a-u-M').first().text();
-        if (shortDescription) {
-            cwsInfo.short_description = shortDescription.trim();
-        }
-
-        // Extract rating
-        const ratingText =
-            $('.rsw-stars').attr('title') ||
-            $('[aria-label*="star"]').attr('aria-label') ||
-            $('.q-N-nd').text();
-        if (ratingText) {
-            const ratingMatch = ratingText.match(/(\d+\.?\d*)/);
-            if (ratingMatch) {
-                cwsInfo.rating = parseFloat(ratingMatch[1]);
-            }
-        }
-
-        // Extract rating count
-        const ratingCountText =
-            $('.q-N-O-k').text() || $('.e-f-ih').text() || $('[aria-label*="rating"]').text();
-        if (ratingCountText) {
-            const countMatch = ratingCountText.match(/(\d+(?:,\d+)*)/);
-            if (countMatch) {
-                cwsInfo.rating_count = parseInt(countMatch[1].replace(/,/g, ''), 10);
-            }
-        }
-
-        // Extract user count (downloads)
-        // For themes, the structure is: <div class="F9iKBc"><a>Theme</a>32 users</div>
-        // We need to clone the element, remove any anchor tags, and then get the text
-        let userCount = '';
-        const userCountElem = $('.F9iKBc').first();
-        if (userCountElem.length > 0) {
-            const clonedElem = userCountElem.clone();
-            clonedElem.find('a').remove(); // Remove category links
-            userCount = clonedElem.text();
-        } else {
-            // Fallback to legacy selectors
-            userCount =
-                $('.e-f-ih').text() || $('.F-u-j').text() || $('[aria-label*="user"]').text();
-        }
-        if (userCount) {
-            cwsInfo.user_count = userCount.trim();
-        }
-
-        // Extract last updated date
-        const lastUpdated =
-            $('.h-C-b-p-D-md').text() ||
-            $('[itemprop="datePublished"]').text() ||
-            $('.C-b-p-j-D-J').text();
-        if (lastUpdated) {
-            cwsInfo.last_updated = lastUpdated.trim();
-        }
-
-        // Extract version
-        const version =
-            $('.C-b-p-D-Xe.h-C-b-p-D-md').text() ||
-            $('[itemprop="version"]').text() ||
-            $('.h-C-b-p-D-za').text();
-        if (version) {
-            cwsInfo.version = version.trim();
-        }
-
-        // Extract size
-        const size = $('.h-C-b-p-D-xh-hh').text() || $('[itemprop="fileSize"]').text();
-        if (size) {
-            cwsInfo.size = size.trim();
-        }
-
-        // Extract languages
-        const languagesText = $('.C-b-p-D-Xe-E').text() || $('.e-f-oh').text();
-        if (languagesText) {
-            const languages = languagesText.split(',').map((lang) => lang.trim());
-            if (languages.length > 0 && languages[0]) {
-                cwsInfo.languages = languages;
-            }
-        }
-
-        // Extract developer information
-        const developer =
-            $('.e-f-Me').text() || $('[itemprop="author"]').text() || $('.C-b-p-D-Xe-D').text();
-        if (developer) {
-            cwsInfo.developer = developer.trim();
-        }
-
-        // Extract developer website
-        const developerWebsite = $('.e-f-y a').attr('href') || $('[itemprop="url"]').attr('href');
-        if (developerWebsite) {
-            cwsInfo.developer_website = developerWebsite.trim();
-        }
-
-        // Extract privacy policy
-        const privacyPolicy =
-            $('a[href*="privacy"]').attr('href') || $('a:contains("Privacy")').attr('href');
-        if (privacyPolicy) {
-            cwsInfo.privacy_policy = privacyPolicy.trim();
-        }
-
-        // Return null if no meaningful data was extracted
-        if (Object.keys(cwsInfo).length === 0) {
-            logger.debug(null, `No CWS data could be extracted from: ${htmlPath}`);
-            return null;
-        }
-
-        logger.debug(null, `Successfully extracted CWS info from: ${htmlPath}`, {
-            fields_extracted: Object.keys(cwsInfo).length,
         });
 
-        return cwsInfo;
+        // Size
+        $('.ZbWJPd.ZSMSLb').each((i, el) => {
+            const label = $(el).find('.nws2nb').text().trim();
+            if (label === 'Size') {
+                const sizeDiv = $(el).find('div').not('.nws2nb').first();
+                details.size = sizeDiv.text().trim();
+            }
+        });
+
+        // Languages
+        $('.ZbWJPd.FFG5Td').each((i, el) => {
+            const label = $(el).find('.nws2nb').text().trim();
+            if (label === 'Languages') {
+                const languages: string[] = [];
+                $(el).find('div').not('.nws2nb').find('div').each((j, langEl) => {
+                    const lang = $(langEl).text().trim();
+                    if (lang) languages.push(lang);
+                });
+                details.languages = languages;
+            }
+        });
+
+        // Rating
+        const ratingEl = $('.Vq0ZA');
+        if (ratingEl.length > 0) {
+            details.rating = ratingEl.text().trim();
+        }
+
+        // Rating count - extract from the text like "15 ratings"
+        const ratingCountEl = $('.xJEoWe');
+        if (ratingCountEl.length > 0) {
+            const ratingText = ratingCountEl.text().trim();
+            const match = ratingText.match(/(\d+)\s+rating/);
+            if (match) {
+                details.ratingCount = match[1];
+            }
+        }
+
+        // Website
+        const websiteEl = $('.cJI8ee .tkwLZc');
+        if (websiteEl.length > 0) {
+            details.website = websiteEl.text().trim();
+        }
+
+        // Developer - look for the Developer section
+        $('.ZbWJPd.odyJv').each((i, el) => {
+            const label = $(el).find('.nws2nb').text().trim();
+            if (label === 'Developer') {
+                const devLink = $(el).find('.Gztlsc');
+                if (devLink.length > 0) {
+                    details.developer = devLink.attr('href') || devLink.text().trim();
+                }
+            }
+        });
+
+        return {
+            description,
+            images: {
+                logo,
+                ...images,
+            },
+            details,
+        };
+
     } catch (error) {
-        logger.error(null, `Error parsing CWS HTML file: ${htmlPath}`, {
-            error: error instanceof Error ? error.message : String(error),
-        });
+        logger.error(null, `Error parsing CWD HTML: ${error}`);
         return null;
     }
 }
@@ -254,7 +202,7 @@ export function parseCWSHtml(htmlPath: string): CWSInfo | null {
  * @param extensionDir The extension directory path
  * @returns CWSInfo object if found and parsed, null otherwise
  */
-export function findAndParseCWSInfo(extensionDir: string): CWSInfo | null {
+export function findAndParseCWSInfo(extensionDir: string): CWSData | null {
     // Get the extension folder name (which should match the HTML filename)
     const extensionFolderName = path.basename(extensionDir);
 
@@ -279,7 +227,7 @@ export function findAndParseCWSInfo(extensionDir: string): CWSInfo | null {
 
     if (existsSync(cwsHtmlPath)) {
         logger.debug(null, `Found CWS HTML file: ${cwsHtmlPath}`);
-        return parseCWSHtml(cwsHtmlPath);
+        return parseCWSData(cwsHtmlPath);
     }
 
     logger.debug(null, `No CWS HTML file found for extension: ${extensionFolderName}`, {
