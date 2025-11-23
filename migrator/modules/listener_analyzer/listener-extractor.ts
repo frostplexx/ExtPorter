@@ -1,4 +1,5 @@
 import { Extension } from '../../types/extension';
+import { logger } from '../../utils/logger';
 
 export interface EventListener {
     api: string; // e.g., "chrome.runtime.onMessage"
@@ -33,6 +34,7 @@ export function extractListeners(extension: Extension): EventListener[] {
             content = file.getContent();
         } catch (error) {
             // Skip files that can't be read
+            logger.error(null, error as any)
             continue;
         }
 
