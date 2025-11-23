@@ -36,5 +36,5 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 # Image handling
 reqwest = { version = "0.12", features = ["blocking"] }
 image = "0.25"
-ratatui-image = { version = "1.0", features = ["serde"] }
+ratatui-image = { version = "8.0", features = ["serde"] }
 tui-textarea = "0.7.0"
