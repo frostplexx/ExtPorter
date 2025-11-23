@@ -39,16 +39,13 @@ def extract_api_calls(file_path: Path) -> Set[str]:
         with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
             content = f.read()
         
-        # Pattern to match chrome.api.method.submethod calls
-        # Matches: chrome.tabs.query, chrome.storage.local.get, chrome.runtime.sendMessage, etc.
-        # Captures the full API path (e.g., "tabs.query", "storage.local.get")
-        # Using non-greedy matching and looking for method calls or property access
-        pattern = r'chrome\.((?:[a-zA-Z_][a-zA-Z0-9_]*\.)*[a-zA-Z_][a-zA-Z0-9_]*)'
+        # 
+        pattern = r'\bchrome\.([\w.]+?)\s*\('
         matches = re.findall(pattern, content)
         apis.update(matches)
         
         # Also check for browser.* API calls (WebExtensions API)
-        browser_pattern = r'browser\.((?:[a-zA-Z_][a-zA-Z0-9_]*\.)*[a-zA-Z_][a-zA-Z0-9_]*)'
+        browser_pattern = r'\bbrowser\.([\w.]+?)\s*\('
         browser_matches = re.findall(browser_pattern, content)
         apis.update(browser_matches)
     
@@ -95,6 +92,14 @@ def get_manifest_version(extension_path: Path) -> Optional[int]:
     
     return None
 
+def check_app_or_theme(extension_path: Path) -> bool:
+    manifest = get_manifest(extension_path)
+    if manifest:
+        if manifest.get("app"): 
+            return True
+        if manifest.get("theme"):
+            return True
+    return False
 
 def analyze_extensions(extensions_folder: Path, mv2_only: bool = False) -> Dict[str, Dict[str, Any]]:
     """
@@ -120,6 +125,11 @@ def analyze_extensions(extensions_folder: Path, mv2_only: bool = False) -> Dict[
     skipped_count = 0
     
     for ext_dir in extension_dirs:
+        # Skip if its a app or theme
+        if check_app_or_theme(ext_dir) is True:
+            print(f"Skipping: {ext_dir.name} (Is theme or app)")
+            continue
+
         # Check manifest version if filtering
         if mv2_only:
             manifest_version = get_manifest_version(ext_dir)

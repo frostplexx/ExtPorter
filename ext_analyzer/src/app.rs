@@ -1,5 +1,6 @@
 use anyhow::Result;
 use crossterm::event::{KeyCode, KeyEvent};
+use futures_util::Stream;
 use ratatui::{
     layout::{Constraint, Direction, Layout},
     style::{Color, Modifier, Style},
@@ -7,6 +8,7 @@ use ratatui::{
     widgets::{Block, Borders, Tabs},
     Frame,
 };
+use reqwest::blocking;
 use tokio::sync::mpsc;
 
 use crate::{
@@ -70,37 +72,56 @@ pub enum MessageType {
 }
 
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize, Default)]
-pub struct CwsInfo {
+pub struct CwsData {
     #[serde(default)]
-    pub name: Option<String>,
+    pub description: String,
     #[serde(default)]
-    pub description: Option<String>,
+    pub images: CwsImages,
     #[serde(default)]
-    pub short_description: Option<String>,
-    #[serde(default)]
-    pub images: Vec<String>,
-    #[serde(default)]
-    pub rating: Option<f64>,
-    #[serde(default)]
-    pub rating_count: Option<u64>,
-    #[serde(default)]
-    pub user_count: Option<String>,
-    #[serde(default)]
-    pub last_updated: Option<String>,
+    pub details: CwsDetails
+}
+
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize, Default)]
+pub struct CwsDetails {
     #[serde(default)]
     pub version: Option<String>,
+
+    #[serde(default)]
+    pub updated: Option<String>,
+
     #[serde(default)]
     pub size: Option<String>,
+
     #[serde(default)]
     pub languages: Vec<String>,
+
+
+    #[serde(default)]
+    pub user_count: Option<String>,
+
+    #[serde(default)]
+    pub rating: Option<String>,
+
+    #[serde(default)]
+    pub rating_count: Option<String>,
+
+    #[serde(default)]
+    pub website: Option<String>,
+
     #[serde(default)]
     pub developer: Option<String>,
+}
+
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize, Default)]
+pub struct CwsImages {
     #[serde(default)]
-    pub developer_address: Option<String>,
+    pub logo: Option<String>,
     #[serde(default)]
-    pub developer_website: Option<String>,
+    pub screenshots: Vec<String>,
     #[serde(default)]
-    pub privacy_policy: Option<String>,
+    pub video_thumbnails: Vec<String>,
+    #[serde(default)]
+    pub video_embeds: Vec<String>
 }
 
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
@@ -116,7 +137,12 @@ pub struct EventListener {
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
 pub struct Extension {
     pub id: String,
+
     pub name: String,
+
+    #[serde(default)]
+    pub manifest_v2_path: Option<String>,
+
     #[serde(default)]
     pub version: Option<String>,
     #[serde(default)]
@@ -132,11 +158,9 @@ pub struct Extension {
     #[serde(default)]
     pub input_path: Option<String>,
     #[serde(default)]
-    pub manifest_v2_path: Option<String>,
-    #[serde(default)]
     pub manifest_v3_path: Option<String>,
     #[serde(default)]
-    pub cws_info: Option<CwsInfo>,
+    pub cws_info: Option<CwsData>,
     #[serde(default)]
     pub event_listeners: Vec<EventListener>,
 }
@@ -309,14 +333,6 @@ impl App {
             }
         }
         Ok(())
-    }
-
-    /// Returns true if the current active tab wants to handle Esc itself
-    pub fn active_tab_handles_esc(&self) -> bool {
-        self.tabs
-            .get(self.active_tab)
-            .map(|tab| tab.handles_esc())
-            .unwrap_or(false)
     }
 
     pub fn switch_to_tab(&mut self, tab_index: usize) {
