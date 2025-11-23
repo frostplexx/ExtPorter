@@ -35,7 +35,7 @@ jobs:
                       asset_name: ext_analyzer-macos-aarch64
 
         steps:
-            - uses: actions/checkout@v5
+            - uses: actions/checkout@v6
 
             - name: Setup Rust
               uses: dtolnay/rust-toolchain@stable
@@ -109,7 +109,7 @@ jobs:
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
 
         steps:
-            - uses: actions/checkout@v5
+            - uses: actions/checkout@v6
 
             - name: Generate version
               id: version
