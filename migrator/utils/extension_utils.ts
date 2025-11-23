@@ -15,7 +15,6 @@ export const extensionUtils = {
         return extension;
     },
 
-
     closeExtensionFiles: (extension: Extension): void => {
         // Close all file descriptors for LazyFile objects
         extension.files.forEach((file) => {
@@ -30,5 +29,5 @@ export const extensionUtils = {
     isNewTabExtension: (extension: Extension): boolean => {
         const newtab = extension.manifest?.chrome_url_overrides?.newtab;
         return newtab != null && newtab !== '';
-    }
+    },
 };

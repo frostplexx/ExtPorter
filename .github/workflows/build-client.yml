@@ -1,0 +1,152 @@
+---
+name: Build Client
+
+on:
+    push:
+        branches: [main]
+        paths:
+            - 'ext_analyzer/**'
+            - '.github/workflows/build-client.yml'
+    pull_request:
+        branches: [main]
+        paths:
+            - 'ext_analyzer/**'
+            - '.github/workflows/build-client.yml'
+    workflow_dispatch:
+
+jobs:
+    build:
+        name: Build ${{ matrix.os }}
+        runs-on: ${{ matrix.os }}
+        strategy:
+            matrix:
+                include:
+                    - os: ubuntu-latest
+                      target: x86_64-unknown-linux-gnu
+                      artifact_name: ext_analyzer
+                      asset_name: ext_analyzer-linux-x86_64
+                    - os: macos-latest
+                      target: x86_64-apple-darwin
+                      artifact_name: ext_analyzer
+                      asset_name: ext_analyzer-macos-x86_64
+                    - os: macos-latest
+                      target: aarch64-apple-darwin
+                      artifact_name: ext_analyzer
+                      asset_name: ext_analyzer-macos-aarch64
+
+        steps:
+            - uses: actions/checkout@v6
+
+            - name: Setup Rust
+              uses: dtolnay/rust-toolchain@stable
+              with:
+                  targets: ${{ matrix.target }}
+
+            - name: Cache cargo registry
+              uses: actions/cache@v4
+              with:
+                  path: ~/.cargo/registry
+                  key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+
+            - name: Cache cargo index
+              uses: actions/cache@v4
+              with:
+                  path: ~/.cargo/git
+                  key: ${{ runner.os }}-cargo-git-${{ hashFiles('**/Cargo.lock') }}
+
+            - name: Cache cargo build
+              uses: actions/cache@v4
+              with:
+                  path: ext_analyzer/target
+                  key: ${{ runner.os }}-${{ matrix.target }}-cargo-build-${{ hashFiles('**/Cargo.lock') }}
+
+            - name: Generate version
+              id: version
+              run: |
+                  DATE=$(date +%Y.%m%d)
+                  BUILD_NUMBER=${{ github.run_number }}
+                  VERSION="${DATE}.${BUILD_NUMBER}"
+                  echo "version=${VERSION}" >> $GITHUB_OUTPUT
+                  echo "Generated version: ${VERSION}"
+
+            - name: Update Cargo.toml version
+              working-directory: ext_analyzer
+              run: |
+                  sed -i.bak 's/^version = .*/version = "${{ steps.version.outputs.version }}"/' Cargo.toml
+                  cat Cargo.toml | grep version
+
+            - name: Build
+              working-directory: ext_analyzer
+              run: cargo build --release --target ${{ matrix.target }}
+
+            - name: Strip binary (Linux)
+              if: matrix.os == 'ubuntu-latest'
+              working-directory: ext_analyzer
+              run: strip target/${{ matrix.target }}/release/${{ matrix.artifact_name }}
+
+            - name: Strip binary (macOS)
+              if: matrix.os == 'macos-latest'
+              working-directory: ext_analyzer
+              run: strip target/${{ matrix.target }}/release/${{ matrix.artifact_name }}
+
+            - name: Rename binary
+              working-directory: ext_analyzer
+              run: |
+                  mv target/${{ matrix.target }}/release/${{ matrix.artifact_name }} \
+                     target/${{ matrix.target }}/release/${{ matrix.asset_name }}
+
+            - name: Upload artifact
+              uses: actions/upload-artifact@v5
+              with:
+                  name: ${{ matrix.asset_name }}-${{ steps.version.outputs.version }}
+                  path: ext_analyzer/target/${{ matrix.target }}/release/${{ matrix.asset_name }}
+                  if-no-files-found: error
+
+    create-release:
+        name: Create Release
+        needs: build
+        runs-on: ubuntu-latest
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+        steps:
+            - uses: actions/checkout@v6
+
+            - name: Generate version
+              id: version
+              run: |
+                  DATE=$(date +%Y.%m.%d)
+                  BUILD_NUMBER=${{ github.run_number }}
+                  VERSION="${DATE}.${BUILD_NUMBER}"
+                  echo "version=${VERSION}" >> $GITHUB_OUTPUT
+                  echo "tag=v${VERSION}" >> $GITHUB_OUTPUT
+
+            - name: Download all artifacts
+              uses: actions/download-artifact@v6
+              with:
+                  path: artifacts
+
+            - name: Display structure of downloaded files
+              run: ls -R artifacts
+
+            - name: Create Release
+              uses: softprops/action-gh-release@v2
+              with:
+                  tag_name: ${{ steps.version.outputs.tag }}
+                  name: Release ${{ steps.version.outputs.version }}
+                  body: |
+                      ## ExtPorter Client v${{ steps.version.outputs.version }}
+
+                      Automated build of ext_analyzer client.
+
+                      ### Downloads
+                      - **Linux (x86_64)**: ext_analyzer-linux-x86_64
+                      - **macOS (Intel)**: ext_analyzer-macos-x86_64
+                      - **macOS (Apple Silicon)**: ext_analyzer-macos-aarch64
+
+                      ### Changes
+                      Built from commit: ${{ github.sha }}
+                  files: artifacts/**/*
+                  draft: false
+                  prerelease: false
+              env:
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
