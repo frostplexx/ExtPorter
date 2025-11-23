@@ -1,77 +1,5 @@
 use ratatui::style::Color;
 
-/// Global color scheme configuration for the entire application
-///
-/// # Example
-/// ```
-/// use ratatui::style::Color;
-///
-/// let custom_theme = ColorScheme {
-///     // Menu bar
-///     tab_active: Color::LightRgb(88,70,120),
-///     tab_inactive: Color::Gray,
-///     connection_active: Color::LightGreen,
-///     connection_connecting: Color::Rgb(255, 165, 0),
-///     connection_disconnected: Color::LightRed,
-///     
-///     // Messages
-///     msg_info: Color::Magenta,
-///     msg_system_info: Color::Rgb(88,70,120),
-///     msg_error: Color::LightRed,
-///     msg_warning: Color::LightYellow,
-///     msg_default: Color::White,
-///     
-///     // Status indicators
-///     status_running: Color::LightGreen,
-///     status_stopped: Color::LightRed,
-///     
-///     // UI elements
-///     footer_background: Color::Rgb(50, 50, 50),
-///     scroll_indicator: Color::LightYellow,
-///     
-///     // Confirmation dialog
-///     dialog_border: Color::Magenta,
-///     
-///     // Explorer
-///     stats_total: Color::Rgb(88,70,120),
-///     stats_mv3: Color::LightGreen,
-///     stats_mv2_only: Color::LightYellow,
-///     stats_failed: Color::LightRed,
-///     stats_avg_score: Color::Magenta,
-///     search_border_active: Color::LightYellow,
-///     search_border_inactive: Color::Gray,
-///     search_label: Color::Gray,
-///     search_cursor: Color::White,
-///     item_selected_fg: Color::Rgb(88,70,120),
-///     item_selected_bg: Color::Blue,
-///     item_mv3_indicator: Color::LightGreen,
-///     item_failed_indicator: Color::LightRed,
-///     detail_label: Color::Rgb(88,70,120),
-///     score_high: Color::LightGreen,
-///     score_medium: Color::LightYellow,
-///     score_low: Color::LightRed,
-///     text_muted: Color::Gray,
-///     analyzer_loaded_indicator: Color::LightYellow,
-///     
-///     // Analyzer tab
-///     analyzer_v2_border: Color::Blue,
-///     analyzer_v3_border: Color::LightRed,
-///     // ... (other analyzer colors)
-///     
-///     // Database tab
-///     database_label: Color::Rgb(88,70,120),
-///     database_connected: Color::LightGreen,
-///     // ... (other database colors)
-///     
-///     // Settings tab
-///     settings_title: Color::Rgb(88,70,120),
-///     settings_section_header: Color::White,
-///     settings_label: Color::Rgb(88,70,120),
-///     settings_feature_enabled: Color::LightGreen,
-///     settings_about_text: Color::Gray,
-///     settings_about_highlight: Color::Rgb(88,70,120),
-/// };
-/// ```
 #[derive(Debug, Clone)]
 pub struct ColorScheme {
     // Menu bar
@@ -80,6 +8,7 @@ pub struct ColorScheme {
     pub connection_active: Color,
     pub connection_connecting: Color,
     pub connection_disconnected: Color,
+    pub menubar_border: Color,
 
     // Messages
     pub msg_info: Color,
@@ -93,7 +22,6 @@ pub struct ColorScheme {
     pub status_stopped: Color,
 
     // UI elements
-    pub footer_background: Color,
     pub scroll_indicator: Color,
 
     // Confirmation dialog
@@ -150,28 +78,34 @@ pub struct ColorScheme {
     pub database_info_message: Color,
     pub database_info_dim: Color,
 
-    // Settings
-    pub settings_title: Color,
-    pub settings_section_header: Color,
-    pub settings_label: Color,
-    pub settings_feature_enabled: Color,
-    pub settings_about_text: Color,
-    pub settings_about_highlight: Color,
 }
+
+
+#[derive(Debug, Clone)]
+struct CustomColors;
+
+impl CustomColors {
+    pub const ACCENT: Color = Color::Rgb(140, 64, 145);
+    pub const PRIMARY: Color = Color::Rgb(100, 150, 200);
+    pub const SECONDARY: Color = Color::Rgb(200, 100, 150);
+    pub const ORANGE: Color = Color::Rgb(255, 165, 0);
+}
+
 
 impl Default for ColorScheme {
     fn default() -> Self {
         Self {
             // Menu bar
-            tab_active: Color::Rgb(88,70,120),
-            tab_inactive: Color::White,
+            tab_active: Color::White,
+            menubar_border: CustomColors::ACCENT,
+            tab_inactive: Color::DarkGray,
             connection_active: Color::Green,
-            connection_connecting: Color::Rgb(255, 165, 0), // Orange
+            connection_connecting: CustomColors::ORANGE, // Orange
             connection_disconnected: Color::Red,
 
             // Messages
-            msg_info: Color::Magenta,
-            msg_system_info: Color::Rgb(88,70,120),
+            msg_info: Color::Green,
+            msg_system_info: Color::Green,
             msg_error: Color::Red,
             msg_warning: Color::Yellow,
             msg_default: Color::White,
@@ -181,14 +115,13 @@ impl Default for ColorScheme {
             status_stopped: Color::Red,
 
             // UI elements
-            footer_background: Color::Rgb(88, 70, 120),
             scroll_indicator: Color::Yellow,
 
             // Confirmation dialog
-            dialog_border: Color::Yellow,
+            dialog_border: Color::White,
 
             // Explorer
-            stats_total: Color::Rgb(88,70,120),
+            stats_total: CustomColors::ACCENT,
             stats_mv3: Color::Green,
             stats_mv2_only: Color::Yellow,
             stats_failed: Color::Red,
@@ -197,11 +130,11 @@ impl Default for ColorScheme {
             search_border_inactive: Color::Gray,
             search_label: Color::Gray,
             search_cursor: Color::White,
-            item_selected_fg: Color::Rgb(88,70,120),
+            item_selected_fg: CustomColors::ACCENT,
             item_selected_bg: Color::Blue,
             item_mv3_indicator: Color::Green,
             item_failed_indicator: Color::Red,
-            detail_label: Color::Rgb(88,70,120),
+            detail_label: CustomColors::ACCENT,
             score_high: Color::Green,
             score_medium: Color::Yellow,
             score_low: Color::Red,
@@ -212,12 +145,12 @@ impl Default for ColorScheme {
             analyzer_v2_border: Color::Blue,
             analyzer_v3_border: Color::Red,
             analyzer_event_count: Color::Gray,
-            analyzer_ext_name: Color::Rgb(88,70,120),
+            analyzer_ext_name: Color::Yellow,
             analyzer_image_loading: Color::DarkGray,
-            analyzer_image_placeholder: Color::Rgb(88,70,120),
+            analyzer_image_placeholder: CustomColors::ACCENT,
             analyzer_rating: Color::Yellow,
             analyzer_user_count: Color::Green,
-            analyzer_version_label: Color::Rgb(88,70,120),
+            analyzer_version_label: CustomColors::ACCENT,
             analyzer_description_label: Color::Magenta,
             analyzer_developer_label: Color::Blue,
             analyzer_last_updated_label: Color::Gray,
@@ -228,23 +161,15 @@ impl Default for ColorScheme {
             analyzer_listeners_border: Color::Magenta,
 
             // Database
-            database_label: Color::Rgb(88,70,120),
+            database_label: CustomColors::ACCENT,
             database_connected: Color::Green,
             database_disconnected: Color::Red,
             database_mode: Color::Magenta,
             database_border: Color::Gray,
             database_query_label: Color::Gray,
-            database_query_text: Color::Rgb(88,70,120),
+            database_query_text: CustomColors::ACCENT,
             database_info_message: Color::Yellow,
             database_info_dim: Color::Gray,
-
-            // Settings
-            settings_title: Color::Rgb(88,70,120),
-            settings_section_header: Color::White,
-            settings_label: Color::Rgb(88,70,120),
-            settings_feature_enabled: Color::Green,
-            settings_about_text: Color::Gray,
-            settings_about_highlight: Color::Rgb(88,70,120),
         }
     }
 }

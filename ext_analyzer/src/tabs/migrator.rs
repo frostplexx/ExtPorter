@@ -132,15 +132,14 @@ impl super::Tab for MigratorTab {
             scroll_indicator,
         ]);
 
-        let footer_widget =
-            Paragraph::new(footer).style(Style::default().bg(state.theme.footer_background));
+        let footer_widget = Paragraph::new(footer).style(Style::default().add_modifier(Modifier::DIM));
 
         f.render_widget(footer_widget, chunks[1]);
 
         // Render confirmation dialog if active
         if let Some(ref textarea) = self.confirmation_dialog {
             // Create a centered popup with fixed height (3 lines: border + text + border)
-            let popup_width = (f.area().width as f32 * 0.4) as u16;
+            let popup_width = (f.area().width as f32 * 0.1) as u16;
             let popup_height = 3;
 
             let popup_area = ratatui::layout::Rect {
@@ -156,14 +155,15 @@ impl super::Tab for MigratorTab {
             // Create outer block with border
             let block = Block::default()
                 .borders(Borders::ALL)
-                .border_style(Style::default().fg(state.theme.dialog_border));
+                .border_style(Style::default().fg(state.theme.dialog_border))
+                .title("Enter 'ExtPorter' to confirm");
 
             let inner_area = block.inner(popup_area);
             f.render_widget(block, popup_area);
 
             // Single line with instruction text and input field combined
             let text = format!(
-                "Enter 'ExtPorter' to confirm: {}",
+                "{}",
                 textarea.lines().join("")
             );
             let paragraph =

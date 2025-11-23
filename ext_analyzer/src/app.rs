@@ -274,6 +274,7 @@ impl App {
             .block(
                 Block::default()
                     .borders(Borders::ALL)
+                    .border_style(Style::new().fg(self.state.theme.menubar_border))
                     .title("ExtPorter"),
             )
             .select(self.active_tab)
@@ -309,7 +310,7 @@ impl App {
             Span::raw("Connection "),
             Span::styled(status_text, Style::default().fg(status_color)),
         ]))
-        .block(Block::default().borders(Borders::ALL))
+        .block(Block::default().borders(Borders::ALL).border_style(Style::new().fg(self.state.theme.menubar_border)))
         .alignment(Alignment::Center);
 
         f.render_widget(connection_status, menu_chunks[1]);
