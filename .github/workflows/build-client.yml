@@ -63,7 +63,7 @@ jobs:
             - name: Generate version
               id: version
               run: |
-                  DATE=$(date +%Y%m%d)
+                  DATE=$(date +%Y.%m%d)
                   BUILD_NUMBER=${{ github.run_number }}
                   VERSION="${DATE}.${BUILD_NUMBER}"
                   echo "version=${VERSION}" >> $GITHUB_OUTPUT
