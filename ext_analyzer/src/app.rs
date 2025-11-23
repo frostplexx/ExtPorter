@@ -323,7 +323,6 @@ impl App {
             KeyCode::Char('2') => self.active_tab = 1,
             KeyCode::Char('3') => self.active_tab = 2,
             KeyCode::Char('4') => self.active_tab = 3,
-            KeyCode::Char('5') => self.active_tab = 4,
             KeyCode::Left if self.active_tab > 0 => self.active_tab -= 1,
             KeyCode::Right if self.active_tab < self.tabs.len() - 1 => self.active_tab += 1,
             _ => {

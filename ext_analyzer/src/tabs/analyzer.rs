@@ -221,8 +221,8 @@ impl AnalyzerTab {
                 .direction(Direction::Vertical)
                 .constraints([
                     Constraint::Length(3), // Extension name
-                    Constraint::Length(8), // Images area (if available)
-                    Constraint::Min(0),    // Metadata area
+                    Constraint::Min(0), // Metadata
+                    Constraint::Length(15),    // Images
                 ])
                 .split(main_chunks[1]);
 
@@ -236,6 +236,7 @@ impl AnalyzerTab {
                     .add_modifier(Modifier::BOLD),
             )]))
             .block(Block::default().borders(Borders::ALL));
+
             f.render_widget(name_text, center_chunks[0]);
 
             // Images area - show actual images or placeholders
@@ -251,7 +252,7 @@ impl AnalyzerTab {
                     let icon_chunks = Layout::default()
                         .direction(Direction::Horizontal)
                         .constraints(constraints)
-                        .split(center_chunks[1]);
+                        .split(center_chunks[2]);
 
                     // Render all images
                     for (i, chunk) in icon_chunks.iter().enumerate() {
@@ -472,7 +473,7 @@ impl AnalyzerTab {
                         .borders(Borders::ALL)
                         .title("Extension Info"),
                 );
-            f.render_widget(metadata, center_chunks[2]);
+            f.render_widget(metadata, center_chunks[1]);
         } else {
             let no_ext = Paragraph::new(vec![Line::from(Span::styled(
                 "No extension selected",
