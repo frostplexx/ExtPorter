@@ -96,7 +96,7 @@ jobs:
                      target/${{ matrix.target }}/release/${{ matrix.asset_name }}
 
             - name: Upload artifact
-              uses: actions/upload-artifact@v4
+              uses: actions/upload-artifact@v5
               with:
                   name: ${{ matrix.asset_name }}-${{ steps.version.outputs.version }}
                   path: ext_analyzer/target/${{ matrix.target }}/release/${{ matrix.asset_name }}
@@ -121,7 +121,7 @@ jobs:
                   echo "tag=v${VERSION}" >> $GITHUB_OUTPUT
 
             - name: Download all artifacts
-              uses: actions/download-artifact@v4
+              uses: actions/download-artifact@v6
               with:
                   path: artifacts
 
