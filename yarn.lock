@@ -3323,9 +3323,9 @@ ini@~1.3.0:
   integrity sha512-JV/yugV2uzW5iMRSiZAyDtQd+nxtUnjeLt0acNdw98kKLrvuRVyB80tsREOE7yvGVgalhZ6RNXCmEHkUKBKxew==
 
 ink@^6.5.0:
-  version "6.5.0"
-  resolved "https://registry.yarnpkg.com/ink/-/ink-6.5.0.tgz#6aefd27a952ec676ca0e8bc5b372cc5f7681b0e3"
-  integrity sha512-abn3rYIxepGKD/h4ZH6sQHgJxBi/EISY/1fIxHODlF5LPvw0wKv2S2uOMIMTfJdBwy9DsWndCfKDCcWSRclp/w==
+  version "6.5.1"
+  resolved "https://registry.yarnpkg.com/ink/-/ink-6.5.1.tgz#81f1e825984dc06c18a78c4bb57a77de57316e66"
+  integrity sha512-wF3j/DmkM8q5E+OtfdQhCRw8/0ahkc8CUTgEddxZzpEWPslu7YPL3t64MWRoI9m6upVGpfAg4ms2BBvxCdKRLQ==
   dependencies:
     "@alcalzone/ansi-tokenize" "^0.2.1"
     ansi-escapes "^7.2.0"
