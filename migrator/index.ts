@@ -1,28 +1,7 @@
 import dotenv from 'dotenv';
-import * as path from 'path';
-import { RenameAPIS } from './modules/api_renames';
-import { MigrateManifest } from './modules/manifest';
-import { MigrateCSP } from './modules/csp';
-import { InterestingnessScorer } from './modules/interestingenss_scorer';
-import { Extension } from './types/extension';
-import { find_extensions } from './utils/find_extensions';
 import { logger } from './utils/logger';
 import { Globals } from './types/globals';
 import { Database } from './features/database/db_manager';
-import { MigrationError } from './types/migration_module';
-// import { ResourceDownloader } from './modules/resource_downloader';
-import { BridgeInjector } from './modules/bridge_injector';
-import { OffscreenDocumentMigrator } from './modules/offscreen_documents';
-import { WebRequestMigrator } from './modules/web_request_migrator/web_request_migrator';
-import { extensionUtils } from './utils/extension_utils';
-import { WriteMigrated } from './modules/write_extension';
-import { WriteQueue } from './modules/write_extension/write-queue';
-import {
-    logMemoryUsage,
-    forceGarbageCollection,
-    checkMemoryThreshold,
-    clearExtensionMemory,
-} from './utils/garbage';
 import { MigrationServer } from './features/server/app';
 
 // Load environment variables once at application startup

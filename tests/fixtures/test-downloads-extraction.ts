@@ -1,9 +1,9 @@
 /**
  * Demo script to show user count extraction from CWS HTML files
  */
-import { parseCWSHtml } from '../../migrator/utils/cws_parser';
 import * as fs from 'fs';
 import * as path from 'path';
+import { parseCWSData } from '../../migrator/utils/cws_parser';
 
 const cwsDir = '/Users/daniel/Developer/github.com/frostplexx/Bachelor_Thesis/research/dataset/cws';
 
@@ -21,13 +21,12 @@ console.log('\n--- Testing Themes (with category links) ---\n');
 for (const file of themeFiles) {
     const htmlPath = path.join(cwsDir, file);
     if (fs.existsSync(htmlPath)) {
-        const result = parseCWSHtml(htmlPath);
+        const result = parseCWSData(htmlPath);
 
         if (result) {
-            console.log(`Extension: ${result.name || 'Unknown'}`);
             console.log(`File: ${file}`);
-            console.log(`User Count: "${result.user_count || 'Not found'}"`);
-            console.log(`Rating: ${result.rating || 'N/A'}`);
+            console.log(`User Count: "${result.details.userCount || 'Not found'}"`);
+            console.log(`Rating: ${result.details.rating || 'N/A'}`);
             console.log('-'.repeat(60));
         }
     }
@@ -42,13 +41,12 @@ const files = fs
 console.log('\n--- Testing Regular Extensions ---\n');
 for (const file of files) {
     const htmlPath = path.join(cwsDir, file);
-    const result = parseCWSHtml(htmlPath);
+    const result = parseCWSData(htmlPath);
 
     if (result) {
-        console.log(`Extension: ${result.name || 'Unknown'}`);
         console.log(`File: ${file}`);
-        console.log(`User Count: "${result.user_count || 'Not found'}"`);
-        console.log(`Rating: ${result.rating || 'N/A'}`);
+        console.log(`User Count: "${result.details.userCount || 'Not found'}"`);
+        console.log(`Rating: ${result.details.rating || 'N/A'}`);
         console.log('-'.repeat(60));
     }
 }
