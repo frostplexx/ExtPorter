@@ -31,6 +31,7 @@ pub struct ColorScheme {
     pub stats_total: Color,
     pub stats_mv3: Color,
     pub stats_mv2_only: Color,
+    #[allow(dead_code)]
     pub stats_failed: Color,
     pub stats_avg_score: Color,
     pub search_border_active: Color,
@@ -77,20 +78,19 @@ pub struct ColorScheme {
     pub database_query_text: Color,
     pub database_info_message: Color,
     pub database_info_dim: Color,
-
 }
-
 
 #[derive(Debug, Clone)]
 struct CustomColors;
 
 impl CustomColors {
     pub const ACCENT: Color = Color::Rgb(140, 64, 145);
+    #[allow(dead_code)]
     pub const PRIMARY: Color = Color::Rgb(100, 150, 200);
+    #[allow(dead_code)]
     pub const SECONDARY: Color = Color::Rgb(200, 100, 150);
     pub const ORANGE: Color = Color::Rgb(255, 165, 0);
 }
-
 
 impl Default for ColorScheme {
     fn default() -> Self {
