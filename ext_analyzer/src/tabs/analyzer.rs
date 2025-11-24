@@ -1,6 +1,6 @@
 use anyhow::Result;
-use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{
+    crossterm::event::{KeyCode, KeyEvent},
     layout::{Constraint, Direction, Layout},
     style::{Modifier, Style},
     text::{Line, Span},
@@ -22,7 +22,7 @@ pub struct AnalyzerTab {
     image_handler: ImageHandler,
     last_displayed_ext_id: Option<String>,
     // Store image protocols for rendering (dynamic number based on available images)
-    image_protocols: Vec<Option<Box<dyn StatefulProtocol>>>,
+    image_protocols: Vec<Option<StatefulProtocol>>,
 }
 
 #[derive(Clone, Copy)]
@@ -53,9 +53,9 @@ impl super::Tab for AnalyzerTab {
         f: &mut Frame,
         area: ratatui::layout::Rect,
         state: &AppState,
-        tx: mpsc::UnboundedSender<AppEvent>,
+        _tx: mpsc::UnboundedSender<AppEvent>,
     ) {
-        self.render_comparison_mode(f, area, state, tx);
+        self.render_comparison_mode(f, area, state, _tx);
     }
 
     fn handle_input(
@@ -79,7 +79,7 @@ impl AnalyzerTab {
         f: &mut Frame,
         area: ratatui::layout::Rect,
         state: &AppState,
-        tx: mpsc::UnboundedSender<AppEvent>,
+        _tx: mpsc::UnboundedSender<AppEvent>,
     ) {
         let chunks = Layout::default()
             .direction(Direction::Vertical)
@@ -102,22 +102,24 @@ impl AnalyzerTab {
 
         // Get selected extension by ID from AppState
         let selected_ext = if let Some(ref ext_id) = state.selected_extension_id {
-            state.extensions.iter().find(|e| e.id == *ext_id)
+            state.extensions.iter().find(|e| e.get_id() == *ext_id)
         } else {
             None
         };
 
         // If extension changed, start downloading its images
         if let Some(ext) = selected_ext {
-            if self.last_displayed_ext_id.as_ref() != Some(&ext.id) {
-                self.last_displayed_ext_id = Some(ext.id.clone());
+            let ext_id = ext.get_id();
+            if self.last_displayed_ext_id.as_ref() != Some(&ext_id) {
+                self.last_displayed_ext_id = Some(ext_id.clone());
 
                 // Reset the image handler's display state for the new extension
-                self.image_handler.reset_for_extension(ext.id.clone());
+                self.image_handler.reset_for_extension(ext_id.clone());
 
                 // Clear existing protocols and initialize based on number of images
                 if let Some(ref cws) = ext.cws_info {
-                    self.image_protocols = vec![None; cws.images.screenshots.len()];
+                    self.image_protocols =
+                        (0..cws.images.screenshots.len()).map(|_| None).collect();
                 } else {
                     self.image_protocols.clear();
                 }
@@ -126,7 +128,7 @@ impl AnalyzerTab {
                 if let Some(ref cws) = ext.cws_info {
                     if !cws.images.screenshots.is_empty() {
                         self.image_handler
-                            .start_downloading(ext.id.clone(), cws.images.screenshots.clone());
+                            .start_downloading(ext_id.clone(), cws.images.screenshots.clone());
                     }
                 }
             } else {
@@ -134,7 +136,8 @@ impl AnalyzerTab {
                 if let Some(ref cws) = ext.cws_info {
                     // Ensure we have enough protocol slots
                     if self.image_protocols.len() < cws.images.screenshots.len() {
-                        self.image_protocols.resize_with(cws.images.screenshots.len(), || None);
+                        self.image_protocols
+                            .resize_with(cws.images.screenshots.len(), || None);
                     }
 
                     // Try to create protocols for all images
@@ -220,9 +223,9 @@ impl AnalyzerTab {
             let center_chunks = Layout::default()
                 .direction(Direction::Vertical)
                 .constraints([
-                    Constraint::Length(3), // Extension name
-                    Constraint::Min(0), // Metadata
-                    Constraint::Length(15),    // Images
+                    Constraint::Length(3),  // Extension name
+                    Constraint::Min(0),     // Metadata
+                    Constraint::Length(15), // Images
                 ])
                 .split(main_chunks[1]);
 
@@ -266,7 +269,7 @@ impl AnalyzerTab {
                             f.render_widget(border, *chunk);
 
                             // Render the image inside
-                            let image_widget = StatefulImage::new(None);
+                            let image_widget = StatefulImage::new();
                             f.render_stateful_widget(image_widget, inner, protocol);
                         } else {
                             // No protocol yet - show placeholder
@@ -411,14 +414,14 @@ impl AnalyzerTab {
                 metadata_lines.push(Line::from(Span::raw("")));
 
                 // Description - prioritize full description over short description
-                    metadata_lines.push(Line::from(Span::styled(
-                        "Description:",
-                        Style::default()
-                            .fg(state.theme.analyzer_description_label)
-                            .add_modifier(Modifier::BOLD),
-                    )));
-                    metadata_lines.push(Line::from(Span::raw(cws.description.as_str())));
-                    metadata_lines.push(Line::from(Span::raw("")));
+                metadata_lines.push(Line::from(Span::styled(
+                    "Description:",
+                    Style::default()
+                        .fg(state.theme.analyzer_description_label)
+                        .add_modifier(Modifier::BOLD),
+                )));
+                metadata_lines.push(Line::from(Span::raw(cws.description.as_str())));
+                metadata_lines.push(Line::from(Span::raw("")));
 
                 // Developer info
                 if let Some(ref developer) = cws.details.developer {
@@ -540,7 +543,7 @@ impl AnalyzerTab {
                     "Extension ID: ",
                     Style::default().fg(state.theme.analyzer_ext_name),
                 ),
-                Span::raw(&ext.id),
+                Span::raw(ext.get_id()),
                 Span::styled(" • ", Style::default().fg(state.theme.text_muted)),
                 Span::styled(
                     format!("Events Logged: {}", self.event_count),
@@ -583,7 +586,7 @@ impl AnalyzerTab {
             KeyCode::Char('o') | KeyCode::Char('O') => {
                 // Launch both browsers using the selected extension from AppState
                 if let Some(ref ext_id) = state.selected_extension_id {
-                    if let Some(_ext) = state.extensions.iter().find(|e| e.id == *ext_id) {
+                    if let Some(_ext) = state.extensions.iter().find(|e| e.get_id() == *ext_id) {
                         let msg = format!("LAUNCH_DUAL:{}", ext_id);
                         let _ = tx.send(AppEvent::SendWebSocketMessage(msg));
                         self.mv2_browser_running = true;

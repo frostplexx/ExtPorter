@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
-use ratatui_image::picker::{Picker, ProtocolType};
+use ratatui_image::picker::Picker;
 use ratatui_image::protocol::StatefulProtocol;
 use image::DynamicImage;
 
@@ -16,11 +16,8 @@ pub struct ImageHandler {
 
 impl ImageHandler {
     pub fn new() -> Self {
-        // Create a picker and force it to use the Kitty graphics protocol
-        let picker = Picker::from_termios().ok().map(|mut p| {
-            p.protocol_type = ProtocolType::Kitty;
-            p
-        });
+        // Create a picker
+        let picker = Picker::from_query_stdio().ok();
         
         Self {
             cache: Arc::new(Mutex::new(HashMap::new())),
@@ -87,7 +84,7 @@ impl ImageHandler {
 
     /// Create a StatefulProtocol for rendering an image at a URL
     /// Returns None if the image is not cached or picker is unavailable
-    pub fn create_protocol(&mut self, url: &str) -> Option<Box<dyn StatefulProtocol>> {
+    pub fn create_protocol(&mut self, url: &str) -> Option<StatefulProtocol> {
         let picker = self.picker.as_mut()?;
         let cache = self.cache.lock().ok()?;
         let img = cache.get(url)?.clone();

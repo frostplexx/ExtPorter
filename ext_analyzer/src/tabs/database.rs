@@ -1,6 +1,6 @@
 use anyhow::Result;
-use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{
+    crossterm::event::{KeyCode, KeyEvent},
     layout::{Constraint, Direction, Layout},
     style::{Modifier, Style},
     text::{Line, Span},

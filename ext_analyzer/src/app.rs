@@ -1,19 +1,18 @@
 use anyhow::Result;
-use crossterm::event::{KeyCode, KeyEvent};
-use futures_util::Stream;
 use ratatui::{
+    crossterm::event::{KeyCode, KeyEvent},
     layout::{Constraint, Direction, Layout},
-    style::{Color, Modifier, Style},
+    style::{Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, Tabs},
     Frame,
 };
-use reqwest::blocking;
 use tokio::sync::mpsc;
 
 use crate::{
     tabs::{
-        analyzer::AnalyzerTab, database::DatabaseTab, explorer::ExplorerTab, migrator::MigratorTab, Tab,
+        analyzer::AnalyzerTab, database::DatabaseTab, explorer::ExplorerTab, migrator::MigratorTab,
+        Tab,
     },
     theme::ColorScheme,
     websocket::WebSocketSender,
@@ -78,7 +77,7 @@ pub struct CwsData {
     #[serde(default)]
     pub images: CwsImages,
     #[serde(default)]
-    pub details: CwsDetails
+    pub details: CwsDetails,
 }
 
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize, Default)]
@@ -94,7 +93,6 @@ pub struct CwsDetails {
 
     #[serde(default)]
     pub languages: Vec<String>,
-
 
     #[serde(default)]
     pub user_count: Option<String>,
@@ -121,7 +119,7 @@ pub struct CwsImages {
     #[serde(default)]
     pub video_thumbnails: Vec<String>,
     #[serde(default)]
-    pub video_embeds: Vec<String>
+    pub video_embeds: Vec<String>,
 }
 
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
@@ -136,13 +134,17 @@ pub struct EventListener {
 
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
 pub struct Extension {
-    pub id: String,
+    // MongoDB internal ID (ignored during serialization)
+    #[serde(skip_serializing, default)]
+    pub _id: Option<serde_json::Value>,
 
+    // Custom extension ID (may be missing in older documents)
+    #[serde(default)]
+    pub id: Option<String>,
     pub name: String,
 
     #[serde(default)]
     pub manifest_v2_path: Option<String>,
-
     #[serde(default)]
     pub version: Option<String>,
     #[serde(default)]
@@ -163,6 +165,41 @@ pub struct Extension {
     pub cws_info: Option<CwsData>,
     #[serde(default)]
     pub event_listeners: Vec<EventListener>,
+
+    // Additional fields from MongoDB that we don't need to display
+    #[serde(skip_serializing, default)]
+    pub manifest: Option<serde_json::Value>,
+    #[serde(skip_serializing, default)]
+    pub files: Option<serde_json::Value>,
+    #[serde(skip_serializing, default)]
+    pub isNewTabExtension: Option<bool>,
+    #[serde(skip_serializing, default)]
+    pub interestingness_breakdown: Option<serde_json::Value>,
+    #[serde(skip_serializing, default)]
+    pub fakeium_validation: Option<serde_json::Value>,
+}
+
+impl Extension {
+    /// Get the extension ID, using _id as fallback if id is not set
+    pub fn get_id(&self) -> String {
+        if let Some(ref id) = self.id {
+            return id.clone();
+        }
+
+        // Fallback to _id if available
+        if let Some(ref id_value) = self._id {
+            if let Some(id_str) = id_value.as_str() {
+                return id_str.to_string();
+            }
+            // If _id is an ObjectId object like {"$oid": "..."}
+            if let Some(oid) = id_value.get("$oid").and_then(|v| v.as_str()) {
+                return oid.to_string();
+            }
+        }
+
+        // Last resort: use name
+        self.name.clone()
+    }
 }
 
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize, Default)]
@@ -310,7 +347,11 @@ impl App {
             Span::raw("Connection "),
             Span::styled(status_text, Style::default().fg(status_color)),
         ]))
-        .block(Block::default().borders(Borders::ALL).border_style(Style::new().fg(self.state.theme.menubar_border)))
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_style(Style::new().fg(self.state.theme.menubar_border)),
+        )
         .alignment(Alignment::Center);
 
         f.render_widget(connection_status, menu_chunks[1]);
@@ -386,36 +427,11 @@ impl App {
                     if id == "get_extensions" {
                         if let Some(result) = json_msg.get("result") {
                             // Try to parse as ExtensionsWithStats first
-                            if let Ok(data) =
-                                serde_json::from_value::<ExtensionsWithStats>(result.clone())
-                            {
-                                let count = data.extensions.len();
-                                self.state.extensions = data.extensions;
-                                self.state.extension_stats = data.stats;
-
-                                // Add a message about loaded extensions
-                                if self.state.message_scroll_offset > 0 {
-                                    self.state.message_scroll_offset += 1;
-                                }
-
-                                self.state.messages.push(Message {
-                                    msg_type: MessageType::System,
-                                    content: format!("✓ Loaded {} extensions (MV3: {}, Failed: {}, Avg Score: {:.2})", 
-                                        count, 
-                                        self.state.extension_stats.with_mv3,
-                                        self.state.extension_stats.failed,
-                                        self.state.extension_stats.avg_score
-                                    ),
-                                    timestamp: chrono::Utc::now(),
-                                });
-                                return;
-                            }
-
-                            // Fallback: Parse as plain extension array
-                            match serde_json::from_value::<Vec<Extension>>(result.clone()) {
-                                Ok(extensions) => {
-                                    let count = extensions.len();
-                                    self.state.extensions = extensions;
+                            match serde_json::from_value::<ExtensionsWithStats>(result.clone()) {
+                                Ok(data) => {
+                                    let count = data.extensions.len();
+                                    self.state.extensions = data.extensions;
+                                    self.state.extension_stats = data.stats;
 
                                     // Add a message about loaded extensions
                                     if self.state.message_scroll_offset > 0 {
@@ -424,23 +440,36 @@ impl App {
 
                                     self.state.messages.push(Message {
                                         msg_type: MessageType::System,
-                                        content: format!(
-                                            "✓ Loaded {} extensions from database",
-                                            count
+                                        content: format!("✓ Loaded {} extensions (MV3: {}, Failed: {}, Avg Score: {:.2})", 
+                                            count, 
+                                            self.state.extension_stats.with_mv3,
+                                            self.state.extension_stats.failed,
+                                            self.state.extension_stats.avg_score
                                         ),
                                         timestamp: chrono::Utc::now(),
                                     });
                                     return;
                                 }
                                 Err(e) => {
-                                    // Log parse error
+                                    // Log detailed parse error with JSON snippet
                                     if self.state.message_scroll_offset > 0 {
                                         self.state.message_scroll_offset += 1;
                                     }
 
+                                    let json_preview = serde_json::to_string_pretty(result)
+                                        .unwrap_or_else(|_| "<invalid json>".to_string());
+                                    let preview = if json_preview.len() > 200 {
+                                        format!("{}...", &json_preview[..200])
+                                    } else {
+                                        json_preview
+                                    };
+
                                     self.state.messages.push(Message {
                                         msg_type: MessageType::System,
-                                        content: format!("Error parsing extensions: {}", e),
+                                        content: format!(
+                                            "Error parsing extensions: {} | Data preview: {}",
+                                            e, preview
+                                        ),
                                         timestamp: chrono::Utc::now(),
                                     });
                                     return;

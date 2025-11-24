@@ -1,6 +1,6 @@
 use anyhow::Result;
-use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{
+    crossterm::event::{KeyCode, KeyEvent},
     layout::{Alignment, Constraint, Direction, Layout},
     style::{Modifier, Style},
     text::{Line, Span},
@@ -132,7 +132,8 @@ impl super::Tab for MigratorTab {
             scroll_indicator,
         ]);
 
-        let footer_widget = Paragraph::new(footer).style(Style::default().add_modifier(Modifier::DIM));
+        let footer_widget =
+            Paragraph::new(footer).style(Style::default().add_modifier(Modifier::DIM));
 
         f.render_widget(footer_widget, chunks[1]);
 
@@ -162,10 +163,7 @@ impl super::Tab for MigratorTab {
             f.render_widget(block, popup_area);
 
             // Single line with instruction text and input field combined
-            let text = format!(
-                "{}",
-                textarea.lines().join("")
-            );
+            let text = format!("{}", textarea.lines().join(""));
             let paragraph =
                 Paragraph::new(Line::from(Span::raw(text))).alignment(Alignment::Center);
             f.render_widget(paragraph, inner_area);

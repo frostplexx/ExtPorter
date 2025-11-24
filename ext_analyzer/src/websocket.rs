@@ -68,7 +68,7 @@ async fn connect_and_run(
             msg = read.next() => {
                 match msg {
                     Some(Ok(Message::Text(text))) => {
-                        let _ = tx.send(AppEvent::WebSocketMessage(text));
+                        let _ = tx.send(AppEvent::WebSocketMessage(text.to_string()));
                     }
                     Some(Ok(Message::Close(_))) => {
                         break;
@@ -86,7 +86,7 @@ async fn connect_and_run(
             msg = send_rx.recv() => {
                 match msg {
                     Some(text) => {
-                        if let Err(e) = write.send(Message::Text(text)).await {
+                        if let Err(e) = write.send(Message::Text(text.into())).await {
                             let _ = tx.send(AppEvent::WebSocketError(format!("Failed to send message: {}", e)));
                             break;
                         }
