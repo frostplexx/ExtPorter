@@ -4,7 +4,7 @@ use std::sync::Arc;
 use tokio::sync::{mpsc, Mutex};
 use tokio_tungstenite::{connect_async, tungstenite::Message};
 
-use crate::app::AppEvent;
+use crate::types::AppEvent;
 
 fn get_ws_url() -> String {
     std::env::var("WS_URL").unwrap_or_else(|_| "ws://localhost:8080".to_string())

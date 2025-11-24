@@ -15,29 +15,12 @@ use crate::{
         Tab,
     },
     theme::ColorScheme,
+    types::{
+        AppEvent, ConnectionState, Extension, ExtensionStats, ExtensionsWithStats, Message,
+        MessageType,
+    },
     websocket::WebSocketSender,
 };
-
-#[derive(Debug, Clone)]
-pub enum AppEvent {
-    Input(KeyEvent),
-    WebSocketConnecting,
-    WebSocketConnected,
-    WebSocketDisconnected,
-    WebSocketMessage(String),
-    WebSocketError(String),
-    SendWebSocketMessage(String),
-    ExtensionsLoaded(Vec<Extension>),
-    SwitchToTab(usize),
-    Quit,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum ConnectionState {
-    Disconnected,
-    Connecting,
-    Connected,
-}
 
 pub struct AppState {
     pub ws_connection_state: ConnectionState,
@@ -49,172 +32,8 @@ pub struct AppState {
     pub extension_stats: ExtensionStats,
     pub message_scroll_offset: usize,
     pub connection_state_changed_at: Option<std::time::Instant>,
-    pub last_message_time: Option<std::time::Instant>,
-    pub recent_message_count: usize,
-    pub burst_window_start: Option<std::time::Instant>,
     pub selected_extension_id: Option<String>,
     pub theme: ColorScheme,
-}
-
-#[derive(Debug, Clone)]
-pub struct Message {
-    pub msg_type: MessageType,
-    pub content: String,
-    pub timestamp: chrono::DateTime<chrono::Utc>,
-}
-
-#[derive(Debug, Clone)]
-pub enum MessageType {
-    Sent,
-    Received,
-    System,
-}
-
-#[derive(Debug, Clone, serde::Deserialize, serde::Serialize, Default)]
-pub struct CwsData {
-    #[serde(default)]
-    pub description: String,
-    #[serde(default)]
-    pub images: CwsImages,
-    #[serde(default)]
-    pub details: CwsDetails,
-}
-
-#[derive(Debug, Clone, serde::Deserialize, serde::Serialize, Default)]
-pub struct CwsDetails {
-    #[serde(default)]
-    pub version: Option<String>,
-
-    #[serde(default)]
-    pub updated: Option<String>,
-
-    #[serde(default)]
-    pub size: Option<String>,
-
-    #[serde(default)]
-    pub languages: Vec<String>,
-
-    #[serde(default)]
-    pub user_count: Option<String>,
-
-    #[serde(default)]
-    pub rating: Option<String>,
-
-    #[serde(default)]
-    pub rating_count: Option<String>,
-
-    #[serde(default)]
-    pub website: Option<String>,
-
-    #[serde(default)]
-    pub developer: Option<String>,
-}
-
-#[derive(Debug, Clone, serde::Deserialize, serde::Serialize, Default)]
-pub struct CwsImages {
-    #[serde(default)]
-    pub logo: Option<String>,
-    #[serde(default)]
-    pub screenshots: Vec<String>,
-    #[serde(default)]
-    pub video_thumbnails: Vec<String>,
-    #[serde(default)]
-    pub video_embeds: Vec<String>,
-}
-
-#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
-pub struct EventListener {
-    pub api: String,
-    pub file: String,
-    #[serde(default)]
-    pub line: Option<u32>,
-    #[serde(default)]
-    pub code_snippet: Option<String>,
-}
-
-#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
-pub struct Extension {
-    // MongoDB internal ID (ignored during serialization)
-    #[serde(skip_serializing, default)]
-    pub _id: Option<serde_json::Value>,
-
-    // Custom extension ID (may be missing in older documents)
-    #[serde(default)]
-    pub id: Option<String>,
-    pub name: String,
-
-    #[serde(default)]
-    pub manifest_v2_path: Option<String>,
-    #[serde(default)]
-    pub version: Option<String>,
-    #[serde(default)]
-    pub mv2_extension_id: Option<String>,
-    #[serde(default)]
-    pub mv3_extension_id: Option<String>,
-    #[serde(default)]
-    pub tags: Vec<String>,
-    #[serde(default, rename = "interestingness_score")]
-    pub interestingness: Option<f64>,
-    #[serde(default)]
-    pub migration_time_seconds: Option<f64>,
-    #[serde(default)]
-    pub input_path: Option<String>,
-    #[serde(default)]
-    pub manifest_v3_path: Option<String>,
-    #[serde(default)]
-    pub cws_info: Option<CwsData>,
-    #[serde(default)]
-    pub event_listeners: Vec<EventListener>,
-
-    // Additional fields from MongoDB that we don't need to display
-    #[serde(skip_serializing, default)]
-    pub manifest: Option<serde_json::Value>,
-    #[serde(skip_serializing, default)]
-    pub files: Option<serde_json::Value>,
-    #[serde(skip_serializing, default)]
-    pub isNewTabExtension: Option<bool>,
-    #[serde(skip_serializing, default)]
-    pub interestingness_breakdown: Option<serde_json::Value>,
-    #[serde(skip_serializing, default)]
-    pub fakeium_validation: Option<serde_json::Value>,
-}
-
-impl Extension {
-    /// Get the extension ID, using _id as fallback if id is not set
-    pub fn get_id(&self) -> String {
-        if let Some(ref id) = self.id {
-            return id.clone();
-        }
-
-        // Fallback to _id if available
-        if let Some(ref id_value) = self._id {
-            if let Some(id_str) = id_value.as_str() {
-                return id_str.to_string();
-            }
-            // If _id is an ObjectId object like {"$oid": "..."}
-            if let Some(oid) = id_value.get("$oid").and_then(|v| v.as_str()) {
-                return oid.to_string();
-            }
-        }
-
-        // Last resort: use name
-        self.name.clone()
-    }
-}
-
-#[derive(Debug, Clone, serde::Deserialize, serde::Serialize, Default)]
-pub struct ExtensionStats {
-    pub total: usize,
-    pub with_mv3: usize,
-    pub with_mv2_only: usize,
-    pub failed: usize,
-    pub avg_score: f64,
-}
-
-#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
-pub struct ExtensionsWithStats {
-    pub extensions: Vec<Extension>,
-    pub stats: ExtensionStats,
 }
 
 pub struct App {
@@ -222,11 +41,10 @@ pub struct App {
     tabs: Vec<Box<dyn Tab>>,
     state: AppState,
     tx: mpsc::UnboundedSender<AppEvent>,
-    ws_sender: WebSocketSender,
 }
 
 impl App {
-    pub fn new(tx: mpsc::UnboundedSender<AppEvent>, ws_sender: WebSocketSender) -> Self {
+    pub fn new(tx: mpsc::UnboundedSender<AppEvent>, _ws_sender: WebSocketSender) -> Self {
         let state = AppState {
             ws_connection_state: ConnectionState::Connecting,
             ws_connected: false,
@@ -237,9 +55,6 @@ impl App {
             extension_stats: ExtensionStats::default(),
             message_scroll_offset: 0,
             connection_state_changed_at: Some(std::time::Instant::now()),
-            last_message_time: None,
-            recent_message_count: 0,
-            burst_window_start: None,
             selected_extension_id: None,
             theme: ColorScheme::default(),
         };
@@ -256,7 +71,6 @@ impl App {
             tabs,
             state,
             tx,
-            ws_sender,
         }
     }
 
