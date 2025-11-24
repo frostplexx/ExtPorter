@@ -1,6 +1,5 @@
 use anyhow::Result;
-use crossterm::event::KeyEvent;
-use ratatui::Frame;
+use ratatui::{crossterm::event::KeyEvent, Frame};
 use tokio::sync::mpsc;
 
 use crate::app::{AppEvent, AppState};

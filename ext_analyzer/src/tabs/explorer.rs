@@ -1,6 +1,6 @@
 use anyhow::Result;
-use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{
+    crossterm::event::{KeyCode, KeyEvent},
     layout::{Constraint, Direction, Layout},
     style::{Modifier, Style},
     text::{Line, Span},
@@ -78,7 +78,7 @@ impl super::Tab for ExplorerTab {
                         .to_lowercase()
                         .contains(&self.search_query.to_lowercase())
                     || ext
-                        .id
+                        .get_id()
                         .to_lowercase()
                         .contains(&self.search_query.to_lowercase())
                     || ext
@@ -192,7 +192,7 @@ impl super::Tab for ExplorerTab {
                                 .to_lowercase()
                                 .contains(&self.search_query.to_lowercase())
                             || ext
-                                .id
+                                .get_id()
                                 .to_lowercase()
                                 .contains(&self.search_query.to_lowercase())
                             || ext.tags.iter().any(|t| {
@@ -202,7 +202,7 @@ impl super::Tab for ExplorerTab {
                     .collect();
 
                 if let Some(ext) = filtered_extensions.get(self.selected_index) {
-                    state.selected_extension_id = Some(ext.id.clone());
+                    state.selected_extension_id = Some(ext.get_id());
                     // Switch to Analyzer tab (tab index 2)
                     let _ = tx.send(AppEvent::SwitchToTab(2));
                 }
@@ -234,15 +234,13 @@ impl ExplorerTab {
         let stats = Paragraph::new(Line::from(vec![
             Span::styled("Total:", Style::default().fg(state.theme.stats_total)),
             Span::raw(format!(" {} ", state.extension_stats.total)),
-            Span::styled("• MV3:", Style::default().fg(state.theme.stats_mv3)),
+            Span::styled("• Succeeded:", Style::default().fg(state.theme.stats_mv3)),
             Span::raw(format!(" {} ", state.extension_stats.with_mv3)),
             Span::styled(
-                "• MV2 Only:",
+                "• Failed:",
                 Style::default().fg(state.theme.stats_mv2_only),
             ),
             Span::raw(format!(" {} ", state.extension_stats.with_mv2_only)),
-            Span::styled("• Failed:", Style::default().fg(state.theme.stats_failed)),
-            Span::raw(format!(" {} ", state.extension_stats.failed)),
             Span::styled(
                 "• Avg Score:",
                 Style::default().fg(state.theme.stats_avg_score),
@@ -310,7 +308,7 @@ impl ExplorerTab {
                         .to_lowercase()
                         .contains(&self.search_query.to_lowercase())
                     || ext
-                        .id
+                        .get_id()
                         .to_lowercase()
                         .contains(&self.search_query.to_lowercase())
                     || ext
@@ -442,7 +440,7 @@ impl ExplorerTab {
                             .fg(state.theme.detail_label)
                             .add_modifier(Modifier::BOLD),
                     ),
-                    Span::raw(&ext.id),
+                    Span::raw(ext.get_id()),
                 ]),
                 Line::from(vec![
                     Span::styled(
@@ -498,7 +496,7 @@ impl ExplorerTab {
 
             // Add analyzer status indicator
             if let Some(ref selected_id) = state.selected_extension_id {
-                if selected_id == &ext.id {
+                if selected_id == &ext.get_id() {
                     lines.push(Line::from(""));
                     lines.push(Line::from(vec![
                         Span::styled(
