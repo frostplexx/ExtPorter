@@ -7,7 +7,7 @@ use ratatui::{
     widgets::{Block, Borders, Tabs},
     Frame,
 };
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use tokio::sync::mpsc;
 
 use crate::{
@@ -37,6 +37,7 @@ pub struct AppState {
     pub theme: ColorScheme,
     pub reports: Vec<Report>,
     pub llm_description_cache: HashMap<String, String>,
+    pub llm_generating: HashSet<String>, // Track which extensions are currently generating
 }
 
 pub struct App {
@@ -62,6 +63,7 @@ impl App {
             theme: ColorScheme::default(),
             reports: Vec::new(),
             llm_description_cache: HashMap::new(),
+            llm_generating: HashSet::new(),
         };
 
         let tabs: Vec<Box<dyn Tab>> = vec![
@@ -178,20 +180,27 @@ impl App {
 
     pub fn handle_input(&mut self, key: KeyEvent) -> Result<()> {
         // Tab navigation with numbers 1-5
-        match key.code {
-            KeyCode::Char('1') => self.active_tab = 0,
-            KeyCode::Char('2') => self.active_tab = 1,
-            KeyCode::Char('3') => self.active_tab = 2,
-            KeyCode::Char('4') => self.active_tab = 3,
-            KeyCode::Left if self.active_tab > 0 => self.active_tab -= 1,
-            KeyCode::Right if self.active_tab < self.tabs.len() - 1 => self.active_tab += 1,
-            _ => {
-                // Pass input to active tab
-                if let Some(tab) = self.tabs.get_mut(self.active_tab) {
-                    tab.handle_input(key, &mut self.state, self.tx.clone())?;
-                }
+        let new_tab = match key.code {
+            KeyCode::Char('1') => Some(0),
+            KeyCode::Char('2') => Some(1),
+            KeyCode::Char('3') => Some(2),
+            KeyCode::Char('4') => Some(3),
+            KeyCode::Left if self.active_tab > 0 => Some(self.active_tab - 1),
+            KeyCode::Right if self.active_tab < self.tabs.len() - 1 => Some(self.active_tab + 1),
+            _ => None,
+        };
+
+        if let Some(tab_index) = new_tab {
+            if tab_index != self.active_tab {
+                self.active_tab = tab_index;
+            }
+        } else {
+            // Pass input to active tab
+            if let Some(tab) = self.tabs.get_mut(self.active_tab) {
+                tab.handle_input(key, &mut self.state, self.tx.clone())?;
             }
         }
+
         Ok(())
     }
 
@@ -213,11 +222,10 @@ impl App {
         self.state.ws_connected = true;
         self.state.connection_state_changed_at = Some(std::time::Instant::now());
 
-        // If user is scrolled up, increment scroll offset to maintain view position
+        // Add message
         if self.state.message_scroll_offset > 0 {
             self.state.message_scroll_offset += 1;
         }
-
         self.state.messages.push(Message {
             msg_type: MessageType::System,
             content: "Connected to Migration Server".to_string(),
@@ -594,14 +602,34 @@ impl App {
                 timestamp: chrono::Utc::now(),
             });
 
-            // Request LLM description for this extension
-            let _ = self.tx.send(AppEvent::SendWebSocketMessage(format!(
-                "GENERATE_DESCRIPTION:{}",
-                ext_id
-            )));
+            // Check if we have a cached description
+            if let Some(cached_desc) = self.state.llm_description_cache.get(&ext_id).cloned() {
+                // Apply cached description to the extension
+                if let Some(ext) = self
+                    .state
+                    .extensions
+                    .iter_mut()
+                    .find(|e| e.get_id() == ext_id)
+                {
+                    ext.llm_description = Some(cached_desc);
+                    ext.showing_llm_description = true;
+                }
 
-            // Prefetch description for the next+1 extension
-            self.prefetch_next_extension_description(&ext_id);
+                // Still prefetch the next extension
+                self.prefetch_next_extension_description(&ext_id);
+            } else if !self.state.llm_generating.contains(&ext_id) {
+                // Only request if not already generating
+                self.state.llm_generating.insert(ext_id.clone());
+
+                // Request LLM description for this extension
+                let _ = self.tx.send(AppEvent::SendWebSocketMessage(format!(
+                    "GENERATE_DESCRIPTION:{}",
+                    ext_id
+                )));
+
+                // Prefetch description for the next+1 extension
+                self.prefetch_next_extension_description(&ext_id);
+            }
         } else {
             if self.state.message_scroll_offset > 0 {
                 self.state.message_scroll_offset += 1;
@@ -628,14 +656,34 @@ impl App {
                 timestamp: chrono::Utc::now(),
             });
 
-            // Request LLM description for this extension
-            let _ = self.tx.send(AppEvent::SendWebSocketMessage(format!(
-                "GENERATE_DESCRIPTION:{}",
-                ext_id
-            )));
+            // Check if we have a cached description
+            if let Some(cached_desc) = self.state.llm_description_cache.get(&ext_id).cloned() {
+                // Apply cached description to the extension
+                if let Some(ext) = self
+                    .state
+                    .extensions
+                    .iter_mut()
+                    .find(|e| e.get_id() == ext_id)
+                {
+                    ext.llm_description = Some(cached_desc);
+                    ext.showing_llm_description = true;
+                }
 
-            // Prefetch description for the next+1 extension
-            self.prefetch_next_extension_description(&ext_id);
+                // Still prefetch the next extension
+                self.prefetch_next_extension_description(&ext_id);
+            } else if !self.state.llm_generating.contains(&ext_id) {
+                // Only request if not already generating
+                self.state.llm_generating.insert(ext_id.clone());
+
+                // Request LLM description for this extension
+                let _ = self.tx.send(AppEvent::SendWebSocketMessage(format!(
+                    "GENERATE_DESCRIPTION:{}",
+                    ext_id
+                )));
+
+                // Prefetch description for the next+1 extension
+                self.prefetch_next_extension_description(&ext_id);
+            }
         } else {
             if self.state.message_scroll_offset > 0 {
                 self.state.message_scroll_offset += 1;
@@ -662,19 +710,39 @@ impl App {
                 timestamp: chrono::Utc::now(),
             });
 
-            // Request LLM description for this extension
-            let _ = self.tx.send(AppEvent::SendWebSocketMessage(format!(
-                "GENERATE_DESCRIPTION:{}",
-                ext_id
-            )));
+            // Check if we have a cached description
+            if let Some(cached_desc) = self.state.llm_description_cache.get(&ext_id).cloned() {
+                // Apply cached description to the extension
+                if let Some(ext) = self
+                    .state
+                    .extensions
+                    .iter_mut()
+                    .find(|e| e.get_id() == ext_id)
+                {
+                    ext.llm_description = Some(cached_desc);
+                    ext.showing_llm_description = true;
+                }
 
-            // Prefetch description for the next+1 extension
-            self.prefetch_next_extension_description(&ext_id);
+                // Still prefetch the next extension
+                self.prefetch_next_extension_description(&ext_id);
+            } else if !self.state.llm_generating.contains(&ext_id) {
+                // Only request if not already generating
+                self.state.llm_generating.insert(ext_id.clone());
+
+                // Request LLM description for this extension
+                let _ = self.tx.send(AppEvent::SendWebSocketMessage(format!(
+                    "GENERATE_DESCRIPTION:{}",
+                    ext_id
+                )));
+
+                // Prefetch description for the next+1 extension
+                self.prefetch_next_extension_description(&ext_id);
+            }
         }
     }
 
     /// Prefetch LLM description for the extension after the given ID
-    fn prefetch_next_extension_description(&self, current_id: &str) {
+    fn prefetch_next_extension_description(&mut self, current_id: &str) {
         // Find current extension's index
         if let Some(current_idx) = self
             .state
@@ -690,12 +758,19 @@ impl App {
                     .iter()
                     .any(|r| r.extension_id == ext.get_id() && r.tested);
                 if !is_tested && ext.mv3_extension_id.is_some() {
-                    // Check if we already have this description cached
-                    if !self.state.llm_description_cache.contains_key(&ext.get_id()) {
-                        // Prefetch it
+                    let ext_id = ext.get_id();
+
+                    // Check if we already have this description (in cache OR in extension object OR currently generating)
+                    let has_description = self.state.llm_description_cache.contains_key(&ext_id)
+                        || ext.llm_description.is_some()
+                        || self.state.llm_generating.contains(&ext_id);
+
+                    if !has_description {
+                        // Mark as generating and prefetch it
+                        self.state.llm_generating.insert(ext_id.clone());
                         let _ = self.tx.send(AppEvent::SendWebSocketMessage(format!(
                             "GENERATE_DESCRIPTION:{}",
-                            ext.get_id()
+                            ext_id
                         )));
                     }
                     break;
@@ -706,29 +781,39 @@ impl App {
 
     /// Handle receiving an LLM description
     pub fn handle_llm_description_received(&mut self, ext_id: String, description: String) {
+        // Remove from generating set
+        self.state.llm_generating.remove(&ext_id);
+
         // Store in cache
         self.state
             .llm_description_cache
             .insert(ext_id.clone(), description.clone());
 
-        // If this is the currently selected extension, update it
-        if let Some(selected_id) = &self.state.selected_extension_id {
-            if selected_id == &ext_id {
-                if let Some(ext) = self
-                    .state
-                    .extensions
-                    .iter_mut()
-                    .find(|e| e.get_id() == ext_id)
-                {
-                    ext.llm_description = Some(description);
-                    ext.showing_llm_description = true; // Show LLM by default
-                }
+        // Always update the extension object, regardless of whether it's currently selected
+        // This ensures prefetched descriptions are available when we navigate to them
+        if let Some(ext) = self
+            .state
+            .extensions
+            .iter_mut()
+            .find(|e| e.get_id() == ext_id)
+        {
+            ext.llm_description = Some(description);
+            // Only show LLM by default if this is the currently selected extension
+            if self.state.selected_extension_id.as_ref() == Some(&ext_id) {
+                ext.showing_llm_description = true;
             }
         }
+
+        // After receiving any description, prefetch the next one
+        // This creates a continuous chain of generation
+        self.prefetch_next_extension_description(&ext_id);
     }
 
     /// Handle LLM description generation error
     pub fn handle_llm_description_error(&mut self, ext_id: String, error: String) {
+        // Remove from generating set on error
+        self.state.llm_generating.remove(&ext_id);
+
         // Only show error message if this is the currently selected extension
         if let Some(selected_id) = &self.state.selected_extension_id {
             if selected_id == &ext_id {

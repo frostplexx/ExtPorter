@@ -196,25 +196,52 @@ fn render_description_panel(
     selected_ext: Option<&crate::types::Extension>,
 ) {
     let (description, title, toggle_hint) = if let Some(ext) = selected_ext {
+        let ext_id = ext.get_id();
+
+        // Check if currently generating
+        let generating_indicator = if state.llm_generating.contains(&ext_id) {
+            " ⏳ Generating..."
+        } else {
+            ""
+        };
+
         // Check if we should show LLM description
         if ext.showing_llm_description && ext.llm_description.is_some() {
             let desc = ext.llm_description.as_ref().unwrap().clone();
             let hint = " [D] Show CWS Description";
-            (desc, "Description (LLM Generated)", hint)
+            (
+                desc,
+                format!("Description (LLM Generated){}", generating_indicator),
+                hint,
+            )
         } else if let Some(ref cws) = ext.cws_info {
             let desc = cws.description.clone();
             // Show toggle hint only if LLM description is available
             let hint = if ext.llm_description.is_some() {
                 " [D] Show LLM Description"
+            } else if state.llm_generating.contains(&ext_id) {
+                "" // No toggle while generating
             } else {
                 ""
             };
-            (desc, "Description (Chrome Web Store)", hint)
+            (
+                desc,
+                format!("Description (Chrome Web Store){}", generating_indicator),
+                hint,
+            )
         } else {
-            ("No description available".to_string(), "Description", "")
+            (
+                "No description available".to_string(),
+                format!("Description{}", generating_indicator),
+                "",
+            )
         }
     } else {
-        ("No extension selected".to_string(), "Description", "")
+        (
+            "No extension selected".to_string(),
+            "Description".to_string(),
+            "",
+        )
     };
 
     let title_with_hint = format!("{}{}", title, toggle_hint);
@@ -244,62 +271,106 @@ fn render_browser_cards(
         .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
         .split(*area);
 
-    // V2 Card
+    // V2 Card - Enhanced with purple theme
+    let v2_status_text = if mv2_browser_running {
+        "● Running"
+    } else {
+        "○ Stopped"
+    };
+    let v2_status_color = if mv2_browser_running {
+        state.theme.status_running
+    } else {
+        state.theme.status_stopped
+    };
+
+    let v2_border_style = if mv2_browser_running {
+        Style::default()
+            .fg(state.theme.analyzer_v2_border)
+            .add_modifier(Modifier::BOLD)
+    } else {
+        Style::default().fg(state.theme.analyzer_status_border)
+    };
+
     let v2_lines = vec![
         Line::from(Span::styled(
-            if mv2_browser_running {
-                "● Running"
-            } else {
-                "○ Stopped"
-            },
-            Style::default().fg(if mv2_browser_running {
-                state.theme.status_running
-            } else {
-                state.theme.status_stopped
-            }),
+            v2_status_text,
+            Style::default()
+                .fg(v2_status_color)
+                .add_modifier(Modifier::BOLD),
         )),
         Line::from(Span::raw("")),
-        Line::from(Span::styled(
-            format!("Events: {}", event_count),
-            Style::default().fg(state.theme.analyzer_event_count),
-        )),
+        Line::from(vec![
+            Span::styled("Events: ", Style::default().fg(state.theme.text_muted)),
+            Span::styled(
+                format!("{}", event_count),
+                Style::default()
+                    .fg(state.theme.analyzer_event_count)
+                    .add_modifier(Modifier::BOLD),
+            ),
+        ]),
     ];
 
     let v2_panel = Paragraph::new(v2_lines).block(
         Block::default()
             .borders(Borders::ALL)
-            .title("V2")
-            .border_style(Style::default().fg(state.theme.analyzer_v2_border)),
+            .title(Line::from(vec![
+                Span::raw(" "),
+                Span::styled("MV2", Style::default().add_modifier(Modifier::BOLD)),
+                Span::raw(" "),
+            ]))
+            .border_style(v2_border_style),
     );
 
     f.render_widget(v2_panel, left_chunks[0]);
 
-    // V3 Card
+    // V3 Card - Enhanced with purple theme
+    let v3_status_text = if mv3_browser_running {
+        "● Running"
+    } else {
+        "○ Stopped"
+    };
+    let v3_status_color = if mv3_browser_running {
+        state.theme.status_running
+    } else {
+        state.theme.status_stopped
+    };
+
+    let v3_border_style = if mv3_browser_running {
+        Style::default()
+            .fg(state.theme.analyzer_v3_border)
+            .add_modifier(Modifier::BOLD)
+    } else {
+        Style::default().fg(state.theme.analyzer_status_border)
+    };
+
     let v3_lines = vec![
         Line::from(Span::styled(
-            if mv3_browser_running {
-                "● Running"
-            } else {
-                "○ Stopped"
-            },
-            Style::default().fg(if mv3_browser_running {
-                state.theme.status_running
-            } else {
-                state.theme.status_stopped
-            }),
+            v3_status_text,
+            Style::default()
+                .fg(v3_status_color)
+                .add_modifier(Modifier::BOLD),
         )),
         Line::from(Span::raw("")),
-        Line::from(Span::styled(
-            format!("Events: {}", event_count),
-            Style::default().fg(state.theme.analyzer_event_count),
-        )),
+        Line::from(vec![
+            Span::styled("Events: ", Style::default().fg(state.theme.text_muted)),
+            Span::styled(
+                format!("{}", event_count),
+                Style::default()
+                    .fg(state.theme.analyzer_event_count)
+                    .add_modifier(Modifier::BOLD),
+            ),
+        ]),
     ];
 
     let v3_panel = Paragraph::new(v3_lines).block(
         Block::default()
             .borders(Borders::ALL)
-            .title("V3")
-            .border_style(Style::default().fg(state.theme.analyzer_v3_border)),
+            .title(Line::from(vec![
+                Span::raw(" "),
+                Span::styled("MV3", Style::default().add_modifier(Modifier::BOLD)),
+                Span::raw(" "),
+            ]))
+            .border_style(v3_border_style),
     );
 
     f.render_widget(v3_panel, left_chunks[1]);
