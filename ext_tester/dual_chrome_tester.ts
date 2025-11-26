@@ -360,4 +360,150 @@ export class DualChromeTester {
     isMV3Ready(): boolean {
         return this.mv3Browser !== undefined;
     }
+
+    /**
+     * Get installed extension IDs from chrome://extensions page
+     * Returns { mv2ExtensionId, mv3ExtensionId }
+     */
+    async getExtensionIds(): Promise<{ mv2Id: string | null; mv3Id: string | null }> {
+        const result = { mv2Id: null as string | null, mv3Id: null as string | null };
+
+        try {
+            // Get MV2 extension ID
+            if (this.mv2Browser) {
+                const page = await this.mv2Browser.newPage();
+                await page.goto('chrome://extensions');
+                await page.waitForSelector('extensions-manager', { timeout: 5000 });
+
+                // Extract extension ID from the page
+                const mv2Id = await page.evaluate(() => {
+                    const manager = document.querySelector('extensions-manager');
+                    if (!manager) return null;
+                    const shadowRoot = manager.shadowRoot;
+                    if (!shadowRoot) return null;
+                    const itemsList = shadowRoot.querySelector('extensions-item-list');
+                    if (!itemsList) return null;
+                    const itemsRoot = itemsList.shadowRoot;
+                    if (!itemsRoot) return null;
+                    const items = itemsRoot.querySelectorAll('extensions-item');
+                    if (items.length === 0) return null;
+                    // Get the first extension's ID
+                    const firstItem = items[0];
+                    return firstItem.getAttribute('id') || null;
+                });
+
+                result.mv2Id = mv2Id;
+                await page.close();
+            }
+
+            // Get MV3 extension ID
+            if (this.mv3Browser) {
+                const page = await this.mv3Browser.newPage();
+                await page.goto('chrome://extensions');
+                await page.waitForSelector('extensions-manager', { timeout: 5000 });
+
+                const mv3Id = await page.evaluate(() => {
+                    const manager = document.querySelector('extensions-manager');
+                    if (!manager) return null;
+                    const shadowRoot = manager.shadowRoot;
+                    if (!shadowRoot) return null;
+                    const itemsList = shadowRoot.querySelector('extensions-item-list');
+                    if (!itemsList) return null;
+                    const itemsRoot = itemsList.shadowRoot;
+                    if (!itemsRoot) return null;
+                    const items = itemsRoot.querySelectorAll('extensions-item');
+                    if (items.length === 0) return null;
+                    const firstItem = items[0];
+                    return firstItem.getAttribute('id') || null;
+                });
+
+                result.mv3Id = mv3Id;
+                await page.close();
+            }
+        } catch (error) {
+            logger.warn(this.current_extension, 'Failed to extract extension IDs', { error });
+        }
+
+        return result;
+    }
+
+    /**
+     * Open extension popup pages in both browsers
+     * Reads manifest files to find popup HTML and navigates to chrome-extension://ID/popup.html
+     */
+    async openPopupPages(extension: Extension): Promise<void> {
+        if (!this.mv2Browser || !this.mv3Browser) {
+            logger.warn(extension, 'Both browsers must be initialized');
+            return;
+        }
+
+        try {
+            const fs = await import('fs');
+            const path = await import('path');
+
+            // Get extension directories
+            const mv2Dir = extension.manifest_v2_path.endsWith('manifest.json')
+                ? extension.manifest_v2_path.replace(/\/manifest\.json$/, '')
+                : extension.manifest_v2_path;
+            const mv3Dir = extension.manifest_v3_path!.endsWith('manifest.json')
+                ? extension.manifest_v3_path!.replace(/\/manifest\.json$/, '')
+                : extension.manifest_v3_path!;
+
+            // Read manifests
+            const mv2Manifest = JSON.parse(
+                fs.readFileSync(path.join(mv2Dir, 'manifest.json'), 'utf8')
+            );
+            const mv3Manifest = JSON.parse(
+                fs.readFileSync(path.join(mv3Dir, 'manifest.json'), 'utf8')
+            );
+
+            // Get extension IDs from Chrome
+            const { mv2Id, mv3Id } = await this.getExtensionIds();
+
+            if (!mv2Id || !mv3Id) {
+                logger.warn(extension, 'Could not extract extension IDs from Chrome');
+                return;
+            }
+
+            // Extract popup paths from manifests
+            const mv2PopupPath =
+                mv2Manifest.browser_action?.default_popup ||
+                mv2Manifest.page_action?.default_popup ||
+                mv2Manifest.action?.default_popup;
+
+            const mv3PopupPath =
+                mv3Manifest.action?.default_popup ||
+                mv3Manifest.browser_action?.default_popup ||
+                mv3Manifest.page_action?.default_popup;
+
+            // Open popups
+            if (mv2PopupPath && mv2Id) {
+                const mv2PopupUrl = `chrome-extension://${mv2Id}/${mv2PopupPath.replace(/^\//, '')}`;
+                logger.debug(extension, `Opening MV2 popup: ${mv2PopupUrl}`);
+                await this.navigateMV2(mv2PopupUrl);
+            } else if (mv2Manifest.options_page || mv2Manifest.options_ui?.page) {
+                // Fallback to options page if no popup
+                const optionsPath = mv2Manifest.options_page || mv2Manifest.options_ui?.page;
+                const mv2OptionsUrl = `chrome-extension://${mv2Id}/${optionsPath.replace(/^\//, '')}`;
+                logger.debug(extension, `Opening MV2 options page: ${mv2OptionsUrl}`);
+                await this.navigateMV2(mv2OptionsUrl);
+            }
+
+            if (mv3PopupPath && mv3Id) {
+                const mv3PopupUrl = `chrome-extension://${mv3Id}/${mv3PopupPath.replace(/^\//, '')}`;
+                logger.debug(extension, `Opening MV3 popup: ${mv3PopupUrl}`);
+                await this.navigateMV3(mv3PopupUrl);
+            } else if (mv3Manifest.options_page || mv3Manifest.options_ui?.page) {
+                // Fallback to options page if no popup
+                const optionsPath = mv3Manifest.options_page || mv3Manifest.options_ui?.page;
+                const mv3OptionsUrl = `chrome-extension://${mv3Id}/${optionsPath.replace(/^\//, '')}`;
+                logger.debug(extension, `Opening MV3 options page: ${mv3OptionsUrl}`);
+                await this.navigateMV3(mv3OptionsUrl);
+            }
+
+            logger.debug(extension, 'Popup pages opened successfully');
+        } catch (error) {
+            logger.warn(extension, 'Failed to open popup pages', { error });
+        }
+    }
 }

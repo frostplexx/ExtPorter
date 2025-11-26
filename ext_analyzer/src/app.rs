@@ -17,7 +17,7 @@ use crate::{
     theme::ColorScheme,
     types::{
         AppEvent, ConnectionState, Extension, ExtensionStats, ExtensionsWithStats, Message,
-        MessageType,
+        MessageType, Report,
     },
     websocket::WebSocketSender,
 };
@@ -34,6 +34,7 @@ pub struct AppState {
     pub connection_state_changed_at: Option<std::time::Instant>,
     pub selected_extension_id: Option<String>,
     pub theme: ColorScheme,
+    pub reports: Vec<Report>,
 }
 
 pub struct App {
@@ -57,6 +58,7 @@ impl App {
             connection_state_changed_at: Some(std::time::Instant::now()),
             selected_extension_id: None,
             theme: ColorScheme::default(),
+            reports: Vec::new(),
         };
 
         let tabs: Vec<Box<dyn Tab>> = vec![
@@ -262,6 +264,13 @@ impl App {
                                         ),
                                         timestamp: chrono::Utc::now(),
                                     });
+
+                                    // Fetch reports
+                                    let get_reports_msg = r#"{"type":"db_query","id":"get_reports","method":"getAllReports","params":{}}"#;
+                                    let _ = self.tx.send(AppEvent::SendWebSocketMessage(
+                                        get_reports_msg.to_string(),
+                                    ));
+
                                     return;
                                 }
                                 Err(e) => {
@@ -301,6 +310,65 @@ impl App {
                                 content: format!("Error loading extensions: {}", error),
                                 timestamp: chrono::Utc::now(),
                             });
+                            return;
+                        }
+                    }
+                    if id == "get_reports" {
+                        if let Some(result) = json_msg.get("result") {
+                            match serde_json::from_value::<Vec<Report>>(result.clone()) {
+                                Ok(reports) => {
+                                    self.state.reports = reports;
+
+                                    if self.state.message_scroll_offset > 0 {
+                                        self.state.message_scroll_offset += 1;
+                                    }
+
+                                    self.state.messages.push(Message {
+                                        msg_type: MessageType::System,
+                                        content: format!(
+                                            "✓ Loaded {} testing reports",
+                                            self.state.reports.len()
+                                        ),
+                                        timestamp: chrono::Utc::now(),
+                                    });
+
+                                    // Auto-load first untested extension if none selected
+                                    if self.state.selected_extension_id.is_none() {
+                                        let _ = self.tx.send(AppEvent::LoadFirstUntestedExtension);
+                                    }
+
+                                    return;
+                                }
+                                Err(e) => {
+                                    if self.state.message_scroll_offset > 0 {
+                                        self.state.message_scroll_offset += 1;
+                                    }
+
+                                    self.state.messages.push(Message {
+                                        msg_type: MessageType::System,
+                                        content: format!("Error parsing reports: {}", e),
+                                        timestamp: chrono::Utc::now(),
+                                    });
+                                    return;
+                                }
+                            }
+                        }
+                    }
+                    if id == "create_report" {
+                        if json_msg.get("error").is_none() {
+                            if self.state.message_scroll_offset > 0 {
+                                self.state.message_scroll_offset += 1;
+                            }
+
+                            self.state.messages.push(Message {
+                                msg_type: MessageType::System,
+                                content: "✓ Extension marked as tested".to_string(),
+                                timestamp: chrono::Utc::now(),
+                            });
+
+                            // Auto-load next untested extension
+                            let _ = self.tx.send(AppEvent::LoadNextUntestedExtension);
+
                             return;
                         }
                     }
@@ -398,6 +466,143 @@ impl App {
             self.state.messages.push(Message {
                 msg_type: MessageType::System,
                 content: format!("Server Error: {}", err),
+                timestamp: chrono::Utc::now(),
+            });
+        }
+    }
+
+    /// Find the next untested extension after the current one
+    /// Returns the extension ID if found
+    pub fn find_next_untested_extension(&self) -> Option<String> {
+        let current_id = self.state.selected_extension_id.as_ref()?;
+
+        // Find current extension's index
+        let current_idx = self
+            .state
+            .extensions
+            .iter()
+            .position(|e| &e.get_id() == current_id)?;
+
+        // Search forward from current position
+        for ext in self.state.extensions.iter().skip(current_idx + 1) {
+            let is_tested = self
+                .state
+                .reports
+                .iter()
+                .any(|r| r.extension_id == ext.get_id() && r.tested);
+            if !is_tested && ext.mv3_extension_id.is_some() {
+                return Some(ext.get_id());
+            }
+        }
+
+        None
+    }
+
+    /// Find the previous untested extension before the current one
+    /// Returns the extension ID if found
+    pub fn find_previous_untested_extension(&self) -> Option<String> {
+        let current_id = self.state.selected_extension_id.as_ref()?;
+
+        // Find current extension's index
+        let current_idx = self
+            .state
+            .extensions
+            .iter()
+            .position(|e| &e.get_id() == current_id)?;
+
+        // Search backward from current position
+        for ext in self.state.extensions.iter().take(current_idx).rev() {
+            let is_tested = self
+                .state
+                .reports
+                .iter()
+                .any(|r| r.extension_id == ext.get_id() && r.tested);
+            if !is_tested && ext.mv3_extension_id.is_some() {
+                return Some(ext.get_id());
+            }
+        }
+
+        None
+    }
+
+    /// Find the first untested extension in the list
+    /// Returns the extension ID if found
+    pub fn find_first_untested_extension(&self) -> Option<String> {
+        self.state
+            .extensions
+            .iter()
+            .find(|ext| {
+                let is_tested = self
+                    .state
+                    .reports
+                    .iter()
+                    .any(|r| r.extension_id == ext.get_id() && r.tested);
+                !is_tested && ext.mv3_extension_id.is_some()
+            })
+            .map(|ext| ext.get_id())
+    }
+
+    /// Handle loading the next untested extension
+    pub fn handle_load_next_untested_extension(&mut self) {
+        if let Some(ext_id) = self.find_next_untested_extension() {
+            self.state.selected_extension_id = Some(ext_id.clone());
+
+            if self.state.message_scroll_offset > 0 {
+                self.state.message_scroll_offset += 1;
+            }
+            self.state.messages.push(Message {
+                msg_type: MessageType::System,
+                content: "→ Loaded next untested extension".to_string(),
+                timestamp: chrono::Utc::now(),
+            });
+        } else {
+            if self.state.message_scroll_offset > 0 {
+                self.state.message_scroll_offset += 1;
+            }
+            self.state.messages.push(Message {
+                msg_type: MessageType::System,
+                content: "No more untested extensions".to_string(),
+                timestamp: chrono::Utc::now(),
+            });
+        }
+    }
+
+    /// Handle loading the previous untested extension
+    pub fn handle_load_previous_untested_extension(&mut self) {
+        if let Some(ext_id) = self.find_previous_untested_extension() {
+            self.state.selected_extension_id = Some(ext_id.clone());
+
+            if self.state.message_scroll_offset > 0 {
+                self.state.message_scroll_offset += 1;
+            }
+            self.state.messages.push(Message {
+                msg_type: MessageType::System,
+                content: "← Loaded previous untested extension".to_string(),
+                timestamp: chrono::Utc::now(),
+            });
+        } else {
+            if self.state.message_scroll_offset > 0 {
+                self.state.message_scroll_offset += 1;
+            }
+            self.state.messages.push(Message {
+                msg_type: MessageType::System,
+                content: "No previous untested extensions".to_string(),
+                timestamp: chrono::Utc::now(),
+            });
+        }
+    }
+
+    /// Handle loading the first untested extension
+    pub fn handle_load_first_untested_extension(&mut self) {
+        if let Some(ext_id) = self.find_first_untested_extension() {
+            self.state.selected_extension_id = Some(ext_id.clone());
+
+            if self.state.message_scroll_offset > 0 {
+                self.state.message_scroll_offset += 1;
+            }
+            self.state.messages.push(Message {
+                msg_type: MessageType::System,
+                content: "→ Loaded first untested extension".to_string(),
                 timestamp: chrono::Utc::now(),
             });
         }

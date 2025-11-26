@@ -624,6 +624,33 @@ export class MigrationServer {
                     result = await Database.shared.getLogs(params.limit || 50);
                     break;
 
+                case 'createReport':
+                    // Create a new report
+                    const report = {
+                        id: `report_${Date.now()}_${params.extension_id}`,
+                        extension_id: params.extension_id,
+                        tested: params.tested !== false,
+                        created_at: Date.now(),
+                        updated_at: Date.now(),
+                    };
+                    result = await Database.shared.insertReport(report);
+                    break;
+
+                case 'getAllReports':
+                    result = await Database.shared.getAllReports();
+                    break;
+
+                case 'getReportByExtensionId':
+                    result = await Database.shared.getReportByExtensionId(params.extension_id);
+                    break;
+
+                case 'updateReportTested':
+                    result = await Database.shared.updateReportTested(
+                        params.extension_id,
+                        params.tested
+                    );
+                    break;
+
                 default:
                     throw new Error(`Unknown database method: ${method}`);
             }
@@ -722,6 +749,11 @@ export class MigrationServer {
 
             ws.send('DUAL_BROWSERS_LAUNCHED');
             ws.send(`Both browsers launched successfully for ${ext.name}`);
+
+            // Open popup pages automatically
+            ws.send('Opening extension popup/options pages...');
+            await DualChromeTester.shared.openPopupPages(extensionDoc as any);
+            ws.send('Extension pages opened');
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : String(error);
             const errorStack = error instanceof Error ? error.stack : '';

@@ -159,13 +159,14 @@ fn render_extension_list(
                 ext.name.clone()
             };
 
-            let has_mv3 = ext.mv3_extension_id.is_some();
-            let is_failed = ext.tags.contains(&"migration-failed".to_string());
+            // Check if extension has been tested
+            let is_tested = state
+                .reports
+                .iter()
+                .any(|r| r.extension_id == ext.get_id() && r.tested);
 
-            let mv3_indicator = if has_mv3 {
-                Span::styled(" ✓", Style::default().fg(state.theme.item_mv3_indicator))
-            } else if is_failed {
-                Span::styled(" ✗", Style::default().fg(state.theme.item_failed_indicator))
+            let tested_indicator = if is_tested {
+                Span::styled(" ✓", Style::default().fg(state.theme.stats_avg_score))
             } else {
                 Span::raw("")
             };
@@ -181,7 +182,7 @@ fn render_extension_list(
 
             ListItem::new(Line::from(vec![
                 Span::styled(format!("{}{}", prefix, name_truncated), style),
-                mv3_indicator,
+                tested_indicator,
             ]))
         })
         .collect();

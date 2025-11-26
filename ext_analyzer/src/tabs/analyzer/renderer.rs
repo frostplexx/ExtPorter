@@ -10,7 +10,7 @@ use tokio::sync::mpsc;
 
 use crate::{app::AppState, types::AppEvent};
 
-use super::image_handler::ImageHandler;
+use super::{image_handler::ImageHandler, report_form::ReportForm};
 
 pub fn render_comparison_mode(
     f: &mut Frame,
@@ -23,6 +23,49 @@ pub fn render_comparison_mode(
     image_handler: &mut ImageHandler,
     last_displayed_ext_id: &mut Option<String>,
     image_protocols: &mut Vec<Option<StatefulProtocol>>,
+    report_form: &mut Option<ReportForm>,
+) {
+    // Get selected extension by ID from AppState
+    let selected_ext = if let Some(ref ext_id) = state.selected_extension_id {
+        state.extensions.iter().find(|e| e.get_id() == *ext_id)
+    } else {
+        None
+    };
+
+    // Check if form is visible
+    let form_visible = report_form.as_ref().map_or(false, |f| f.visible);
+
+    if form_visible {
+        // Form mode: Split screen - left side shows form, right side shows listeners and description
+        render_form_mode(f, area, state, selected_ext, report_form);
+    } else {
+        // Normal mode: Show browser cards, extension details, and listeners
+        render_normal_mode(
+            f,
+            area,
+            state,
+            mv2_browser_running,
+            mv3_browser_running,
+            event_count,
+            image_handler,
+            last_displayed_ext_id,
+            image_protocols,
+            selected_ext,
+        );
+    }
+}
+
+fn render_normal_mode(
+    f: &mut Frame,
+    area: ratatui::layout::Rect,
+    state: &AppState,
+    mv2_browser_running: bool,
+    mv3_browser_running: bool,
+    event_count: u32,
+    image_handler: &mut ImageHandler,
+    last_displayed_ext_id: &mut Option<String>,
+    image_protocols: &mut Vec<Option<StatefulProtocol>>,
+    selected_ext: Option<&crate::types::Extension>,
 ) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
@@ -42,13 +85,6 @@ pub fn render_comparison_mode(
             Constraint::Percentage(30), // Right: Registered listeners
         ])
         .split(chunks[0]);
-
-    // Get selected extension by ID from AppState
-    let selected_ext = if let Some(ref ext_id) = state.selected_extension_id {
-        state.extensions.iter().find(|e| e.get_id() == *ext_id)
-    } else {
-        None
-    };
 
     // If extension changed, start downloading its images
     if let Some(ext) = selected_ext {
@@ -110,7 +146,75 @@ pub fn render_comparison_mode(
     );
     render_listeners_panel(f, &main_chunks[2], state, selected_ext);
     render_status_bar(f, &chunks[1], state, selected_ext, event_count);
-    render_help_text(f, &chunks[2], state);
+    render_help_text(f, &chunks[2], state, false);
+}
+
+fn render_form_mode(
+    f: &mut Frame,
+    area: ratatui::layout::Rect,
+    state: &AppState,
+    selected_ext: Option<&crate::types::Extension>,
+    report_form: &mut Option<ReportForm>,
+) {
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Min(0), Constraint::Length(1)])
+        .split(area);
+
+    // Main area: split into form (left) and info (right)
+    let main_chunks = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([
+            Constraint::Percentage(50), // Left: Form
+            Constraint::Percentage(50), // Right: Description + Listeners
+        ])
+        .split(chunks[0]);
+
+    // Render the form
+    if let Some(form) = report_form {
+        form.render(f, main_chunks[0], state);
+    }
+
+    // Right side: description and listeners stacked
+    let right_chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Percentage(50), // Description
+            Constraint::Percentage(50), // Listeners
+        ])
+        .split(main_chunks[1]);
+
+    render_description_panel(f, &right_chunks[0], state, selected_ext);
+    render_listeners_panel(f, &right_chunks[1], state, selected_ext);
+    render_help_text(f, &chunks[1], state, true);
+}
+
+fn render_description_panel(
+    f: &mut Frame,
+    area: &ratatui::layout::Rect,
+    state: &AppState,
+    selected_ext: Option<&crate::types::Extension>,
+) {
+    let description = if let Some(ext) = selected_ext {
+        if let Some(ref cws) = ext.cws_info {
+            cws.description.clone()
+        } else {
+            "No description available".to_string()
+        }
+    } else {
+        "No extension selected".to_string()
+    };
+
+    let desc_paragraph = Paragraph::new(description)
+        .wrap(ratatui::widgets::Wrap { trim: true })
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(state.theme.menubar_border))
+                .title("Description"),
+        );
+
+    f.render_widget(desc_paragraph, *area);
 }
 
 fn render_browser_cards(
@@ -570,9 +674,16 @@ fn render_status_bar(
     f.render_widget(status, *area);
 }
 
-fn render_help_text(f: &mut Frame, area: &ratatui::layout::Rect, state: &AppState) {
-    let help_text = if state.selected_extension_id.is_some() {
-        "O: Launch Both • Q: Close Both"
+fn render_help_text(
+    f: &mut Frame,
+    area: &ratatui::layout::Rect,
+    state: &AppState,
+    form_mode: bool,
+) {
+    let help_text = if form_mode {
+        "Tab/Shift+Tab: Navigate • Space: Toggle • Type: Edit Notes • Enter: Submit • Esc: Cancel"
+    } else if state.selected_extension_id.is_some() {
+        "Enter: Start Testing • O: Launch Both • Q: Close Both • N: Next • P: Previous"
     } else {
         "No extension loaded • Go to Explorer tab and press 'A' to send an extension here"
     };
