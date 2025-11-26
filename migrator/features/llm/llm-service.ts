@@ -36,14 +36,17 @@ export class LLMService {
      */
     async initialize(): Promise<void> {
         if (this.config.ssh) {
-            this.sshTunnel = new SSHTunnel(this.config.ssh);
-            await this.sshTunnel.connect();
+            // Only create and connect tunnel if not already connected
+            if (!this.sshTunnel || !this.sshTunnel.isConnected()) {
+                this.sshTunnel = new SSHTunnel(this.config.ssh);
+                await this.sshTunnel.connect();
 
-            // Update endpoint to use local tunnel
-            const url = new URL(this.config.endpoint);
-            url.hostname = 'localhost';
-            url.port = this.config.ssh.localPort.toString();
-            this.effectiveEndpoint = url.toString();
+                // Update endpoint to use local tunnel
+                const url = new URL(this.config.endpoint);
+                url.hostname = 'localhost';
+                url.port = this.config.ssh.localPort.toString();
+                this.effectiveEndpoint = url.toString();
+            }
         }
 
         // Ensure Ollama is running and model is available

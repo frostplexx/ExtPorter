@@ -198,11 +198,22 @@ fn render_description_panel(
     let (description, title, toggle_hint) = if let Some(ext) = selected_ext {
         let ext_id = ext.get_id();
 
-        // Check if currently generating
+        // Check if currently generating - show animated spinner
         let generating_indicator = if state.llm_generating.contains(&ext_id) {
-            " ⏳ Generating..."
+            // Animated spinner frames
+            let spinner_frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+            let frame_idx = (std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_millis()
+                / 100)
+                % spinner_frames.len() as u128;
+            format!(
+                " {} Generating LLM description...",
+                spinner_frames[frame_idx as usize]
+            )
         } else {
-            ""
+            "".to_string()
         };
 
         // Check if we should show LLM description
@@ -228,6 +239,13 @@ fn render_description_panel(
                 desc,
                 format!("Description (Chrome Web Store){}", generating_indicator),
                 hint,
+            )
+        } else if state.llm_generating.contains(&ext_id) {
+            // Show spinner in description area if generating and no CWS description
+            (
+                format!("Generating LLM description, please wait...\n\nThis may take up to 3 minutes depending on the extension complexity."),
+                format!("Description{}", generating_indicator),
+                "",
             )
         } else {
             (
