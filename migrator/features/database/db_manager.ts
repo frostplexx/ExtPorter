@@ -666,4 +666,36 @@ export class Database {
                 .updateOne({ extension_id: extensionId }, { $set: update });
         });
     }
+
+    /**
+     * Update an entire report
+     */
+    async updateReport(reportId: string, reportData: any) {
+        return this.enqueueOperation(async () => {
+            if (!this.database) throw new Error('Database not initialized');
+
+            const update = {
+                ...reportData,
+                updated_at: Date.now(),
+            };
+
+            return await this.database
+                .collection(Collections.REPORTS)
+                .updateOne({ id: reportId }, { $set: update });
+        });
+    }
+
+    /**
+     * Delete a report
+     */
+    async deleteReport(reportId: string) {
+        return this.deleteOne(Collections.REPORTS, { id: reportId });
+    }
+
+    /**
+     * Get a report by its ID
+     */
+    async getReportById(reportId: string) {
+        return this.findOne(Collections.REPORTS, { id: reportId });
+    }
 }

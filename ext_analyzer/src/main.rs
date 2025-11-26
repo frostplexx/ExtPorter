@@ -146,6 +146,12 @@ async fn run_app(
                     AppEvent::LoadFirstUntestedExtension => {
                         app.handle_load_first_untested_extension();
                     }
+                    AppEvent::LLMDescriptionReceived(ext_id, description) => {
+                        app.handle_llm_description_received(ext_id, description);
+                    }
+                    AppEvent::LLMDescriptionError(ext_id, error) => {
+                        app.handle_llm_description_error(ext_id, error);
+                    }
                 }
             }
             

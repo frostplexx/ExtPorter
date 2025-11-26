@@ -84,6 +84,17 @@ fn handle_normal_input(
             // Load previous untested extension
             let _ = tx.send(AppEvent::LoadPreviousUntestedExtension);
         }
+        KeyCode::Char('d') | KeyCode::Char('D') => {
+            // Toggle between LLM and CWS description
+            if let Some(ref ext_id) = state.selected_extension_id {
+                if let Some(ext) = state.extensions.iter_mut().find(|e| e.get_id() == *ext_id) {
+                    // Only toggle if LLM description is available
+                    if ext.llm_description.is_some() || ext.cws_info.is_some() {
+                        ext.showing_llm_description = !ext.showing_llm_description;
+                    }
+                }
+            }
+        }
         _ => {}
     }
     Ok(())
@@ -233,12 +244,19 @@ fn submit_report(
     // Convert to JSON
     let report_json = form.to_report_json();
 
-    // Send to server
-    let create_report_msg = format!(
-        r#"{{"type":"db_query","id":"create_report","method":"createReport","params":{}}}"#,
-        serde_json::to_string(&report_json)?
-    );
-    let _ = tx.send(AppEvent::SendWebSocketMessage(create_report_msg));
+    // Send to server (create or update based on edit mode)
+    let message = if form.is_editing {
+        format!(
+            r#"{{"type":"db_query","id":"update_report","method":"updateReport","params":{}}}"#,
+            serde_json::to_string(&report_json)?
+        )
+    } else {
+        format!(
+            r#"{{"type":"db_query","id":"create_report","method":"createReport","params":{}}}"#,
+            serde_json::to_string(&report_json)?
+        )
+    };
+    let _ = tx.send(AppEvent::SendWebSocketMessage(message));
 
     // Fetch updated reports list
     let get_reports_msg =
@@ -248,16 +266,23 @@ fn submit_report(
     // Close browsers
     let _ = tx.send(AppEvent::SendWebSocketMessage("CLOSE_BROWSERS".to_string()));
 
-    // Load next untested extension
-    let _ = tx.send(AppEvent::LoadNextUntestedExtension);
+    // Load next untested extension (only if creating new report, not editing)
+    if !form.is_editing {
+        let _ = tx.send(AppEvent::LoadNextUntestedExtension);
+    }
 
     // Add system message
     if state.message_scroll_offset > 0 {
         state.message_scroll_offset += 1;
     }
+    let success_msg = if form.is_editing {
+        "✓ Report updated successfully"
+    } else {
+        "✓ Report submitted successfully"
+    };
     state.messages.push(crate::types::Message {
         msg_type: crate::types::MessageType::System,
-        content: "✓ Report submitted successfully".to_string(),
+        content: success_msg.to_string(),
         timestamp: chrono::Utc::now(),
     });
 

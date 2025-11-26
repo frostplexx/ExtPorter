@@ -590,6 +590,7 @@ name = "ext_analyzer"
 version = "1.0.0"
 dependencies = [
  "anyhow",
+ "base64",
  "chrono",
  "crossterm 0.29.0",
  "dotenv",

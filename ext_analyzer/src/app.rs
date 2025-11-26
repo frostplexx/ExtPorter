@@ -7,6 +7,7 @@ use ratatui::{
     widgets::{Block, Borders, Tabs},
     Frame,
 };
+use std::collections::HashMap;
 use tokio::sync::mpsc;
 
 use crate::{
@@ -35,6 +36,7 @@ pub struct AppState {
     pub selected_extension_id: Option<String>,
     pub theme: ColorScheme,
     pub reports: Vec<Report>,
+    pub llm_description_cache: HashMap<String, String>,
 }
 
 pub struct App {
@@ -59,6 +61,7 @@ impl App {
             selected_extension_id: None,
             theme: ColorScheme::default(),
             reports: Vec::new(),
+            llm_description_cache: HashMap::new(),
         };
 
         let tabs: Vec<Box<dyn Tab>> = vec![
@@ -411,6 +414,41 @@ impl App {
             return;
         }
 
+        // Parse LLM description messages
+        if msg.starts_with("LLM_DESCRIPTION:") {
+            if let Some(rest) = msg.strip_prefix("LLM_DESCRIPTION:") {
+                let parts: Vec<&str> = rest.splitn(2, ':').collect();
+                if parts.len() == 2 {
+                    let extension_id = parts[0].to_string();
+                    // Decode base64 description
+                    use base64::Engine;
+                    if let Ok(decoded) = base64::engine::general_purpose::STANDARD.decode(parts[1])
+                    {
+                        if let Ok(description) = String::from_utf8(decoded) {
+                            let _ = self
+                                .tx
+                                .send(AppEvent::LLMDescriptionReceived(extension_id, description));
+                        }
+                    }
+                }
+            }
+            return;
+        }
+
+        if msg.starts_with("LLM_DESCRIPTION_ERROR:") {
+            if let Some(rest) = msg.strip_prefix("LLM_DESCRIPTION_ERROR:") {
+                let parts: Vec<&str> = rest.splitn(2, ':').collect();
+                if parts.len() == 2 {
+                    let extension_id = parts[0].to_string();
+                    let error = parts[1].to_string();
+                    let _ = self
+                        .tx
+                        .send(AppEvent::LLMDescriptionError(extension_id, error));
+                }
+            }
+            return;
+        }
+
         // Parse message type
         let (msg_type, content) = if msg.starts_with("STDOUT: ") {
             (
@@ -555,6 +593,15 @@ impl App {
                 content: "→ Loaded next untested extension".to_string(),
                 timestamp: chrono::Utc::now(),
             });
+
+            // Request LLM description for this extension
+            let _ = self.tx.send(AppEvent::SendWebSocketMessage(format!(
+                "GENERATE_DESCRIPTION:{}",
+                ext_id
+            )));
+
+            // Prefetch description for the next+1 extension
+            self.prefetch_next_extension_description(&ext_id);
         } else {
             if self.state.message_scroll_offset > 0 {
                 self.state.message_scroll_offset += 1;
@@ -580,6 +627,15 @@ impl App {
                 content: "← Loaded previous untested extension".to_string(),
                 timestamp: chrono::Utc::now(),
             });
+
+            // Request LLM description for this extension
+            let _ = self.tx.send(AppEvent::SendWebSocketMessage(format!(
+                "GENERATE_DESCRIPTION:{}",
+                ext_id
+            )));
+
+            // Prefetch description for the next+1 extension
+            self.prefetch_next_extension_description(&ext_id);
         } else {
             if self.state.message_scroll_offset > 0 {
                 self.state.message_scroll_offset += 1;
@@ -605,6 +661,86 @@ impl App {
                 content: "→ Loaded first untested extension".to_string(),
                 timestamp: chrono::Utc::now(),
             });
+
+            // Request LLM description for this extension
+            let _ = self.tx.send(AppEvent::SendWebSocketMessage(format!(
+                "GENERATE_DESCRIPTION:{}",
+                ext_id
+            )));
+
+            // Prefetch description for the next+1 extension
+            self.prefetch_next_extension_description(&ext_id);
+        }
+    }
+
+    /// Prefetch LLM description for the extension after the given ID
+    fn prefetch_next_extension_description(&self, current_id: &str) {
+        // Find current extension's index
+        if let Some(current_idx) = self
+            .state
+            .extensions
+            .iter()
+            .position(|e| e.get_id() == current_id)
+        {
+            // Find the next untested extension after current
+            for ext in self.state.extensions.iter().skip(current_idx + 1) {
+                let is_tested = self
+                    .state
+                    .reports
+                    .iter()
+                    .any(|r| r.extension_id == ext.get_id() && r.tested);
+                if !is_tested && ext.mv3_extension_id.is_some() {
+                    // Check if we already have this description cached
+                    if !self.state.llm_description_cache.contains_key(&ext.get_id()) {
+                        // Prefetch it
+                        let _ = self.tx.send(AppEvent::SendWebSocketMessage(format!(
+                            "GENERATE_DESCRIPTION:{}",
+                            ext.get_id()
+                        )));
+                    }
+                    break;
+                }
+            }
+        }
+    }
+
+    /// Handle receiving an LLM description
+    pub fn handle_llm_description_received(&mut self, ext_id: String, description: String) {
+        // Store in cache
+        self.state
+            .llm_description_cache
+            .insert(ext_id.clone(), description.clone());
+
+        // If this is the currently selected extension, update it
+        if let Some(selected_id) = &self.state.selected_extension_id {
+            if selected_id == &ext_id {
+                if let Some(ext) = self
+                    .state
+                    .extensions
+                    .iter_mut()
+                    .find(|e| e.get_id() == ext_id)
+                {
+                    ext.llm_description = Some(description);
+                    ext.showing_llm_description = true; // Show LLM by default
+                }
+            }
+        }
+    }
+
+    /// Handle LLM description generation error
+    pub fn handle_llm_description_error(&mut self, ext_id: String, error: String) {
+        // Only show error message if this is the currently selected extension
+        if let Some(selected_id) = &self.state.selected_extension_id {
+            if selected_id == &ext_id {
+                if self.state.message_scroll_offset > 0 {
+                    self.state.message_scroll_offset += 1;
+                }
+                self.state.messages.push(Message {
+                    msg_type: MessageType::System,
+                    content: format!("⚠ LLM description generation failed: {}", error),
+                    timestamp: chrono::Utc::now(),
+                });
+            }
         }
     }
 }

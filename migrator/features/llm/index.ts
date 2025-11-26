@@ -18,3 +18,4 @@ export {
     buildChatMessagesFromFile,
 } from './prompt-template';
 export type { PromptVariables } from './prompt-template';
+export { llmManager } from './llm-manager';
