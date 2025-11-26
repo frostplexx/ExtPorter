@@ -1,5 +1,6 @@
 import { Db, MongoClient } from 'mongodb';
 import { Extension } from '../../types/extension';
+import { Report } from '../../types/report';
 import { logger, LogLevel } from '../../utils/logger';
 
 export enum Collections {
@@ -8,6 +9,7 @@ export enum Collections {
     LOGS = 'logs',
     TESTS_MV2 = 'tests_mv2',
     TESTS_MV3 = 'tests_mv3',
+    REPORTS = 'reports',
 }
 
 type QueuedOperation = {
@@ -622,6 +624,46 @@ export class Database {
                 .sort({ time: -1 })
                 .limit(limit)
                 .toArray();
+        });
+    }
+
+    /**
+     * Insert or update a report
+     */
+    async insertReport(report: Report) {
+        logger.debug(null, `Upserting report for extension: ${report.extension_id}`);
+        return await this.upsertOne(Collections.REPORTS, report);
+    }
+
+    /**
+     * Get all reports from the database
+     */
+    async getAllReports() {
+        return this.find(Collections.REPORTS);
+    }
+
+    /**
+     * Get a report for a specific extension
+     */
+    async getReportByExtensionId(extensionId: string) {
+        return this.findOne(Collections.REPORTS, { extension_id: extensionId });
+    }
+
+    /**
+     * Update the tested status of a report
+     */
+    async updateReportTested(extensionId: string, tested: boolean) {
+        return this.enqueueOperation(async () => {
+            if (!this.database) throw new Error('Database not initialized');
+
+            const update = {
+                tested,
+                updated_at: Date.now(),
+            };
+
+            return await this.database
+                .collection(Collections.REPORTS)
+                .updateOne({ extension_id: extensionId }, { $set: update });
         });
     }
 }

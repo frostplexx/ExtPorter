@@ -8,8 +8,10 @@ use crate::{app::AppState, types::AppEvent};
 mod image_handler;
 mod input_handler;
 mod renderer;
+mod report_form;
 
 pub use image_handler::ImageHandler;
+pub use report_form::{ListenerStatus, ReportForm};
 
 pub struct AnalyzerTab {
     mv2_browser_running: bool,
@@ -19,6 +21,8 @@ pub struct AnalyzerTab {
     last_displayed_ext_id: Option<String>,
     // Store image protocols for rendering (dynamic number based on available images)
     image_protocols: Vec<Option<StatefulProtocol>>,
+    // Report form for testing
+    report_form: Option<ReportForm>,
 }
 
 impl AnalyzerTab {
@@ -30,6 +34,7 @@ impl AnalyzerTab {
             image_handler: ImageHandler::new(),
             last_displayed_ext_id: None,
             image_protocols: Vec::new(),
+            report_form: None,
         }
     }
 }
@@ -53,6 +58,7 @@ impl super::Tab for AnalyzerTab {
             &mut self.image_handler,
             &mut self.last_displayed_ext_id,
             &mut self.image_protocols,
+            &mut self.report_form,
         );
     }
 
@@ -68,6 +74,7 @@ impl super::Tab for AnalyzerTab {
             tx,
             &mut self.mv2_browser_running,
             &mut self.mv3_browser_running,
+            &mut self.report_form,
         )
     }
 

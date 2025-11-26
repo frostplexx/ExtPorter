@@ -137,6 +137,15 @@ async fn run_app(
                     AppEvent::Quit => {
                         return Ok(());
                     }
+                    AppEvent::LoadNextUntestedExtension => {
+                        app.handle_load_next_untested_extension();
+                    }
+                    AppEvent::LoadPreviousUntestedExtension => {
+                        app.handle_load_previous_untested_extension();
+                    }
+                    AppEvent::LoadFirstUntestedExtension => {
+                        app.handle_load_first_untested_extension();
+                    }
                 }
             }
             

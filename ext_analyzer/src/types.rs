@@ -14,6 +14,9 @@ pub enum AppEvent {
     SwitchToTab(usize),
     #[allow(dead_code)]
     Quit,
+    LoadNextUntestedExtension,
+    LoadPreviousUntestedExtension,
+    LoadFirstUntestedExtension,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -169,4 +172,48 @@ pub struct ExtensionStats {
 pub struct ExtensionsWithStats {
     pub extensions: Vec<Extension>,
     pub stats: ExtensionStats,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct ListenerTestResult {
+    pub api: String,
+    pub file: String,
+    #[serde(default)]
+    pub line: Option<u32>,
+    pub status: String, // "untested", "yes", "no"
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct Report {
+    pub id: String,
+    pub extension_id: String,
+    pub tested: bool,
+    pub created_at: f64,
+    pub updated_at: f64,
+
+    // Automatically collected
+    #[serde(default)]
+    pub verification_duration_secs: Option<f64>,
+
+    // Quick assessment fields
+    #[serde(default)]
+    pub overall_working: Option<bool>,
+    #[serde(default)]
+    pub has_errors: Option<bool>,
+    #[serde(default)]
+    pub seems_slower: Option<bool>,
+    #[serde(default)]
+    pub needs_login: Option<bool>,
+    #[serde(default)]
+    pub is_popup_broken: Option<bool>,
+    #[serde(default)]
+    pub is_settings_broken: Option<bool>,
+    #[serde(default)]
+    pub is_interesting: Option<bool>,
+    #[serde(default)]
+    pub notes: Option<String>,
+
+    // Per-listener testing
+    #[serde(default)]
+    pub listeners: Vec<ListenerTestResult>,
 }
