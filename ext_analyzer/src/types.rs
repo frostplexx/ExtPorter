@@ -17,6 +17,8 @@ pub enum AppEvent {
     LoadNextUntestedExtension,
     LoadPreviousUntestedExtension,
     LoadFirstUntestedExtension,
+    LLMDescriptionReceived(String, String), // (extension_id, description)
+    LLMDescriptionError(String, String),    // (extension_id, error)
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -140,6 +142,10 @@ pub struct Extension {
     #[serde(skip_serializing, default)]
     #[allow(dead_code)]
     pub fakeium_validation: Option<serde_json::Value>,
+    #[serde(skip)]
+    pub llm_description: Option<String>,
+    #[serde(skip)]
+    pub showing_llm_description: bool,
 }
 
 impl Extension {

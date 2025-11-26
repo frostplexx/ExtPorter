@@ -110,6 +110,11 @@ pub struct ReportForm {
     pub visible: bool,
     pub notes_cursor_pos: usize,
 
+    // Edit mode
+    pub is_editing: bool,
+    pub report_id: Option<String>,
+    pub created_at: Option<f64>,
+
     // Extensibility
     pub custom_fields: Vec<CustomField>,
 }
@@ -182,8 +187,48 @@ impl ReportForm {
             active_field: first_field,
             visible: false,
             notes_cursor_pos: 0,
+            is_editing: false,
+            report_id: None,
+            created_at: None,
             custom_fields: Vec::new(),
         }
+    }
+
+    /// Create form from existing report (for editing)
+    pub fn from_report(extension: &Extension, report: &crate::types::Report) -> Self {
+        let mut form = Self::new(extension);
+
+        // Load report data
+        form.is_editing = true;
+        form.report_id = Some(report.id.clone());
+        form.created_at = Some(report.created_at);
+        form.verification_duration_secs = report.verification_duration_secs;
+        form.overall_working = report.overall_working.unwrap_or(true);
+        form.has_errors = report.has_errors.unwrap_or(false);
+        form.seems_slower = report.seems_slower.unwrap_or(false);
+        form.needs_login = report.needs_login.unwrap_or(false);
+        form.is_popup_broken = report.is_popup_broken.unwrap_or(false);
+        form.is_settings_broken = report.is_settings_broken.unwrap_or(false);
+        form.is_interesting = report.is_interesting.unwrap_or(false);
+        form.notes = report.notes.clone().unwrap_or_default();
+        form.notes_cursor_pos = form.notes.len();
+
+        // Load listener statuses
+        for listener_result in &report.listeners {
+            if let Some(listener) = form
+                .listeners
+                .iter_mut()
+                .find(|l| l.api == listener_result.api)
+            {
+                listener.status = match listener_result.status.as_str() {
+                    "yes" => ListenerStatus::Working,
+                    "no" => ListenerStatus::NotWorking,
+                    _ => ListenerStatus::Untested,
+                };
+            }
+        }
+
+        form
     }
 
     /// Reset the form for a new extension
@@ -410,6 +455,14 @@ impl ReportForm {
                 })
             }).collect::<Vec<_>>(),
         });
+
+        // Add ID and timestamps if editing
+        if let Some(ref id) = self.report_id {
+            json["id"] = serde_json::json!(id);
+        }
+        if let Some(created) = self.created_at {
+            json["created_at"] = serde_json::json!(created);
+        }
 
         // Add conditional fields only if applicable
         if self.has_popup {

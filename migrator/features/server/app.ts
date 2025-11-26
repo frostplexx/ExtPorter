@@ -245,6 +245,8 @@ export class MigrationServer {
                     this.handleLaunchDual(ws, command);
                 } else if (command === 'CLOSE_BROWSERS') {
                     this.handleCloseBrowsers(ws);
+                } else if (command.startsWith('GENERATE_DESCRIPTION:')) {
+                    this.handleGenerateDescription(ws, command);
                 } else {
                     ws.send(`Server received: ${command}`);
                 }
@@ -625,13 +627,15 @@ export class MigrationServer {
                     break;
 
                 case 'createReport':
-                    // Create a new report
+                    // Create a new report with all fields from params
                     const report = {
-                        id: `report_${Date.now()}_${params.extension_id}`,
+                        id: params.id || `report_${Date.now()}_${params.extension_id}`,
                         extension_id: params.extension_id,
                         tested: params.tested !== false,
-                        created_at: Date.now(),
+                        created_at: params.created_at || Date.now(),
                         updated_at: Date.now(),
+                        // Copy all other fields from params
+                        ...params,
                     };
                     result = await Database.shared.insertReport(report);
                     break;
@@ -649,6 +653,18 @@ export class MigrationServer {
                         params.extension_id,
                         params.tested
                     );
+                    break;
+
+                case 'updateReport':
+                    result = await Database.shared.updateReport(params.id, params);
+                    break;
+
+                case 'deleteReport':
+                    result = await Database.shared.deleteReport(params.id);
+                    break;
+
+                case 'getReportById':
+                    result = await Database.shared.getReportById(params.id);
                     break;
 
                 default:
@@ -777,6 +793,211 @@ export class MigrationServer {
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : String(error);
             ws.send(`ERROR closing browsers: ${errorMessage}`);
+        }
+    }
+
+    // Handle LLM description generation
+    private async handleGenerateDescription(ws: WebSocket, command: string): Promise<void> {
+        try {
+            const extensionId = command.replace('GENERATE_DESCRIPTION:', '').trim();
+
+            if (!extensionId) {
+                ws.send('LLM_DESCRIPTION_ERROR:INVALID:Extension ID is required');
+                return;
+            }
+
+            // Get extension from database
+            const extensionDoc = await Database.shared.findExtension({ id: extensionId });
+
+            if (!extensionDoc) {
+                ws.send(`LLM_DESCRIPTION_ERROR:${extensionId}:Extension not found in database`);
+                return;
+            }
+
+            const ext = extensionDoc as any;
+            ws.send(`Generating LLM description for: ${ext.name}...`);
+
+            // Import LLM utilities
+            const path = await import('path');
+            const fs = await import('fs');
+            const { llmManager, buildChatMessagesFromFile } = await import('../llm/index.js');
+
+            // Get the prompt template path
+            const templatePath = path.join(
+                process.cwd(),
+                'migrator',
+                'prompts',
+                'extension-description.txt'
+            );
+
+            if (!fs.existsSync(templatePath)) {
+                ws.send(
+                    `LLM_DESCRIPTION_ERROR:${extensionId}:Prompt template not found at ${templatePath}`
+                );
+                return;
+            }
+
+            // Build manifest summary
+            const manifestSummary = this.buildManifestSummary(ext);
+
+            // Get CWS description
+            const cwsDescription = ext.cws_info?.description || 'No description available';
+
+            // Read some source files (limit to key files)
+            const extensionFiles = await this.getExtensionFiles(ext);
+
+            // Build prompt variables
+            const variables = {
+                extension_name: ext.name || 'Unknown Extension',
+                manifest_summary: manifestSummary,
+                cws_description: cwsDescription,
+                extension_files: extensionFiles,
+            };
+
+            // Build chat messages from template
+            const messages = buildChatMessagesFromFile(templatePath, variables);
+
+            // Get LLM service and generate description
+            const llmService = await llmManager.getService();
+            ws.send(`Calling LLM service (this may take up to 3 minutes)...`);
+
+            const description = await llmService.generateChatCompletion(messages, {
+                streamToConsole: false,
+            });
+
+            // Send the description back
+            // Encode as base64 to handle newlines and special characters
+            const encoded = Buffer.from(description).toString('base64');
+            ws.send(`LLM_DESCRIPTION:${extensionId}:${encoded}`);
+            ws.send(`LLM description generated successfully for ${ext.name}`);
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            const extensionId = command.replace('GENERATE_DESCRIPTION:', '').trim();
+            ws.send(`LLM_DESCRIPTION_ERROR:${extensionId}:${errorMessage}`);
+            ws.send(`ERROR generating LLM description: ${errorMessage}`);
+        }
+    }
+
+    // Build a summary of the manifest
+    private buildManifestSummary(ext: any): string {
+        const lines: string[] = [];
+
+        if (ext.manifest) {
+            const manifest = ext.manifest;
+
+            lines.push(`Manifest Version: ${manifest.manifest_version || 'Unknown'}`);
+            lines.push(`Version: ${manifest.version || 'Unknown'}`);
+
+            if (manifest.permissions && manifest.permissions.length > 0) {
+                lines.push(`Permissions: ${manifest.permissions.join(', ')}`);
+            }
+
+            if (manifest.host_permissions && manifest.host_permissions.length > 0) {
+                lines.push(`Host Permissions: ${manifest.host_permissions.join(', ')}`);
+            }
+
+            if (manifest.background) {
+                if (manifest.background.service_worker) {
+                    lines.push(
+                        `Background: Service Worker (${manifest.background.service_worker})`
+                    );
+                } else if (manifest.background.scripts) {
+                    lines.push(`Background: Scripts (${manifest.background.scripts.join(', ')})`);
+                }
+            }
+
+            if (manifest.content_scripts && manifest.content_scripts.length > 0) {
+                lines.push(`Content Scripts: ${manifest.content_scripts.length} script(s)`);
+            }
+
+            if (manifest.action?.default_popup || manifest.browser_action?.default_popup) {
+                const popup =
+                    manifest.action?.default_popup || manifest.browser_action?.default_popup;
+                lines.push(`Popup: ${popup}`);
+            }
+
+            if (manifest.options_page || manifest.options_ui?.page) {
+                const options = manifest.options_page || manifest.options_ui?.page;
+                lines.push(`Options: ${options}`);
+            }
+        }
+
+        return lines.join('\n');
+    }
+
+    // Get key extension files for LLM context
+    private async getExtensionFiles(ext: any): Promise<string> {
+        try {
+            const fs = await import('fs');
+            const path = await import('path');
+            const files: string[] = [];
+
+            // Prefer MV3 version for analysis
+            const manifestPath = ext.manifest_v3_path || ext.manifest_v2_path;
+            if (!manifestPath) {
+                return 'No source files available';
+            }
+
+            const extDir = manifestPath.endsWith('manifest.json')
+                ? manifestPath.replace(/\/manifest\.json$/, '')
+                : manifestPath;
+
+            // Read key files based on manifest
+            const manifest = ext.manifest;
+            if (!manifest) {
+                return 'No manifest available';
+            }
+
+            const filesToRead: string[] = [];
+
+            // Background scripts
+            if (manifest.background) {
+                if (manifest.background.service_worker) {
+                    filesToRead.push(manifest.background.service_worker);
+                } else if (manifest.background.scripts) {
+                    filesToRead.push(...manifest.background.scripts.slice(0, 2)); // Max 2
+                }
+            }
+
+            // Content scripts (first one only)
+            if (manifest.content_scripts && manifest.content_scripts[0]?.js) {
+                filesToRead.push(manifest.content_scripts[0].js[0]);
+            }
+
+            // Popup script
+            if (manifest.action?.default_popup || manifest.browser_action?.default_popup) {
+                const popup =
+                    manifest.action?.default_popup || manifest.browser_action?.default_popup;
+                filesToRead.push(popup);
+            }
+
+            // Read files (max 3 files, 500 lines total)
+            let totalLines = 0;
+            const maxLines = 500;
+
+            for (const file of filesToRead.slice(0, 3)) {
+                if (totalLines >= maxLines) break;
+
+                const filePath = path.join(extDir, file);
+                if (fs.existsSync(filePath)) {
+                    try {
+                        const content = fs.readFileSync(filePath, 'utf-8');
+                        const lines = content.split('\n');
+                        const linesToTake = Math.min(lines.length, maxLines - totalLines);
+
+                        files.push(`\n--- ${file} (${linesToTake} lines) ---`);
+                        files.push(lines.slice(0, linesToTake).join('\n'));
+
+                        totalLines += linesToTake;
+                    } catch {
+                        // Skip files that can't be read
+                    }
+                }
+            }
+
+            return files.length > 0 ? files.join('\n') : 'No readable source files found';
+        } catch {
+            return 'Error reading source files';
         }
     }
 

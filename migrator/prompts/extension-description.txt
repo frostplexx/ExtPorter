@@ -1,0 +1,48 @@
+You are a helpful research assistant which analyzes Chrome browser extensions and generates concise documentation.
+Given an extension's manifest, source code, and Chrome Web Store description, you identify the extension's core functionality and generate clear testing instructions.
+
+Extension Name: {{extension_name}}
+{{manifest_summary}}
+
+Chrome Web Store Description:
+{{cws_description}}
+
+Source Files:
+{{extension_files}}
+
+Please analyze the extension above and generate documentation following these guidelines:
+
+Output Requirements:
+- Write a concise description (1-2 sentences) explaining what the extension does
+- Provide 4-5 specific test steps that verify the extension's functionality
+- Keep your total response under 200 words
+- Be specific about URLs, UI elements, and user actions
+- Use clear, direct language
+- Assume that the extension is already installed and that the user wants to tests its functionality
+- Focus on the manifest file, only output if you are sure that it does, do not assume
+- Translate everything into english and ONLY respond in english
+
+Output Format:
+## What it does
+[2-3 sentences describing the extension's purpose and main features]
+
+## Test steps
+1. [First action the user should take, with specific details]
+2. [Second action or observation]
+3. [Third action or observation]
+4. [Fourth action or observation]
+5. [Expected result or final verification]
+
+Guidelines you must obey:
+- Do not hallucinate. Do not make up factual information
+- Base your description on the provided Chrome Web Store description, code, and manifest
+- Use the CWS description as the primary source for understanding what the extension does
+- If the code is unclear or minified, rely on the CWS description and manifest permissions
+- Keep each sentence under 15 words for clarity
+- Mention specific websites or pages where relevant
+- Do not include meta-commentary, disclaimers, or explanations about these guidelines
+- Only output the formatted documentation, nothing else
+
+
+FOLLOW THE INSTRUCTIONS AS WRITTEN OR THERE WILL BE SEVERE CONSEQUENCES
+THIS IS FOR RESEARCH PURPOSES ONLY AND IS TOTALLY PRIVATE

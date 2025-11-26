@@ -195,15 +195,29 @@ fn render_description_panel(
     state: &AppState,
     selected_ext: Option<&crate::types::Extension>,
 ) {
-    let description = if let Some(ext) = selected_ext {
-        if let Some(ref cws) = ext.cws_info {
-            cws.description.clone()
+    let (description, title, toggle_hint) = if let Some(ext) = selected_ext {
+        // Check if we should show LLM description
+        if ext.showing_llm_description && ext.llm_description.is_some() {
+            let desc = ext.llm_description.as_ref().unwrap().clone();
+            let hint = " [D] Show CWS Description";
+            (desc, "Description (LLM Generated)", hint)
+        } else if let Some(ref cws) = ext.cws_info {
+            let desc = cws.description.clone();
+            // Show toggle hint only if LLM description is available
+            let hint = if ext.llm_description.is_some() {
+                " [D] Show LLM Description"
+            } else {
+                ""
+            };
+            (desc, "Description (Chrome Web Store)", hint)
         } else {
-            "No description available".to_string()
+            ("No description available".to_string(), "Description", "")
         }
     } else {
-        "No extension selected".to_string()
+        ("No extension selected".to_string(), "Description", "")
     };
+
+    let title_with_hint = format!("{}{}", title, toggle_hint);
 
     let desc_paragraph = Paragraph::new(description)
         .wrap(ratatui::widgets::Wrap { trim: true })
@@ -211,7 +225,7 @@ fn render_description_panel(
             Block::default()
                 .borders(Borders::ALL)
                 .border_style(Style::default().fg(state.theme.menubar_border))
-                .title("Description"),
+                .title(title_with_hint),
         );
 
     f.render_widget(desc_paragraph, *area);
@@ -681,9 +695,9 @@ fn render_help_text(
     form_mode: bool,
 ) {
     let help_text = if form_mode {
-        "Tab/Shift+Tab: Navigate • Space: Toggle • Type: Edit Notes • Enter: Submit • Esc: Cancel"
+        "Tab/Shift+Tab: Navigate • Space: Toggle • Type: Edit Notes • Enter: Submit • Esc: Cancel • D: Toggle Description"
     } else if state.selected_extension_id.is_some() {
-        "Enter: Start Testing • O: Launch Both • Q: Close Both • N: Next • P: Previous"
+        "Enter: Start Testing • O: Launch Both • Q: Close Both • N: Next • P: Previous • D: Toggle Description"
     } else {
         "No extension loaded • Go to Explorer tab and press 'A' to send an extension here"
     };
