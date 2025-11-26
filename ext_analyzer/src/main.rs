@@ -81,14 +81,16 @@ async fn run_app(
     mut rx: mpsc::UnboundedReceiver<AppEvent>,
     ws_sender: websocket::WebSocketSender,
 ) -> Result<()> {
-    // Create a ticker for regular redraws
-    let mut redraw_interval = tokio::time::interval(std::time::Duration::from_millis(50));
+    // Create a ticker for regular redraws (60 FPS for smooth animations)
+    let mut redraw_interval = tokio::time::interval(std::time::Duration::from_millis(16));
     
     loop {
         tokio::select! {
-            // Redraw on a timer (20 FPS)
+            // Redraw on a timer (~60 FPS for smooth animations)
             _ = redraw_interval.tick() => {
-                terminal.draw(|f| app.draw(f))?;
+                terminal.draw(|f| {
+                    app.draw(f);
+                })?;
             }
             
             // Handle events as they come in

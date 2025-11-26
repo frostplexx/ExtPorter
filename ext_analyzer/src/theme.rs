@@ -1,5 +1,31 @@
 use ratatui::style::Color;
 
+// Purple Color Palette - Unified theme based on custom purple Rgb(140, 64, 145)
+#[derive(Debug, Clone)]
+pub struct PurplePalette;
+
+impl PurplePalette {
+    // Core Purple Shades
+    pub const DEEP_PURPLE: Color = Color::Rgb(75, 0, 130); // Indigo - backgrounds, selected items
+    pub const ROYAL_PURPLE: Color = Color::Rgb(140, 64, 145); // Custom purple - primary accent
+    pub const MEDIUM_PURPLE: Color = Color::Rgb(147, 51, 234); // Vibrant purple - highlights
+    pub const LAVENDER: Color = Color::Rgb(180, 120, 200); // Light purple - secondary text
+    pub const SOFT_LAVENDER: Color = Color::Rgb(220, 180, 230); // Very light - active elements
+    pub const MAGENTA: Color = Color::Rgb(199, 21, 133); // Pink-purple - special highlights
+    pub const VIOLET: Color = Color::Rgb(138, 43, 226); // Blue-violet - active states
+
+    // Backgrounds & Borders
+    pub const PURPLE_GRAY: Color = Color::Rgb(120, 100, 130); // Muted purple-gray - borders
+    pub const DARK_PURPLE_BG: Color = Color::Rgb(40, 20, 50); // Very dark - backgrounds
+    pub const LIGHT_PURPLE_BG: Color = Color::Rgb(60, 40, 70); // Dark purple - panel backgrounds
+
+    // Semantic Colors (non-purple but important for clarity)
+    pub const SUCCESS_GREEN: Color = Color::Rgb(34, 197, 94); // Modern green
+    pub const ERROR_RED: Color = Color::Rgb(239, 68, 68); // Modern red
+    pub const WARNING_AMBER: Color = Color::Rgb(251, 191, 36); // Amber/gold
+    pub const INFO_CYAN: Color = Color::Rgb(103, 232, 249); // Cyan-blue
+}
+
 #[derive(Debug, Clone)]
 pub struct ColorScheme {
     // Menu bar
@@ -80,96 +106,87 @@ pub struct ColorScheme {
     pub database_info_dim: Color,
 }
 
-#[derive(Debug, Clone)]
-struct CustomColors;
-
-impl CustomColors {
-    pub const ACCENT: Color = Color::Rgb(140, 64, 145);
-    #[allow(dead_code)]
-    pub const PRIMARY: Color = Color::Rgb(100, 150, 200);
-    #[allow(dead_code)]
-    pub const SECONDARY: Color = Color::Rgb(200, 100, 150);
-    pub const ORANGE: Color = Color::Rgb(255, 165, 0);
-}
+// Remove old CustomColors struct - replaced by PurplePalette
+// (No code here - the CustomColors struct is deleted)
 
 impl Default for ColorScheme {
     fn default() -> Self {
         Self {
-            // Menu bar
-            tab_active: Color::White,
-            menubar_border: CustomColors::ACCENT,
-            tab_inactive: Color::DarkGray,
-            connection_active: Color::Green,
-            connection_connecting: CustomColors::ORANGE, // Orange
-            connection_disconnected: Color::Red,
+            // Menu bar - Purple themed
+            tab_active: PurplePalette::SOFT_LAVENDER,
+            menubar_border: PurplePalette::ROYAL_PURPLE,
+            tab_inactive: PurplePalette::PURPLE_GRAY,
+            connection_active: PurplePalette::SUCCESS_GREEN,
+            connection_connecting: PurplePalette::WARNING_AMBER,
+            connection_disconnected: PurplePalette::ERROR_RED,
 
-            // Messages
-            msg_info: Color::Green,
-            msg_system_info: Color::Green,
-            msg_error: Color::Red,
-            msg_warning: Color::Yellow,
+            // Messages - Color coded
+            msg_info: PurplePalette::INFO_CYAN,
+            msg_system_info: PurplePalette::LAVENDER,
+            msg_error: PurplePalette::ERROR_RED,
+            msg_warning: PurplePalette::WARNING_AMBER,
             msg_default: Color::White,
 
             // Status indicators
-            status_running: Color::Green,
-            status_stopped: Color::Red,
+            status_running: PurplePalette::SUCCESS_GREEN,
+            status_stopped: PurplePalette::ERROR_RED,
 
             // UI elements
-            scroll_indicator: Color::Yellow,
+            scroll_indicator: PurplePalette::MAGENTA,
 
             // Confirmation dialog
-            dialog_border: Color::White,
+            dialog_border: PurplePalette::ROYAL_PURPLE,
 
-            // Explorer
-            stats_total: CustomColors::ACCENT,
-            stats_mv3: Color::Green,
-            stats_mv2_only: Color::Yellow,
-            stats_failed: Color::Red,
-            stats_avg_score: Color::Magenta,
-            search_border_active: Color::Yellow,
-            search_border_inactive: Color::Gray,
-            search_label: Color::Gray,
+            // Explorer - Purple accents
+            stats_total: PurplePalette::ROYAL_PURPLE,
+            stats_mv3: PurplePalette::SUCCESS_GREEN,
+            stats_mv2_only: PurplePalette::WARNING_AMBER,
+            stats_failed: PurplePalette::ERROR_RED,
+            stats_avg_score: PurplePalette::VIOLET,
+            search_border_active: PurplePalette::MEDIUM_PURPLE,
+            search_border_inactive: PurplePalette::PURPLE_GRAY,
+            search_label: PurplePalette::LAVENDER,
             search_cursor: Color::White,
-            item_selected_fg: CustomColors::ACCENT,
-            item_selected_bg: Color::Blue,
-            item_mv3_indicator: Color::Green,
-            item_failed_indicator: Color::Red,
-            detail_label: CustomColors::ACCENT,
-            score_high: Color::Green,
-            score_medium: Color::Yellow,
-            score_low: Color::Red,
-            text_muted: Color::Gray,
-            analyzer_loaded_indicator: Color::Yellow,
+            item_selected_fg: Color::White,
+            item_selected_bg: PurplePalette::DEEP_PURPLE,
+            item_mv3_indicator: PurplePalette::SUCCESS_GREEN,
+            item_failed_indicator: PurplePalette::ERROR_RED,
+            detail_label: PurplePalette::ROYAL_PURPLE,
+            score_high: PurplePalette::SUCCESS_GREEN,
+            score_medium: PurplePalette::WARNING_AMBER,
+            score_low: PurplePalette::ERROR_RED,
+            text_muted: PurplePalette::PURPLE_GRAY,
+            analyzer_loaded_indicator: PurplePalette::MAGENTA,
 
-            // Analyzer
-            analyzer_v2_border: Color::Blue,
-            analyzer_v3_border: Color::Red,
-            analyzer_event_count: Color::Gray,
-            analyzer_ext_name: Color::Yellow,
-            analyzer_image_loading: Color::DarkGray,
-            analyzer_image_placeholder: CustomColors::ACCENT,
-            analyzer_rating: Color::Yellow,
-            analyzer_user_count: Color::Green,
-            analyzer_version_label: CustomColors::ACCENT,
-            analyzer_description_label: Color::Magenta,
-            analyzer_developer_label: Color::Blue,
-            analyzer_last_updated_label: Color::Gray,
-            analyzer_no_cws_warning: Color::Yellow,
-            analyzer_listener_api: Color::Yellow,
-            analyzer_listener_file: Color::Gray,
-            analyzer_status_border: Color::DarkGray,
-            analyzer_listeners_border: Color::Magenta,
+            // Analyzer - Purple themed
+            analyzer_v2_border: PurplePalette::VIOLET,
+            analyzer_v3_border: PurplePalette::MAGENTA,
+            analyzer_event_count: PurplePalette::LAVENDER,
+            analyzer_ext_name: PurplePalette::SOFT_LAVENDER,
+            analyzer_image_loading: PurplePalette::PURPLE_GRAY,
+            analyzer_image_placeholder: PurplePalette::ROYAL_PURPLE,
+            analyzer_rating: PurplePalette::WARNING_AMBER,
+            analyzer_user_count: PurplePalette::SUCCESS_GREEN,
+            analyzer_version_label: PurplePalette::LAVENDER,
+            analyzer_description_label: PurplePalette::MEDIUM_PURPLE,
+            analyzer_developer_label: PurplePalette::VIOLET,
+            analyzer_last_updated_label: PurplePalette::PURPLE_GRAY,
+            analyzer_no_cws_warning: PurplePalette::WARNING_AMBER,
+            analyzer_listener_api: PurplePalette::SOFT_LAVENDER,
+            analyzer_listener_file: PurplePalette::LAVENDER,
+            analyzer_status_border: PurplePalette::PURPLE_GRAY,
+            analyzer_listeners_border: PurplePalette::ROYAL_PURPLE,
 
-            // Database
-            database_label: CustomColors::ACCENT,
-            database_connected: Color::Green,
-            database_disconnected: Color::Red,
-            database_mode: Color::Magenta,
-            database_border: Color::Gray,
-            database_query_label: Color::Gray,
-            database_query_text: CustomColors::ACCENT,
-            database_info_message: Color::Yellow,
-            database_info_dim: Color::Gray,
+            // Database - Purple themed
+            database_label: PurplePalette::ROYAL_PURPLE,
+            database_connected: PurplePalette::SUCCESS_GREEN,
+            database_disconnected: PurplePalette::ERROR_RED,
+            database_mode: PurplePalette::MEDIUM_PURPLE,
+            database_border: PurplePalette::PURPLE_GRAY,
+            database_query_label: PurplePalette::LAVENDER,
+            database_query_text: PurplePalette::SOFT_LAVENDER,
+            database_info_message: PurplePalette::INFO_CYAN,
+            database_info_dim: PurplePalette::PURPLE_GRAY,
         }
     }
 }

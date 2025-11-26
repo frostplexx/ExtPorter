@@ -43,7 +43,7 @@ fn handle_normal_input(
 ) -> Result<()> {
     match key.code {
         KeyCode::Enter => {
-            // Start testing: Open browsers and show form
+            // Start testing: Open browsers and show form with slide-in animation
             if let Some(ref ext_id) = state.selected_extension_id {
                 if let Some(ext) = state.extensions.iter().find(|e| e.get_id() == *ext_id) {
                     // Launch browsers
@@ -177,6 +177,22 @@ fn handle_form_input(
                 }
             }
             KeyCode::Char(c) => {
+                // Handle 'D' key globally (not just in notes field) for description toggle
+                if (c == 'd' || c == 'D') && form.active_field != FormField::Notes {
+                    // Toggle between LLM and CWS description
+                    if let Some(ref ext_id) = state.selected_extension_id {
+                        if let Some(ext) =
+                            state.extensions.iter_mut().find(|e| e.get_id() == *ext_id)
+                        {
+                            // Only toggle if LLM description is available
+                            if ext.llm_description.is_some() || ext.cws_info.is_some() {
+                                ext.showing_llm_description = !ext.showing_llm_description;
+                            }
+                        }
+                    }
+                    return Ok(());
+                }
+
                 // Handle listener shortcuts when a listener is focused
                 if let FormField::Listener(idx) = form.active_field {
                     match c {
