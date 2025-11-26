@@ -21,9 +21,9 @@ class LLMManager {
     async getService(): Promise<LLMService> {
         if (!this.service) {
             this.service = LLMService.fromEnv();
-        }
-
-        if (!this.initialized) {
+            await this.service.initialize();
+            this.initialized = true;
+        } else if (!this.initialized) {
             await this.service.initialize();
             this.initialized = true;
         }

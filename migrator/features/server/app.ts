@@ -2,6 +2,9 @@ import { Globals } from '../../types/globals';
 import { WebSocketServer, WebSocket } from 'ws';
 import { spawn, ChildProcess } from 'child_process';
 import { Database } from '../database/db_manager';
+import { llmManager, buildChatMessagesFromFile } from '../llm/index.js';
+import * as path from 'path';
+import * as fs from 'fs';
 
 interface MigratorProcess {
     process: ChildProcess | null;
@@ -32,6 +35,7 @@ export class MigrationServer {
         progress: { current: 0, total: 0 },
     };
     private connectedClients: Set<WebSocket> = new Set();
+    private llmInitialized: boolean = false;
 
     constructor(globals: Globals) {
         this.globals = globals;
@@ -139,8 +143,20 @@ export class MigrationServer {
     }
 
     // Start the WebSocket server
-    start(): void {
+    async start(): Promise<void> {
         console.log('Starting WebSocket server on port 8080...');
+
+        // Initialize LLM manager and SSH tunnel at startup
+        try {
+            console.log('Initializing LLM service...');
+            await llmManager.getService();
+            this.llmInitialized = true;
+            console.log('✓ LLM service initialized and ready');
+        } catch (error) {
+            console.error('Failed to initialize LLM service:', error);
+            console.log('LLM description generation will not be available');
+            this.llmInitialized = false;
+        }
 
         // Handle new client connections
         this.server.on('connection', (ws: WebSocket) => {
@@ -798,8 +814,19 @@ export class MigrationServer {
 
     // Handle LLM description generation
     private async handleGenerateDescription(ws: WebSocket, command: string): Promise<void> {
+        const extensionId = command.replace('GENERATE_DESCRIPTION:', '').trim();
+
         try {
-            const extensionId = command.replace('GENERATE_DESCRIPTION:', '').trim();
+            console.log(`[LLM] Processing request for extension: ${extensionId}`);
+
+            // Check if LLM is initialized
+            if (!this.llmInitialized) {
+                console.log(`[LLM] Service not initialized, sending error`);
+                ws.send(
+                    `LLM_DESCRIPTION_ERROR:${extensionId}:LLM service not initialized. Check server logs for details.`
+                );
+                return;
+            }
 
             if (!extensionId) {
                 ws.send('LLM_DESCRIPTION_ERROR:INVALID:Extension ID is required');
@@ -807,20 +834,18 @@ export class MigrationServer {
             }
 
             // Get extension from database
+            console.log(`[LLM] Fetching extension from database...`);
             const extensionDoc = await Database.shared.findExtension({ id: extensionId });
 
             if (!extensionDoc) {
+                console.log(`[LLM] Extension not found in database`);
                 ws.send(`LLM_DESCRIPTION_ERROR:${extensionId}:Extension not found in database`);
                 return;
             }
 
             const ext = extensionDoc as any;
+            console.log(`[LLM] Found extension: ${ext.name}`);
             ws.send(`Generating LLM description for: ${ext.name}...`);
-
-            // Import LLM utilities
-            const path = await import('path');
-            const fs = await import('fs');
-            const { llmManager, buildChatMessagesFromFile } = await import('../llm/index.js');
 
             // Get the prompt template path
             const templatePath = path.join(
@@ -831,6 +856,7 @@ export class MigrationServer {
             );
 
             if (!fs.existsSync(templatePath)) {
+                console.log(`[LLM] Template not found at ${templatePath}`);
                 ws.send(
                     `LLM_DESCRIPTION_ERROR:${extensionId}:Prompt template not found at ${templatePath}`
                 );
@@ -855,24 +881,37 @@ export class MigrationServer {
             };
 
             // Build chat messages from template
+            console.log(`[LLM] Building prompt from template...`);
             const messages = buildChatMessagesFromFile(templatePath, variables);
 
-            // Get LLM service and generate description
+            // Get LLM service (already initialized, will reuse connection)
+            console.log(`[LLM] Getting LLM service...`);
             const llmService = await llmManager.getService();
+            console.log(`[LLM] Calling LLM API...`);
             ws.send(`Calling LLM service (this may take up to 3 minutes)...`);
 
             const description = await llmService.generateChatCompletion(messages, {
                 streamToConsole: false,
             });
 
+            console.log(`[LLM] Description generated successfully (${description.length} chars)`);
+
             // Send the description back
             // Encode as base64 to handle newlines and special characters
             const encoded = Buffer.from(description).toString('base64');
             ws.send(`LLM_DESCRIPTION:${extensionId}:${encoded}`);
             ws.send(`LLM description generated successfully for ${ext.name}`);
+
+            console.log(`[LLM] Response sent to client for ${ext.name}`);
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : String(error);
-            const extensionId = command.replace('GENERATE_DESCRIPTION:', '').trim();
+            const errorStack = error instanceof Error ? error.stack : '';
+
+            console.error(`[LLM] Error generating description for ${extensionId}:`, errorMessage);
+            if (errorStack) {
+                console.error(`[LLM] Stack trace:`, errorStack);
+            }
+
             ws.send(`LLM_DESCRIPTION_ERROR:${extensionId}:${errorMessage}`);
             ws.send(`ERROR generating LLM description: ${errorMessage}`);
         }
@@ -928,8 +967,6 @@ export class MigrationServer {
     // Get key extension files for LLM context
     private async getExtensionFiles(ext: any): Promise<string> {
         try {
-            const fs = await import('fs');
-            const path = await import('path');
             const files: string[] = [];
 
             // Prefer MV3 version for analysis
@@ -1097,7 +1134,7 @@ export class MigrationServer {
     }
 
     // Close the server gracefully
-    close(): void {
+    async close(): Promise<void> {
         // Stop all active migrators
         for (const migrator of this.activeMigrators.values()) {
             if (migrator.process) {
@@ -1105,6 +1142,12 @@ export class MigrationServer {
             }
         }
         this.activeMigrators.clear();
+
+        // Cleanup LLM manager and SSH tunnel
+        if (this.llmInitialized) {
+            console.log('Closing SSH tunnel...');
+            await llmManager.cleanup();
+        }
 
         // Restore original console methods
         console.log = this.originalConsoleLog;
