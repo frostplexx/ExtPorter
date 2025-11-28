@@ -1,6 +1,6 @@
 use ratatui::{
     layout::{Constraint, Direction, Layout},
-    style::{Modifier, Style, Styled},
+    style::{Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, Paragraph},
     Frame,
@@ -8,7 +8,7 @@ use ratatui::{
 use ratatui_image::{protocol::StatefulProtocol, StatefulImage};
 use tokio::sync::mpsc;
 
-use crate::{app::AppState, listener_labels::get_listener_label, theme, types::AppEvent};
+use crate::{app::AppState, listener_labels::get_listener_label, types::AppEvent};
 
 use super::{image_handler::ImageHandler, report_form::ReportForm};
 
@@ -24,6 +24,7 @@ pub fn render_comparison_mode(
     last_displayed_ext_id: &mut Option<String>,
     image_protocols: &mut Vec<Option<StatefulProtocol>>,
     report_form: &mut Option<ReportForm>,
+    listeners_scroll_offset: &mut usize,
 ) {
     // Get selected extension by ID from AppState
     let selected_ext = if let Some(ref ext_id) = state.selected_extension_id {
@@ -37,7 +38,14 @@ pub fn render_comparison_mode(
 
     if form_visible {
         // Form mode: Split screen - left side shows form, right side shows listeners and description
-        render_form_mode(f, area, state, selected_ext, report_form);
+        render_form_mode(
+            f,
+            area,
+            state,
+            selected_ext,
+            report_form,
+            listeners_scroll_offset,
+        );
     } else {
         // Normal mode: Show browser cards, extension details, and listeners
         render_normal_mode(
@@ -51,6 +59,7 @@ pub fn render_comparison_mode(
             last_displayed_ext_id,
             image_protocols,
             selected_ext,
+            listeners_scroll_offset,
         );
     }
 }
@@ -66,6 +75,7 @@ fn render_normal_mode(
     last_displayed_ext_id: &mut Option<String>,
     image_protocols: &mut Vec<Option<StatefulProtocol>>,
     selected_ext: Option<&crate::types::Extension>,
+    listeners_scroll_offset: &mut usize,
 ) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
@@ -91,6 +101,9 @@ fn render_normal_mode(
         let ext_id = ext.get_id();
         if last_displayed_ext_id.as_ref() != Some(&ext_id) {
             *last_displayed_ext_id = Some(ext_id.clone());
+
+            // Reset scroll offset when extension changes
+            *listeners_scroll_offset = 0;
 
             // Reset the image handler's display state for the new extension
             image_handler.reset_for_extension(ext_id.clone());
@@ -144,7 +157,13 @@ fn render_normal_mode(
         image_handler,
         image_protocols,
     );
-    render_listeners_panel(f, &main_chunks[2], state, selected_ext);
+    render_listeners_panel(
+        f,
+        &main_chunks[2],
+        state,
+        selected_ext,
+        listeners_scroll_offset,
+    );
     render_status_bar(f, &chunks[1], state, selected_ext, event_count);
     render_help_text(f, &chunks[2], state, false);
 }
@@ -155,6 +174,7 @@ fn render_form_mode(
     state: &AppState,
     selected_ext: Option<&crate::types::Extension>,
     report_form: &mut Option<ReportForm>,
+    listeners_scroll_offset: &mut usize,
 ) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
@@ -185,7 +205,13 @@ fn render_form_mode(
         .split(main_chunks[1]);
 
     render_description_panel(f, &right_chunks[0], state, selected_ext);
-    render_listeners_panel(f, &right_chunks[1], state, selected_ext);
+    render_listeners_panel(
+        f,
+        &right_chunks[1],
+        state,
+        selected_ext,
+        listeners_scroll_offset,
+    );
     render_help_text(f, &chunks[1], state, true);
 }
 
@@ -633,10 +659,6 @@ fn render_metadata(
         let ext_id = ext.get_id();
         let is_generating = state.llm_generating.contains(&ext_id);
 
-        // Description - show LLM or CWS based on toggle, with spinner while generating
-        let ext_id = ext.get_id();
-        let is_generating = state.llm_generating.contains(&ext_id);
-
         let (description_text, description_label, label_color) =
             if is_generating && ext.llm_description.is_none() {
                 // Show spinner while generating (only if no LLM description exists yet)
@@ -745,6 +767,7 @@ fn render_listeners_panel(
     area: &ratatui::layout::Rect,
     state: &AppState,
     selected_ext: Option<&crate::types::Extension>,
+    scroll_offset: &mut usize,
 ) {
     let listener_items: Vec<Line> = if let Some(ext) = selected_ext {
         if ext.event_listeners.is_empty() {
@@ -785,12 +808,34 @@ fn render_listeners_panel(
         ))]
     };
 
-    let listeners_panel = Paragraph::new(listener_items).block(
-        Block::default()
-            .borders(Borders::ALL)
-            .title("Registered Listeners")
-            .border_style(Style::default().fg(state.theme.analyzer_listeners_border)),
-    );
+    // Calculate the available height for content (subtract 2 for borders)
+    let content_height = area.height.saturating_sub(2) as usize;
+    let total_items = listener_items.len();
+
+    // Adjust scroll offset if needed
+    if *scroll_offset > total_items.saturating_sub(content_height) {
+        *scroll_offset = total_items.saturating_sub(content_height);
+    }
+
+    // Build title with scroll indicator if needed
+    let title = if total_items > content_height {
+        format!(
+            "Registered Listeners ({}/{})",
+            (*scroll_offset + content_height.min(total_items)),
+            total_items
+        )
+    } else {
+        "Registered Listeners".to_string()
+    };
+
+    let listeners_panel = Paragraph::new(listener_items)
+        .scroll((*scroll_offset as u16, 0))
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title(title)
+                .border_style(Style::default().fg(state.theme.analyzer_listeners_border)),
+        );
 
     f.render_widget(listeners_panel, *area);
 }
@@ -845,11 +890,8 @@ fn render_help_text(
             Span::styled("Space: ", Style::default().add_modifier(Modifier::DIM)),
             Span::styled("Toggle", Style::default()),
             Span::styled(" • ", Style::default().add_modifier(Modifier::DIM)),
-            Span::styled("Type: ", Style::default().add_modifier(Modifier::DIM)),
-            Span::styled("Edit Notes", Style::default()),
-            Span::styled(" • ", Style::default().add_modifier(Modifier::DIM)),
             Span::styled(
-                "Enter: ",
+                "S: ",
                 Style::default()
                     .fg(state.theme.status_running)
                     .add_modifier(Modifier::BOLD),

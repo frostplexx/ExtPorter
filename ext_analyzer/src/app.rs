@@ -238,6 +238,36 @@ impl App {
     pub fn switch_to_tab(&mut self, tab_index: usize) {
         if tab_index < self.tabs.len() {
             self.active_tab = tab_index;
+
+            // If switching to Analyzer tab (index 2) with a selected extension, trigger LLM generation
+            if tab_index == 2 {
+                if let Some(ext_id) = self.state.selected_extension_id.clone() {
+                    // Check if we have a cached description
+                    if let Some(cached_desc) =
+                        self.state.llm_description_cache.get(&ext_id).cloned()
+                    {
+                        // Apply cached description to the extension
+                        if let Some(ext) = self
+                            .state
+                            .extensions
+                            .iter_mut()
+                            .find(|e| e.get_id() == ext_id)
+                        {
+                            ext.llm_description = Some(cached_desc);
+                            ext.showing_llm_description = true;
+                        }
+                    } else if !self.state.llm_generating.contains(&ext_id) {
+                        // Only request if not already generating
+                        self.state.llm_generating.insert(ext_id.clone());
+
+                        // Request LLM description for this extension
+                        let _ = self.tx.send(AppEvent::SendWebSocketMessage(format!(
+                            "GENERATE_DESCRIPTION:{}",
+                            ext_id
+                        )));
+                    }
+                }
+            }
         }
     }
 
@@ -500,7 +530,7 @@ impl App {
 
         // Parse LLM description messages
         if msg.starts_with("LLM_DESCRIPTION:") {
-           if let Some(rest) = msg.strip_prefix("LLM_DESCRIPTION:") {
+            if let Some(rest) = msg.strip_prefix("LLM_DESCRIPTION:") {
                 let parts: Vec<&str> = rest.splitn(2, ':').collect();
                 if parts.len() == 2 {
                     let extension_id = parts[0].to_string();
@@ -518,7 +548,7 @@ impl App {
                     } else {
                     }
                 } else {
-               }
+                }
             }
             return;
         }
