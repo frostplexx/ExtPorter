@@ -325,11 +325,8 @@ fn render_report_detail(
                 match working_str.as_str() {
                     "yes" => Span::styled("Yes", Style::default().fg(state.theme.score_high)),
                     "no" => Span::styled("No", Style::default().fg(state.theme.score_low)),
-                    "could_not_test" => Span::styled(
-                        "Could not test",
-                        Style::default().fg(state.theme.text_muted),
-                    ),
-                    _ => Span::styled("Unknown", Style::default().fg(state.theme.text_muted)),
+                    "could_not_test" => Span::styled( "Could not test", Style::default().fg(state.theme.could_not_test),),
+                    _ => Span::styled("Unknown", Style::default().fg(state.theme.could_not_test)),
                 },
             ]));
         }

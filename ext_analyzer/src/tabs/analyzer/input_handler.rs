@@ -126,15 +126,10 @@ fn handle_form_input(
                 *report_form = None;
             }
             KeyCode::Enter => {
-                // Handle Submit and Cancel buttons
+                // Handle Submit button
                 if form.active_field == FormField::Submit {
                     // Submit the form
                     submit_report(form, state, tx)?;
-                    *report_form = None;
-                } else if form.active_field == FormField::Cancel {
-                    // Cancel the form - close browsers
-                    let _ = tx.send(AppEvent::SendWebSocketMessage("CLOSE_BROWSERS".to_string()));
-                    form.cancel();
                     *report_form = None;
                 } else {
                     // Move to next field for other fields
