@@ -501,9 +501,55 @@ export class DualChromeTester {
                 await this.navigateMV3(mv3OptionsUrl);
             }
 
+            // Extract and open all URLs from manifest
+            await this.openManifestUrls(mv2Manifest, mv3Manifest);
+
             logger.debug(extension, 'Popup pages opened successfully');
         } catch (error) {
             logger.warn(extension, 'Failed to open popup pages', { error });
+        }
+    }
+
+    /**
+     * Extract URLs from manifest and open them in both browsers
+     */
+    private async openManifestUrls(mv2Manifest: any, mv3Manifest: any): Promise<void> {
+        const urls = new Set<string>();
+
+        // Helper function to extract URLs from any value
+        const extractUrls = (obj: any) => {
+            if (typeof obj === 'string') {
+                // Check if it's a valid HTTP/HTTPS URL
+                if (obj.match(/^https?:\/\//i)) {
+                    urls.add(obj);
+                }
+            } else if (Array.isArray(obj)) {
+                obj.forEach((item) => extractUrls(item));
+            } else if (typeof obj === 'object' && obj !== null) {
+                Object.values(obj).forEach((value) => extractUrls(value));
+            }
+        };
+
+        // Extract from both manifests (prefer MV3 as it's more up-to-date)
+        extractUrls(mv3Manifest);
+        extractUrls(mv2Manifest);
+
+        // Open each URL in both browsers
+        const urlArray = Array.from(urls);
+        if (urlArray.length > 0) {
+            logger.debug(
+                this.current_extension,
+                `Found ${urlArray.length} URLs in manifest, opening them...`
+            );
+
+            for (const url of urlArray) {
+                try {
+                    logger.debug(this.current_extension, `Opening URL: ${url}`);
+                    await this.navigateBoth(url);
+                } catch (error) {
+                    logger.warn(this.current_extension, `Failed to open URL ${url}`, { error });
+                }
+            }
         }
     }
 }

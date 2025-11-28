@@ -13,13 +13,14 @@ pub fn handle_comparison_input(
     mv2_browser_running: &mut bool,
     mv3_browser_running: &mut bool,
     report_form: &mut Option<ReportForm>,
+    listeners_scroll_offset: &mut usize,
 ) -> Result<()> {
     // Check if form is visible
     let form_visible = report_form.as_ref().map_or(false, |f| f.visible);
 
     if form_visible {
         // Form mode input handling
-        handle_form_input(key, state, tx, report_form)
+        handle_form_input(key, state, tx, report_form, listeners_scroll_offset)
     } else {
         // Normal mode input handling
         handle_normal_input(
@@ -29,6 +30,7 @@ pub fn handle_comparison_input(
             mv2_browser_running,
             mv3_browser_running,
             report_form,
+            listeners_scroll_offset,
         )
     }
 }
@@ -40,6 +42,7 @@ fn handle_normal_input(
     mv2_browser_running: &mut bool,
     mv3_browser_running: &mut bool,
     report_form: &mut Option<ReportForm>,
+    listeners_scroll_offset: &mut usize,
 ) -> Result<()> {
     match key.code {
         KeyCode::Enter => {
@@ -95,6 +98,14 @@ fn handle_normal_input(
                 }
             }
         }
+        KeyCode::Char('j') | KeyCode::Char('J') | KeyCode::Down => {
+            // Scroll listeners panel down
+            *listeners_scroll_offset = listeners_scroll_offset.saturating_add(1);
+        }
+        KeyCode::Char('k') | KeyCode::Char('K') | KeyCode::Up => {
+            // Scroll listeners panel up
+            *listeners_scroll_offset = listeners_scroll_offset.saturating_sub(1);
+        }
         _ => {}
     }
     Ok(())
@@ -105,6 +116,7 @@ fn handle_form_input(
     state: &mut AppState,
     tx: mpsc::UnboundedSender<AppEvent>,
     report_form: &mut Option<ReportForm>,
+    listeners_scroll_offset: &mut usize,
 ) -> Result<()> {
     if let Some(form) = report_form {
         match key.code {
@@ -126,9 +138,8 @@ fn handle_form_input(
                 *report_form = None;
             }
             KeyCode::Enter => {
-                // Handle Submit button
+                // Enter on Submit button submits the form
                 if form.active_field == FormField::Submit {
-                    // Submit the form
                     submit_report(form, state, tx)?;
                     *report_form = None;
                 } else {
@@ -201,6 +212,13 @@ fn handle_form_input(
                     return Ok(());
                 }
 
+                // Handle 'S' key globally (not just in notes field) for quick submit
+                if (c == 's' || c == 'S') && form.active_field != FormField::Notes {
+                    submit_report(form, state, tx)?;
+                    *report_form = None;
+                    return Ok(());
+                }
+
                 // Handle listener shortcuts when a listener is focused
                 if let FormField::Listener(idx) = form.active_field {
                     let should_advance = match c {
@@ -250,6 +268,18 @@ fn handle_form_input(
             KeyCode::Right => {
                 if form.active_field == FormField::Notes {
                     form.move_cursor_right();
+                }
+            }
+            KeyCode::Down => {
+                // Scroll listeners panel down (only if not in Notes field)
+                if form.active_field != FormField::Notes {
+                    *listeners_scroll_offset = listeners_scroll_offset.saturating_add(1);
+                }
+            }
+            KeyCode::Up => {
+                // Scroll listeners panel up (only if not in Notes field)
+                if form.active_field != FormField::Notes {
+                    *listeners_scroll_offset = listeners_scroll_offset.saturating_sub(1);
                 }
             }
             _ => {}

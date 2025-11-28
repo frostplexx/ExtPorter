@@ -11,6 +11,12 @@ Chrome Web Store Description:
 
 Task: Generate concise testing documentation based ONLY on the manifest and CWS description.
 
+CRITICAL - LANGUAGE REQUIREMENT:
+- ALWAYS write your response in ENGLISH ONLY
+- If the Chrome Web Store description is in another language (Spanish, French, German, Chinese, Japanese, etc.), TRANSLATE it to English
+- If the extension name is in another language, keep the original name but explain its functionality in English
+- Your entire output must be in English - no exceptions
+
 Critical Requirements:
 1. Write a brief description (2-3 sentences) of what the extension does
 2. Provide 5-8 specific, actionable test steps
@@ -24,7 +30,7 @@ Critical Requirements:
 
 Output Format (FOLLOW EXACTLY):
 ## What it does
-[2-3 sentences explaining the extension's purpose and key features based on CWS description]
+[2-3 sentences explaining the extension's purpose and key features based on CWS description - IN ENGLISH]
 
 ## Test steps
 1. [Action to install/enable the extension if needed - e.g., "Open a new tab and verify the extension icon appears"]
@@ -44,6 +50,7 @@ Step-by-Step Writing Guidelines:
 - For content scripts: specify what page types to test on
 - For background features: explain how to verify they're working
 - Keep each step under 20 words
+- WRITE EVERYTHING IN ENGLISH
 
 What NOT to do:
 - Do not hallucinate features not mentioned in manifest or CWS
@@ -52,5 +59,6 @@ What NOT to do:
 - Do not reference source code
 - Do not use phrases like "if available" or "possibly"
 - Only describe features you can confirm from the provided information
+- DO NOT write in any language other than English
 
-IMPORTANT: This is for research purposes testing Manifest V2 to V3 migration. Follow instructions exactly or the research data will be invalid.
+IMPORTANT: This is for research purposes testing Manifest V2 to V3 migration. Follow instructions exactly or the research data will be invalid. ALL OUTPUT MUST BE IN ENGLISH.

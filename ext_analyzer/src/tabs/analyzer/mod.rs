@@ -11,7 +11,7 @@ mod renderer;
 mod report_form;
 
 pub use image_handler::ImageHandler;
-pub use report_form::{ListenerStatus, ReportForm};
+pub use report_form::ReportForm;
 
 pub struct AnalyzerTab {
     mv2_browser_running: bool,
@@ -23,6 +23,8 @@ pub struct AnalyzerTab {
     image_protocols: Vec<Option<StatefulProtocol>>,
     // Report form for testing
     report_form: Option<ReportForm>,
+    // Scroll offset for listeners panel
+    listeners_scroll_offset: usize,
 }
 
 impl AnalyzerTab {
@@ -35,6 +37,7 @@ impl AnalyzerTab {
             last_displayed_ext_id: None,
             image_protocols: Vec::new(),
             report_form: None,
+            listeners_scroll_offset: 0,
         }
     }
 }
@@ -59,6 +62,7 @@ impl super::Tab for AnalyzerTab {
             &mut self.last_displayed_ext_id,
             &mut self.image_protocols,
             &mut self.report_form,
+            &mut self.listeners_scroll_offset,
         );
     }
 
@@ -75,6 +79,7 @@ impl super::Tab for AnalyzerTab {
             &mut self.mv2_browser_running,
             &mut self.mv3_browser_running,
             &mut self.report_form,
+            &mut self.listeners_scroll_offset,
         )
     }
 
