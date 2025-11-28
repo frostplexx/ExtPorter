@@ -1,48 +1,56 @@
-You are a helpful research assistant which analyzes Chrome browser extensions and generates concise documentation.
-Given an extension's manifest, source code, and Chrome Web Store description, you identify the extension's core functionality and generate clear testing instructions.
+You are a helpful research assistant analyzing Chrome browser extensions to generate precise testing documentation.
+Your goal is to provide clear, actionable test steps that a human tester can follow to verify the extension works correctly after migration from Manifest V2 to V3.
 
 Extension Name: {{extension_name}}
+
+Manifest Information:
 {{manifest_summary}}
 
 Chrome Web Store Description:
 {{cws_description}}
 
-Source Files:
-{{extension_files}}
+Task: Generate concise testing documentation based ONLY on the manifest and CWS description.
 
-Please analyze the extension above and generate documentation following these guidelines:
+Critical Requirements:
+1. Write a brief description (2-3 sentences) of what the extension does
+2. Provide 5-8 specific, actionable test steps
+3. Each test step must be clear and testable (no vague instructions)
+4. Focus on the extension's PRIMARY functionality first
+5. Include steps to verify UI elements (popup, options page, context menus)
+6. Include steps to verify permissions are working (based on manifest)
+7. Total response should be 150-250 words
+8. Use simple, direct language
+9. DO NOT make assumptions - only test what you can verify from the manifest and description
 
-Output Requirements:
-- Write a concise description (1-2 sentences) explaining what the extension does
-- Provide 4-5 specific test steps that verify the extension's functionality
-- Keep your total response under 200 words
-- Be specific about URLs, UI elements, and user actions
-- Use clear, direct language
-- Assume that the extension is already installed and that the user wants to tests its functionality
-- Focus on the manifest file, only output if you are sure that it does, do not assume
-- Translate everything into english and ONLY respond in english
-
-Output Format:
+Output Format (FOLLOW EXACTLY):
 ## What it does
-[2-3 sentences describing the extension's purpose and main features]
+[2-3 sentences explaining the extension's purpose and key features based on CWS description]
 
 ## Test steps
-1. [First action the user should take, with specific details]
-2. [Second action or observation]
-3. [Third action or observation]
-4. [Fourth action or observation]
-5. [Expected result or final verification]
+1. [Action to install/enable the extension if needed - e.g., "Open a new tab and verify the extension icon appears"]
+2. [Test the primary functionality - e.g., "Click the extension icon to open the popup"]
+3. [Verify a specific feature - e.g., "In the popup, toggle the main feature on/off"]
+4. [Test interaction with web pages - e.g., "Navigate to example.com and verify the content script runs"]
+5. [Check permissions work - e.g., "Verify the extension can access browser history if permission granted"]
+6. [Test secondary features - e.g., "Right-click on a page to verify context menu options appear"]
+7. [Verify settings/options - e.g., "Open the options page and modify a setting"]
+8. [Final verification - e.g., "Confirm all changes persist after browser restart"]
 
-Guidelines you must obey:
-- Do not hallucinate. Do not make up factual information
-- Base your description on the provided Chrome Web Store description, code, and manifest
-- Use the CWS description as the primary source for understanding what the extension does
-- If the code is unclear or minified, rely on the CWS description and manifest permissions
-- Keep each sentence under 15 words for clarity
-- Mention specific websites or pages where relevant
-- Do not include meta-commentary, disclaimers, or explanations about these guidelines
-- Only output the formatted documentation, nothing else
+Step-by-Step Writing Guidelines:
+- Start each step with an action verb (Click, Open, Navigate, Verify, etc.)
+- Be specific about WHERE to perform actions (popup, page, toolbar, etc.)
+- Include WHAT to look for (icon appears, menu opens, content changes, etc.)
+- Mention specific URLs only if mentioned in CWS description
+- For content scripts: specify what page types to test on
+- For background features: explain how to verify they're working
+- Keep each step under 20 words
 
+What NOT to do:
+- Do not hallucinate features not mentioned in manifest or CWS
+- Do not make assumptions about implementation details
+- Do not include meta-commentary or disclaimers
+- Do not reference source code
+- Do not use phrases like "if available" or "possibly"
+- Only describe features you can confirm from the provided information
 
-FOLLOW THE INSTRUCTIONS AS WRITTEN OR THERE WILL BE SEVERE CONSEQUENCES
-THIS IS FOR RESEARCH PURPOSES ONLY AND IS TOTALLY PRIVATE
+IMPORTANT: This is for research purposes testing Manifest V2 to V3 migration. Follow instructions exactly or the research data will be invalid.

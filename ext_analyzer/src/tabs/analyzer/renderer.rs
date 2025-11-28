@@ -1,6 +1,6 @@
 use ratatui::{
     layout::{Constraint, Direction, Layout},
-    style::{Modifier, Style},
+    style::{Modifier, Style, Styled},
     text::{Line, Span},
     widgets::{Block, Borders, Paragraph},
     Frame,
@@ -8,7 +8,7 @@ use ratatui::{
 use ratatui_image::{protocol::StatefulProtocol, StatefulImage};
 use tokio::sync::mpsc;
 
-use crate::{app::AppState, listener_labels::get_listener_label, types::AppEvent};
+use crate::{app::AppState, listener_labels::get_listener_label, theme, types::AppEvent};
 
 use super::{image_handler::ImageHandler, report_form::ReportForm};
 
@@ -195,7 +195,7 @@ fn render_description_panel(
     state: &AppState,
     selected_ext: Option<&crate::types::Extension>,
 ) {
-    let (description, title, toggle_hint) = if let Some(ext) = selected_ext {
+    let (description, title_text, toggle_hint, title_color) = if let Some(ext) = selected_ext {
         let ext_id = ext.get_id();
 
         // Check if currently generating - show animated spinner
@@ -224,6 +224,7 @@ fn render_description_panel(
                 desc,
                 format!("Description (LLM Generated){}", generating_indicator),
                 hint,
+                state.theme.llm_description,
             )
         } else if let Some(ref cws) = ext.cws_info {
             let desc = cws.description.clone();
@@ -239,6 +240,7 @@ fn render_description_panel(
                 desc,
                 format!("Description (Chrome Web Store){}", generating_indicator),
                 hint,
+                state.theme.menubar_border,
             )
         } else if state.llm_generating.contains(&ext_id) {
             // Show spinner in description area if generating and no CWS description
@@ -246,12 +248,14 @@ fn render_description_panel(
                 format!("Generating LLM description, please wait...\n\nThis may take up to 3 minutes depending on the extension complexity."),
                 format!("Description{}", generating_indicator),
                 "",
+                state.theme.menubar_border,
             )
         } else {
             (
                 "No description available".to_string(),
                 format!("Description{}", generating_indicator),
                 "",
+                state.theme.menubar_border,
             )
         }
     } else {
@@ -259,17 +263,18 @@ fn render_description_panel(
             "No extension selected".to_string(),
             "Description".to_string(),
             "",
+            state.theme.menubar_border,
         )
     };
 
-    let title_with_hint = format!("{}{}", title, toggle_hint);
+    let title_with_hint = format!("{}{}", title_text, toggle_hint);
 
     let desc_paragraph = Paragraph::new(description)
         .wrap(ratatui::widgets::Wrap { trim: true })
         .block(
             Block::default()
                 .borders(Borders::ALL)
-                .border_style(Style::default().fg(state.theme.menubar_border))
+                .border_style(Style::default().fg(title_color))
                 .title(title_with_hint),
         );
 
@@ -624,14 +629,59 @@ fn render_metadata(
         }
         metadata_lines.push(Line::from(Span::raw("")));
 
-        // Description
+        // Description - show LLM or CWS based on toggle, with spinner while generating
+        let ext_id = ext.get_id();
+        let is_generating = state.llm_generating.contains(&ext_id);
+
+        // Description - show LLM or CWS based on toggle, with spinner while generating
+        let ext_id = ext.get_id();
+        let is_generating = state.llm_generating.contains(&ext_id);
+
+        let (description_text, description_label, label_color) =
+            if is_generating && ext.llm_description.is_none() {
+                // Show spinner while generating (only if no LLM description exists yet)
+                let spinner_frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+                let frame_idx = (std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_millis()
+                    / 100)
+                    % spinner_frames.len() as u128;
+
+                (
+                    format!(
+                        "{} Generating LLM description...",
+                        spinner_frames[frame_idx as usize]
+                    ),
+                    "Description:".to_string(),
+                    state.theme.analyzer_description_label,
+                )
+            } else if ext.showing_llm_description && ext.llm_description.is_some() {
+                (
+                    ext.llm_description.as_ref().unwrap().clone(),
+                    "Description (LLM):".to_string(),
+                    state.theme.llm_description,
+                )
+            } else {
+                (
+                    cws.description.clone(),
+                    "Description (CWS):".to_string(),
+                    state.theme.analyzer_description_label,
+                )
+            };
+
         metadata_lines.push(Line::from(Span::styled(
-            "Description:",
+            description_label.clone(),
             Style::default()
-                .fg(state.theme.analyzer_description_label)
+                .fg(label_color)
                 .add_modifier(Modifier::BOLD),
         )));
-        metadata_lines.push(Line::from(Span::raw(cws.description.as_str())));
+
+        // Split description by newlines to preserve formatting
+        let desc_lines: Vec<&str> = description_text.lines().collect();
+        for line in desc_lines {
+            metadata_lines.push(Line::from(Span::raw(line.to_string())));
+        }
         metadata_lines.push(Line::from(Span::raw("")));
 
         // Developer info
@@ -811,8 +861,18 @@ fn render_help_text(
                     .add_modifier(Modifier::BOLD),
             ),
             Span::styled(" • ", Style::default().add_modifier(Modifier::DIM)),
-            Span::styled("Esc: ", Style::default().add_modifier(Modifier::DIM)),
-            Span::styled("Cancel", Style::default()),
+            Span::styled(
+                "Esc: ",
+                Style::default()
+                    .fg(state.theme.status_stopped)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(
+                "Cancel",
+                Style::default()
+                    .fg(state.theme.status_stopped)
+                    .add_modifier(Modifier::BOLD),
+            ),
             Span::styled(" • ", Style::default().add_modifier(Modifier::DIM)),
             Span::styled("D: ", Style::default().add_modifier(Modifier::DIM)),
             Span::styled("Toggle Description", Style::default()),

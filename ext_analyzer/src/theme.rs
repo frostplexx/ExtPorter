@@ -65,8 +65,11 @@ pub struct ColorScheme {
     // UI elements
     pub scroll_indicator: Color,
 
+    pub could_not_test: Color,
+
     // Confirmation dialog
     pub dialog_border: Color,
+    pub llm_description: Color,
 
     // Explorer
     pub stats_total: Color,
@@ -148,6 +151,11 @@ impl Default for ColorScheme {
 
             // Confirmation dialog
             dialog_border: CatppuccinMocha::MAUVE,
+
+
+            could_not_test: CatppuccinMocha::YELLOW,
+            llm_description: CatppuccinMocha::BLUE,
+
 
             // Explorer - Catppuccin accents
             stats_total: CatppuccinMocha::LAVENDER,

@@ -100,7 +100,6 @@ pub enum FormField {
     OverallWorking,   // Does it basically work? (tri-state) - moved to bottom
     Notes,            // Freeform text (optional)
     Submit,
-    Cancel,
 }
 
 /// Custom field for extensibility
@@ -331,8 +330,7 @@ impl ReportForm {
             FormField::IsInteresting => FormField::OverallWorking,
             FormField::OverallWorking => FormField::Notes,
             FormField::Notes => FormField::Submit,
-            FormField::Submit => FormField::Cancel,
-            FormField::Cancel => {
+            FormField::Submit => {
                 if !self.listeners.is_empty() {
                     FormField::Listener(0)
                 } else {
@@ -349,14 +347,14 @@ impl ReportForm {
                 if idx > 0 {
                     FormField::Listener(idx - 1)
                 } else {
-                    FormField::Cancel
+                    FormField::Submit
                 }
             }
             FormField::Installs => {
                 if !self.listeners.is_empty() {
                     FormField::Listener(self.listeners.len() - 1)
                 } else {
-                    FormField::Cancel
+                    FormField::Submit
                 }
             }
             FormField::WorksInMv2 => FormField::Installs,
@@ -381,7 +379,6 @@ impl ReportForm {
             FormField::OverallWorking => FormField::IsInteresting,
             FormField::Notes => FormField::OverallWorking,
             FormField::Submit => FormField::Notes,
-            FormField::Cancel => FormField::Submit,
         };
     }
 
@@ -844,7 +841,7 @@ impl ReportForm {
         let value_color = if value {
             state.theme.status_running
         } else {
-            state.theme.text_muted
+            state.theme.status_stopped
         };
 
         let style = if is_active {
@@ -890,7 +887,7 @@ impl ReportForm {
         let value_color = match value {
             WorkingStatus::Yes => state.theme.status_running,
             WorkingStatus::No => state.theme.status_stopped,
-            WorkingStatus::CouldNotTest => state.theme.text_muted,
+            WorkingStatus::CouldNotTest => state.theme.msg_warning,
         };
 
         let style = if is_active {
@@ -958,12 +955,7 @@ impl ReportForm {
     }
 
     fn render_buttons(&self, f: &mut Frame, area: Rect, state: &AppState) {
-        let button_chunks = Layout::default()
-            .direction(Direction::Horizontal)
-            .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
-            .split(area);
-
-        // Submit button
+        // Submit button (centered, takes full width)
         let submit_active = self.active_field == FormField::Submit;
         let submit_style = if submit_active {
             Style::default()
@@ -982,31 +974,10 @@ impl ReportForm {
             },
             submit_style,
         )]))
-        .block(Block::default().borders(Borders::ALL));
+        .block(Block::default().borders(Borders::ALL))
+        .alignment(ratatui::layout::Alignment::Center);
 
-        // Cancel button
-        let cancel_active = self.active_field == FormField::Cancel;
-        let cancel_style = if cancel_active {
-            Style::default()
-                .bg(state.theme.status_stopped)
-                .fg(ratatui::style::Color::Black)
-                .add_modifier(Modifier::BOLD)
-        } else {
-            Style::default().fg(state.theme.status_stopped)
-        };
-
-        let cancel_block = Paragraph::new(Line::from(vec![Span::styled(
-            if cancel_active {
-                "▶ Cancel (Esc)"
-            } else {
-                "  Cancel (Esc)"
-            },
-            cancel_style,
-        )]))
-        .block(Block::default().borders(Borders::ALL));
-
-        f.render_widget(submit_block, button_chunks[0]);
-        f.render_widget(cancel_block, button_chunks[1]);
+        f.render_widget(submit_block, area);
     }
 }
 

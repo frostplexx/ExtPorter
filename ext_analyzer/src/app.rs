@@ -500,47 +500,25 @@ impl App {
 
         // Parse LLM description messages
         if msg.starts_with("LLM_DESCRIPTION:") {
-            eprintln!(
-                "[DEBUG] Received LLM_DESCRIPTION message: {}",
-                &msg[..50.min(msg.len())]
-            );
-            if let Some(rest) = msg.strip_prefix("LLM_DESCRIPTION:") {
+           if let Some(rest) = msg.strip_prefix("LLM_DESCRIPTION:") {
                 let parts: Vec<&str> = rest.splitn(2, ':').collect();
                 if parts.len() == 2 {
                     let extension_id = parts[0].to_string();
-                    eprintln!(
-                        "[DEBUG] Parsing description for extension: {}",
-                        extension_id
-                    );
                     // Decode base64 description
                     use base64::Engine;
                     if let Ok(decoded) = base64::engine::general_purpose::STANDARD.decode(parts[1])
                     {
                         if let Ok(description) = String::from_utf8(decoded) {
-                            eprintln!(
-                                "[DEBUG] Successfully decoded description, length: {}",
-                                description.len()
-                            );
                             let _ = self.tx.send(AppEvent::LLMDescriptionReceived(
                                 extension_id.clone(),
                                 description.clone(),
                             ));
-                            eprintln!(
-                                "[DEBUG] Sent LLMDescriptionReceived event for {}",
-                                extension_id
-                            );
                         } else {
-                            eprintln!("[DEBUG] Failed to decode UTF8");
                         }
                     } else {
-                        eprintln!("[DEBUG] Failed to decode base64");
                     }
                 } else {
-                    eprintln!(
-                        "[DEBUG] Message format invalid, parts.len() = {}",
-                        parts.len()
-                    );
-                }
+               }
             }
             return;
         }
@@ -704,32 +682,31 @@ impl App {
                 timestamp: chrono::Utc::now(),
             });
 
-            // LLM integration temporarily disabled
             // Only generate descriptions if we're on the Analyzer tab (index 2)
-            // if self.active_tab == 2 {
-            //     // Check if we have a cached description
-            //     if let Some(cached_desc) = self.state.llm_description_cache.get(&ext_id).cloned() {
-            //         // Apply cached description to the extension
-            //         if let Some(ext) = self
-            //             .state
-            //             .extensions
-            //             .iter_mut()
-            //             .find(|e| e.get_id() == ext_id)
-            //         {
-            //             ext.llm_description = Some(cached_desc);
-            //             ext.showing_llm_description = true;
-            //         }
-            //     } else if !self.state.llm_generating.contains(&ext_id) {
-            //         // Only request if not already generating
-            //         self.state.llm_generating.insert(ext_id.clone());
-            //
-            //         // Request LLM description for this extension
-            //         let _ = self.tx.send(AppEvent::SendWebSocketMessage(format!(
-            //             "GENERATE_DESCRIPTION:{}",
-            //             ext_id
-            //         )));
-            //     }
-            // }
+            if self.active_tab == 2 {
+                // Check if we have a cached description
+                if let Some(cached_desc) = self.state.llm_description_cache.get(&ext_id).cloned() {
+                    // Apply cached description to the extension
+                    if let Some(ext) = self
+                        .state
+                        .extensions
+                        .iter_mut()
+                        .find(|e| e.get_id() == ext_id)
+                    {
+                        ext.llm_description = Some(cached_desc);
+                        ext.showing_llm_description = true;
+                    }
+                } else if !self.state.llm_generating.contains(&ext_id) {
+                    // Only request if not already generating
+                    self.state.llm_generating.insert(ext_id.clone());
+
+                    // Request LLM description for this extension
+                    let _ = self.tx.send(AppEvent::SendWebSocketMessage(format!(
+                        "GENERATE_DESCRIPTION:{}",
+                        ext_id
+                    )));
+                }
+            }
         } else {
             if self.state.message_scroll_offset > 0 {
                 self.state.message_scroll_offset += 1;
@@ -756,32 +733,31 @@ impl App {
                 timestamp: chrono::Utc::now(),
             });
 
-            // LLM integration temporarily disabled
             // Only generate descriptions if we're on the Analyzer tab (index 2)
-            // if self.active_tab == 2 {
-            //     // Check if we have a cached description
-            //     if let Some(cached_desc) = self.state.llm_description_cache.get(&ext_id).cloned() {
-            //         // Apply cached description to the extension
-            //         if let Some(ext) = self
-            //             .state
-            //             .extensions
-            //             .iter_mut()
-            //             .find(|e| e.get_id() == ext_id)
-            //         {
-            //             ext.llm_description = Some(cached_desc);
-            //             ext.showing_llm_description = true;
-            //         }
-            //     } else if !self.state.llm_generating.contains(&ext_id) {
-            //         // Only request if not already generating
-            //         self.state.llm_generating.insert(ext_id.clone());
-            //
-            //         // Request LLM description for this extension
-            //         let _ = self.tx.send(AppEvent::SendWebSocketMessage(format!(
-            //             "GENERATE_DESCRIPTION:{}",
-            //             ext_id
-            //         )));
-            //     }
-            // }
+            if self.active_tab == 2 {
+                // Check if we have a cached description
+                if let Some(cached_desc) = self.state.llm_description_cache.get(&ext_id).cloned() {
+                    // Apply cached description to the extension
+                    if let Some(ext) = self
+                        .state
+                        .extensions
+                        .iter_mut()
+                        .find(|e| e.get_id() == ext_id)
+                    {
+                        ext.llm_description = Some(cached_desc);
+                        ext.showing_llm_description = true;
+                    }
+                } else if !self.state.llm_generating.contains(&ext_id) {
+                    // Only request if not already generating
+                    self.state.llm_generating.insert(ext_id.clone());
+
+                    // Request LLM description for this extension
+                    let _ = self.tx.send(AppEvent::SendWebSocketMessage(format!(
+                        "GENERATE_DESCRIPTION:{}",
+                        ext_id
+                    )));
+                }
+            }
         } else {
             if self.state.message_scroll_offset > 0 {
                 self.state.message_scroll_offset += 1;
@@ -808,32 +784,31 @@ impl App {
                 timestamp: chrono::Utc::now(),
             });
 
-            // LLM integration temporarily disabled
             // Only generate descriptions if we're on the Analyzer tab (index 2)
-            // if self.active_tab == 2 {
-            //     // Check if we have a cached description
-            //     if let Some(cached_desc) = self.state.llm_description_cache.get(&ext_id).cloned() {
-            //         // Apply cached description to the extension
-            //         if let Some(ext) = self
-            //             .state
-            //             .extensions
-            //             .iter_mut()
-            //             .find(|e| e.get_id() == ext_id)
-            //         {
-            //             ext.llm_description = Some(cached_desc);
-            //             ext.showing_llm_description = true;
-            //         }
-            //     } else if !self.state.llm_generating.contains(&ext_id) {
-            //         // Only request if not already generating
-            //         self.state.llm_generating.insert(ext_id.clone());
-            //
-            //         // Request LLM description for this extension
-            //         let _ = self.tx.send(AppEvent::SendWebSocketMessage(format!(
-            //             "GENERATE_DESCRIPTION:{}",
-            //             ext_id
-            //         )));
-            //     }
-            // }
+            if self.active_tab == 2 {
+                // Check if we have a cached description
+                if let Some(cached_desc) = self.state.llm_description_cache.get(&ext_id).cloned() {
+                    // Apply cached description to the extension
+                    if let Some(ext) = self
+                        .state
+                        .extensions
+                        .iter_mut()
+                        .find(|e| e.get_id() == ext_id)
+                    {
+                        ext.llm_description = Some(cached_desc);
+                        ext.showing_llm_description = true;
+                    }
+                } else if !self.state.llm_generating.contains(&ext_id) {
+                    // Only request if not already generating
+                    self.state.llm_generating.insert(ext_id.clone());
+
+                    // Request LLM description for this extension
+                    let _ = self.tx.send(AppEvent::SendWebSocketMessage(format!(
+                        "GENERATE_DESCRIPTION:{}",
+                        ext_id
+                    )));
+                }
+            }
         }
     }
 

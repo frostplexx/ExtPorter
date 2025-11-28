@@ -869,15 +869,14 @@ export class MigrationServer {
             // Get CWS description
             const cwsDescription = ext.cws_info?.description || 'No description available';
 
-            // Read some source files (limit to key files)
-            const extensionFiles = await this.getExtensionFiles(ext);
+            // Simplified: not reading extension source files anymore
+            // We only use CWS description and manifest for faster LLM generation
 
             // Build prompt variables
             const variables = {
                 extension_name: ext.name || 'Unknown Extension',
                 manifest_summary: manifestSummary,
                 cws_description: cwsDescription,
-                extension_files: extensionFiles,
             };
 
             // Build chat messages from template
