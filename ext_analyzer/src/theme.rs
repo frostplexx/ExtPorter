@@ -1,29 +1,44 @@
 use ratatui::style::Color;
 
-// Purple Color Palette - Unified theme based on custom purple Rgb(140, 64, 145)
+// Catppuccin Mocha Color Palette
+// Reference: https://github.com/catppuccin/catppuccin
 #[derive(Debug, Clone)]
-pub struct PurplePalette;
+pub struct CatppuccinMocha;
 
-impl PurplePalette {
-    // Core Purple Shades
-    pub const DEEP_PURPLE: Color = Color::Rgb(75, 0, 130); // Indigo - backgrounds, selected items
-    pub const ROYAL_PURPLE: Color = Color::Rgb(140, 64, 145); // Custom purple - primary accent
-    pub const MEDIUM_PURPLE: Color = Color::Rgb(147, 51, 234); // Vibrant purple - highlights
-    pub const LAVENDER: Color = Color::Rgb(180, 120, 200); // Light purple - secondary text
-    pub const SOFT_LAVENDER: Color = Color::Rgb(220, 180, 230); // Very light - active elements
-    pub const MAGENTA: Color = Color::Rgb(199, 21, 133); // Pink-purple - special highlights
-    pub const VIOLET: Color = Color::Rgb(138, 43, 226); // Blue-violet - active states
+impl CatppuccinMocha {
+    // Base colors
+    pub const BASE: Color = Color::Rgb(30, 30, 46); // #1e1e2e - main background
+    pub const MANTLE: Color = Color::Rgb(24, 24, 37); // #181825 - darker background
+    pub const CRUST: Color = Color::Rgb(17, 17, 27); // #11111b - darkest background
 
-    // Backgrounds & Borders
-    pub const PURPLE_GRAY: Color = Color::Rgb(120, 100, 130); // Muted purple-gray - borders
-    pub const DARK_PURPLE_BG: Color = Color::Rgb(40, 20, 50); // Very dark - backgrounds
-    pub const LIGHT_PURPLE_BG: Color = Color::Rgb(60, 40, 70); // Dark purple - panel backgrounds
+    // Surface colors
+    pub const SURFACE0: Color = Color::Rgb(49, 50, 68); // #313244 - surface
+    pub const SURFACE1: Color = Color::Rgb(69, 71, 90); // #45475a - lighter surface
+    pub const SURFACE2: Color = Color::Rgb(88, 91, 112); // #585b70 - even lighter surface
 
-    // Semantic Colors (non-purple but important for clarity)
-    pub const SUCCESS_GREEN: Color = Color::Rgb(34, 197, 94); // Modern green
-    pub const ERROR_RED: Color = Color::Rgb(239, 68, 68); // Modern red
-    pub const WARNING_AMBER: Color = Color::Rgb(251, 191, 36); // Amber/gold
-    pub const INFO_CYAN: Color = Color::Rgb(103, 232, 249); // Cyan-blue
+    // Text colors
+    pub const TEXT: Color = Color::Rgb(205, 214, 244); // #cdd6f4 - main text
+    pub const SUBTEXT1: Color = Color::Rgb(186, 194, 222); // #bac2de - secondary text
+    pub const SUBTEXT0: Color = Color::Rgb(166, 173, 200); // #a6adc8 - tertiary text
+    pub const OVERLAY2: Color = Color::Rgb(147, 153, 178); // #9399b2 - muted text
+    pub const OVERLAY1: Color = Color::Rgb(127, 132, 156); // #7f849c - more muted text
+    pub const OVERLAY0: Color = Color::Rgb(108, 112, 134); // #6c7086 - very muted text
+
+    // Accent colors
+    pub const ROSEWATER: Color = Color::Rgb(245, 224, 220); // #f5e0dc - soft pink
+    pub const FLAMINGO: Color = Color::Rgb(242, 205, 205); // #f2cdcd - pink
+    pub const PINK: Color = Color::Rgb(245, 194, 231); // #f5c2e7 - bright pink
+    pub const MAUVE: Color = Color::Rgb(203, 166, 247); // #cba6f7 - purple
+    pub const RED: Color = Color::Rgb(243, 139, 168); // #f38ba8 - red
+    pub const MAROON: Color = Color::Rgb(235, 160, 172); // #eba0ac - lighter red
+    pub const PEACH: Color = Color::Rgb(250, 179, 135); // #fab387 - orange
+    pub const YELLOW: Color = Color::Rgb(249, 226, 175); // #f9e2af - yellow
+    pub const GREEN: Color = Color::Rgb(166, 227, 161); // #a6e3a1 - green
+    pub const TEAL: Color = Color::Rgb(148, 226, 213); // #94e2d5 - teal
+    pub const SKY: Color = Color::Rgb(137, 220, 235); // #89dceb - light blue
+    pub const SAPPHIRE: Color = Color::Rgb(116, 199, 236); // #74c7ec - blue
+    pub const BLUE: Color = Color::Rgb(137, 180, 250); // #89b4fa - bright blue
+    pub const LAVENDER: Color = Color::Rgb(180, 190, 254); // #b4befe - lavender
 }
 
 #[derive(Debug, Clone)]
@@ -106,87 +121,84 @@ pub struct ColorScheme {
     pub database_info_dim: Color,
 }
 
-// Remove old CustomColors struct - replaced by PurplePalette
-// (No code here - the CustomColors struct is deleted)
-
 impl Default for ColorScheme {
     fn default() -> Self {
         Self {
-            // Menu bar - Purple themed
-            tab_active: PurplePalette::SOFT_LAVENDER,
-            menubar_border: PurplePalette::ROYAL_PURPLE,
-            tab_inactive: PurplePalette::PURPLE_GRAY,
-            connection_active: PurplePalette::SUCCESS_GREEN,
-            connection_connecting: PurplePalette::WARNING_AMBER,
-            connection_disconnected: PurplePalette::ERROR_RED,
+            // Menu bar - Catppuccin themed
+            tab_active: CatppuccinMocha::MAUVE,
+            menubar_border: CatppuccinMocha::LAVENDER,
+            tab_inactive: CatppuccinMocha::OVERLAY0,
+            connection_active: CatppuccinMocha::GREEN,
+            connection_connecting: CatppuccinMocha::YELLOW,
+            connection_disconnected: CatppuccinMocha::RED,
 
             // Messages - Color coded
-            msg_info: PurplePalette::INFO_CYAN,
-            msg_system_info: PurplePalette::LAVENDER,
-            msg_error: PurplePalette::ERROR_RED,
-            msg_warning: PurplePalette::WARNING_AMBER,
-            msg_default: Color::White,
+            msg_info: CatppuccinMocha::SKY,
+            msg_system_info: CatppuccinMocha::SUBTEXT1,
+            msg_error: CatppuccinMocha::RED,
+            msg_warning: CatppuccinMocha::PEACH,
+            msg_default: CatppuccinMocha::TEXT,
 
             // Status indicators
-            status_running: PurplePalette::SUCCESS_GREEN,
-            status_stopped: PurplePalette::ERROR_RED,
+            status_running: CatppuccinMocha::GREEN,
+            status_stopped: CatppuccinMocha::RED,
 
             // UI elements
-            scroll_indicator: PurplePalette::MAGENTA,
+            scroll_indicator: CatppuccinMocha::PINK,
 
             // Confirmation dialog
-            dialog_border: PurplePalette::ROYAL_PURPLE,
+            dialog_border: CatppuccinMocha::MAUVE,
 
-            // Explorer - Purple accents
-            stats_total: PurplePalette::ROYAL_PURPLE,
-            stats_mv3: PurplePalette::SUCCESS_GREEN,
-            stats_mv2_only: PurplePalette::WARNING_AMBER,
-            stats_failed: PurplePalette::ERROR_RED,
-            stats_avg_score: PurplePalette::VIOLET,
-            search_border_active: PurplePalette::MEDIUM_PURPLE,
-            search_border_inactive: PurplePalette::PURPLE_GRAY,
-            search_label: PurplePalette::LAVENDER,
-            search_cursor: Color::White,
-            item_selected_fg: Color::White,
-            item_selected_bg: PurplePalette::DEEP_PURPLE,
-            item_mv3_indicator: PurplePalette::SUCCESS_GREEN,
-            item_failed_indicator: PurplePalette::ERROR_RED,
-            detail_label: PurplePalette::ROYAL_PURPLE,
-            score_high: PurplePalette::SUCCESS_GREEN,
-            score_medium: PurplePalette::WARNING_AMBER,
-            score_low: PurplePalette::ERROR_RED,
-            text_muted: PurplePalette::PURPLE_GRAY,
-            analyzer_loaded_indicator: PurplePalette::MAGENTA,
+            // Explorer - Catppuccin accents
+            stats_total: CatppuccinMocha::LAVENDER,
+            stats_mv3: CatppuccinMocha::GREEN,
+            stats_mv2_only: CatppuccinMocha::YELLOW,
+            stats_failed: CatppuccinMocha::RED,
+            stats_avg_score: CatppuccinMocha::BLUE,
+            search_border_active: CatppuccinMocha::MAUVE,
+            search_border_inactive: CatppuccinMocha::SURFACE2,
+            search_label: CatppuccinMocha::SUBTEXT1,
+            search_cursor: CatppuccinMocha::TEXT,
+            item_selected_fg: CatppuccinMocha::TEXT,
+            item_selected_bg: CatppuccinMocha::SURFACE1,
+            item_mv3_indicator: CatppuccinMocha::GREEN,
+            item_failed_indicator: CatppuccinMocha::RED,
+            detail_label: CatppuccinMocha::MAUVE,
+            score_high: CatppuccinMocha::GREEN,
+            score_medium: CatppuccinMocha::YELLOW,
+            score_low: CatppuccinMocha::RED,
+            text_muted: CatppuccinMocha::OVERLAY0,
+            analyzer_loaded_indicator: CatppuccinMocha::PINK,
 
-            // Analyzer - Purple themed
-            analyzer_v2_border: PurplePalette::VIOLET,
-            analyzer_v3_border: PurplePalette::MAGENTA,
-            analyzer_event_count: PurplePalette::LAVENDER,
-            analyzer_ext_name: PurplePalette::SOFT_LAVENDER,
-            analyzer_image_loading: PurplePalette::PURPLE_GRAY,
-            analyzer_image_placeholder: PurplePalette::ROYAL_PURPLE,
-            analyzer_rating: PurplePalette::WARNING_AMBER,
-            analyzer_user_count: PurplePalette::SUCCESS_GREEN,
-            analyzer_version_label: PurplePalette::LAVENDER,
-            analyzer_description_label: PurplePalette::MEDIUM_PURPLE,
-            analyzer_developer_label: PurplePalette::VIOLET,
-            analyzer_last_updated_label: PurplePalette::PURPLE_GRAY,
-            analyzer_no_cws_warning: PurplePalette::WARNING_AMBER,
-            analyzer_listener_api: PurplePalette::SOFT_LAVENDER,
-            analyzer_listener_file: PurplePalette::LAVENDER,
-            analyzer_status_border: PurplePalette::PURPLE_GRAY,
-            analyzer_listeners_border: PurplePalette::ROYAL_PURPLE,
+            // Analyzer - Catppuccin themed
+            analyzer_v2_border: CatppuccinMocha::BLUE,
+            analyzer_v3_border: CatppuccinMocha::PINK,
+            analyzer_event_count: CatppuccinMocha::SUBTEXT1,
+            analyzer_ext_name: CatppuccinMocha::MAUVE,
+            analyzer_image_loading: CatppuccinMocha::OVERLAY1,
+            analyzer_image_placeholder: CatppuccinMocha::LAVENDER,
+            analyzer_rating: CatppuccinMocha::YELLOW,
+            analyzer_user_count: CatppuccinMocha::GREEN,
+            analyzer_version_label: CatppuccinMocha::SUBTEXT1,
+            analyzer_description_label: CatppuccinMocha::MAUVE,
+            analyzer_developer_label: CatppuccinMocha::BLUE,
+            analyzer_last_updated_label: CatppuccinMocha::OVERLAY1,
+            analyzer_no_cws_warning: CatppuccinMocha::PEACH,
+            analyzer_listener_api: CatppuccinMocha::LAVENDER,
+            analyzer_listener_file: CatppuccinMocha::SUBTEXT1,
+            analyzer_status_border: CatppuccinMocha::SURFACE2,
+            analyzer_listeners_border: CatppuccinMocha::LAVENDER,
 
-            // Database - Purple themed
-            database_label: PurplePalette::ROYAL_PURPLE,
-            database_connected: PurplePalette::SUCCESS_GREEN,
-            database_disconnected: PurplePalette::ERROR_RED,
-            database_mode: PurplePalette::MEDIUM_PURPLE,
-            database_border: PurplePalette::PURPLE_GRAY,
-            database_query_label: PurplePalette::LAVENDER,
-            database_query_text: PurplePalette::SOFT_LAVENDER,
-            database_info_message: PurplePalette::INFO_CYAN,
-            database_info_dim: PurplePalette::PURPLE_GRAY,
+            // Database - Catppuccin themed
+            database_label: CatppuccinMocha::MAUVE,
+            database_connected: CatppuccinMocha::GREEN,
+            database_disconnected: CatppuccinMocha::RED,
+            database_mode: CatppuccinMocha::LAVENDER,
+            database_border: CatppuccinMocha::SURFACE2,
+            database_query_label: CatppuccinMocha::SUBTEXT1,
+            database_query_text: CatppuccinMocha::MAUVE,
+            database_info_message: CatppuccinMocha::SKY,
+            database_info_dim: CatppuccinMocha::OVERLAY0,
         }
     }
 }
