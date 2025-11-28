@@ -1,5 +1,6 @@
 import { Extension } from '../../types/extension';
 import { logger } from '../../utils/logger';
+import * as path from 'path';
 
 export interface EventListener {
     api: string; // e.g., "chrome.runtime.onMessage"
@@ -13,6 +14,8 @@ export interface EventListener {
  * Looks for patterns like:
  * - chrome.*.on*.addListener(...)
  * - browser.*.on*.addListener(...)
+ *
+ * Only extracts from V2 version of the extension to avoid duplicates
  */
 export function extractListeners(extension: Extension): EventListener[] {
     const listeners: EventListener[] = [];
@@ -22,7 +25,15 @@ export function extractListeners(extension: Extension): EventListener[] {
     // Matches: chrome.runtime.onMessage.addListener, browser.tabs.onUpdated.addListener, etc.
     const listenerRegex = /(chrome|browser)\.(\w+)\.(\w+)\.addListener\s*\(/g;
 
+    // Determine the V2 base path for filtering
+    const v2BasePath = getV2BasePath(extension);
+
     for (const file of extension.files) {
+        // Only analyze files from the V2 version
+        if (!isFileInV2Version(file.path, v2BasePath, extension)) {
+            continue;
+        }
+
         // Only analyze JavaScript files
         if (!isJavaScriptFile(file.path)) {
             continue;
@@ -34,7 +45,7 @@ export function extractListeners(extension: Extension): EventListener[] {
             content = file.getContent();
         } catch (error) {
             // Skip files that can't be read
-            logger.error(null, error as any)
+            logger.error(null, error as any);
             continue;
         }
 
@@ -90,6 +101,47 @@ export function extractListeners(extension: Extension): EventListener[] {
     });
 
     return listeners;
+}
+
+/**
+ * Get the base path for the V2 version of the extension
+ */
+function getV2BasePath(extension: Extension): string {
+    const v2Path = extension.manifest_v2_path;
+
+    // If the path ends with manifest.json, get the directory
+    if (v2Path.endsWith('manifest.json')) {
+        return path.dirname(v2Path);
+    }
+
+    return v2Path;
+}
+
+/**
+ * Check if a file belongs to the V2 version
+ * Files in the V2 version are those that don't belong to the V3 migrated version
+ */
+function isFileInV2Version(filePath: string, v2BasePath: string, extension: Extension): boolean {
+    // If there's no V3 path, all files are V2
+    if (!extension.manifest_v3_path) {
+        return true;
+    }
+
+    // Get the V3 base path
+    const v3Path = extension.manifest_v3_path;
+    const v3BasePath = v3Path.endsWith('manifest.json') ? path.dirname(v3Path) : v3Path;
+
+    // Normalize paths for comparison
+    const normalizedFilePath = path.normalize(filePath);
+    const normalizedV2Base = path.normalize(v2BasePath);
+    const normalizedV3Base = path.normalize(v3BasePath);
+
+    // Check if file is under V2 base path and NOT under V3 base path
+    const isInV2 = normalizedFilePath.startsWith(normalizedV2Base);
+    const isInV3 = normalizedFilePath.startsWith(normalizedV3Base);
+
+    // File belongs to V2 if it's in V2 path and not in V3 path
+    return isInV2 && !isInV3;
 }
 
 /**

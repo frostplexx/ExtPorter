@@ -68,6 +68,10 @@ impl super::Tab for ExplorerTab {
         )
     }
 
+    fn is_in_text_input_mode(&self) -> bool {
+        self.search_focused
+    }
+
     fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
         self
     }

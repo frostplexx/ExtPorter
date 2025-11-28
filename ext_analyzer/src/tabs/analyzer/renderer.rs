@@ -8,7 +8,7 @@ use ratatui::{
 use ratatui_image::{protocol::StatefulProtocol, StatefulImage};
 use tokio::sync::mpsc;
 
-use crate::{app::AppState, types::AppEvent};
+use crate::{app::AppState, listener_labels::get_listener_label, types::AppEvent};
 
 use super::{image_handler::ImageHandler, report_form::ReportForm};
 
@@ -708,10 +708,11 @@ fn render_listeners_panel(
             ext.event_listeners
                 .iter()
                 .map(|listener| {
+                    let human_label = get_listener_label(&listener.api);
                     Line::from(vec![
                         Span::raw("  • "),
                         Span::styled(
-                            &listener.api,
+                            human_label,
                             Style::default().fg(state.theme.analyzer_listener_api),
                         ),
                         Span::raw(" "),

@@ -676,6 +676,7 @@ dependencies = [
  "dotenv",
  "futures-util",
  "image",
+ "once_cell",
  "ratatui",
  "ratatui-image",
  "reqwest",

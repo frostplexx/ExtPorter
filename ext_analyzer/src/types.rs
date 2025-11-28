@@ -203,7 +203,11 @@ pub struct Report {
 
     // Quick assessment fields
     #[serde(default)]
-    pub overall_working: Option<bool>,
+    pub installs: Option<bool>,
+    #[serde(default)]
+    pub works_in_mv2: Option<bool>,
+    #[serde(default)]
+    pub overall_working: Option<String>, // Changed to String for tri-state: "yes", "no", "could_not_test"
     #[serde(default)]
     pub has_errors: Option<bool>,
     #[serde(default)]

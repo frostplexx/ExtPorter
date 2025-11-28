@@ -41,6 +41,10 @@ impl super::Tab for MigratorTab {
         input_handler::handle_input(key, state, tx, &mut self.confirmation_dialog)
     }
 
+    fn is_in_text_input_mode(&self) -> bool {
+        self.confirmation_dialog.is_some()
+    }
+
     fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
         self
     }
