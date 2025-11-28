@@ -93,13 +93,11 @@ pub enum FormField {
     Listener(usize),  // Index into listeners vec
     Installs,         // Does the extension install successfully?
     WorksInMv2,       // Does it work in MV2?
-    OverallWorking,   // Does it basically work? (tri-state)
-    HasErrors,        // Did you see errors?
-    SeemsSlower,      // Performance check
     NeedsLogin,       // Does it need login to test?
     IsPopupBroken,    // Is the popup broken? (conditional - only if has popup)
     IsSettingsBroken, // Are the settings broken? (conditional - only if has settings)
     IsInteresting,    // Is this extension interesting for research?
+    OverallWorking,   // Does it basically work? (tri-state) - moved to bottom
     Notes,            // Freeform text (optional)
     Submit,
     Cancel,
@@ -127,13 +125,11 @@ pub struct ReportForm {
     // Manually collected data - Quick Assessment
     pub installs: bool,                 // Does it install successfully?
     pub works_in_mv2: bool,             // Does it work in MV2?
-    pub overall_working: WorkingStatus, // Does it basically work? (tri-state)
-    pub has_errors: bool,               // Did you see errors?
-    pub seems_slower: bool,             // Noticeably slower?
     pub needs_login: bool,              // Does it need login to test?
     pub is_popup_broken: bool,          // Is the popup broken?
     pub is_settings_broken: bool,       // Are the settings broken?
     pub is_interesting: bool,           // Is it interesting for research?
+    pub overall_working: WorkingStatus, // Does it basically work? (tri-state)
     pub notes: String,                  // Optional notes
 
     // Per-listener testing
@@ -211,15 +207,13 @@ impl ReportForm {
             extension_id: extension.get_id(),
             verification_start_time: None,
             verification_duration_secs: None,
-            installs: true,                      // Default to true
-            works_in_mv2: true,                  // Default to true
-            overall_working: WorkingStatus::Yes, // Default optimistic
-            has_errors: false,
-            seems_slower: false,
+            installs: true,     // Default to true
+            works_in_mv2: true, // Default to true
             needs_login: false,
             is_popup_broken: false,
             is_settings_broken: false,
             is_interesting: false,
+            overall_working: WorkingStatus::Yes, // Default optimistic
             notes: String::new(),
             listeners,
             has_popup,
@@ -245,18 +239,16 @@ impl ReportForm {
         form.verification_duration_secs = report.verification_duration_secs;
         form.installs = report.installs.unwrap_or(true);
         form.works_in_mv2 = report.works_in_mv2.unwrap_or(true);
+        form.needs_login = report.needs_login.unwrap_or(false);
+        form.is_popup_broken = report.is_popup_broken.unwrap_or(false);
+        form.is_settings_broken = report.is_settings_broken.unwrap_or(false);
+        form.is_interesting = report.is_interesting.unwrap_or(false);
         form.overall_working = match report.overall_working.as_deref() {
             Some("yes") => WorkingStatus::Yes,
             Some("no") => WorkingStatus::No,
             Some("could_not_test") => WorkingStatus::CouldNotTest,
             _ => WorkingStatus::Yes,
         };
-        form.has_errors = report.has_errors.unwrap_or(false);
-        form.seems_slower = report.seems_slower.unwrap_or(false);
-        form.needs_login = report.needs_login.unwrap_or(false);
-        form.is_popup_broken = report.is_popup_broken.unwrap_or(false);
-        form.is_settings_broken = report.is_settings_broken.unwrap_or(false);
-        form.is_interesting = report.is_interesting.unwrap_or(false);
         form.notes = report.notes.clone().unwrap_or_default();
         form.notes_cursor_pos = form.notes.len();
 
@@ -318,10 +310,7 @@ impl ReportForm {
                 }
             }
             FormField::Installs => FormField::WorksInMv2,
-            FormField::WorksInMv2 => FormField::OverallWorking,
-            FormField::OverallWorking => FormField::HasErrors,
-            FormField::HasErrors => FormField::SeemsSlower,
-            FormField::SeemsSlower => FormField::NeedsLogin,
+            FormField::WorksInMv2 => FormField::NeedsLogin,
             FormField::NeedsLogin => {
                 if self.has_popup {
                     FormField::IsPopupBroken
@@ -339,7 +328,8 @@ impl ReportForm {
                 }
             }
             FormField::IsSettingsBroken => FormField::IsInteresting,
-            FormField::IsInteresting => FormField::Notes,
+            FormField::IsInteresting => FormField::OverallWorking,
+            FormField::OverallWorking => FormField::Notes,
             FormField::Notes => FormField::Submit,
             FormField::Submit => FormField::Cancel,
             FormField::Cancel => {
@@ -370,10 +360,7 @@ impl ReportForm {
                 }
             }
             FormField::WorksInMv2 => FormField::Installs,
-            FormField::OverallWorking => FormField::WorksInMv2,
-            FormField::HasErrors => FormField::OverallWorking,
-            FormField::SeemsSlower => FormField::HasErrors,
-            FormField::NeedsLogin => FormField::SeemsSlower,
+            FormField::NeedsLogin => FormField::WorksInMv2,
             FormField::IsPopupBroken => FormField::NeedsLogin,
             FormField::IsSettingsBroken => {
                 if self.has_popup {
@@ -391,7 +378,8 @@ impl ReportForm {
                     FormField::NeedsLogin
                 }
             }
-            FormField::Notes => FormField::IsInteresting,
+            FormField::OverallWorking => FormField::IsInteresting,
+            FormField::Notes => FormField::OverallWorking,
             FormField::Submit => FormField::Notes,
             FormField::Cancel => FormField::Submit,
         };
@@ -414,46 +402,71 @@ impl ReportForm {
     /// Toggle installs
     pub fn toggle_installs(&mut self) {
         self.installs = !self.installs;
+        self.update_dependent_fields();
     }
 
     /// Toggle works in MV2
     pub fn toggle_works_in_mv2(&mut self) {
         self.works_in_mv2 = !self.works_in_mv2;
-    }
-
-    /// Toggle overall working (cycle through Yes -> No -> Could not test -> Yes)
-    pub fn toggle_overall_working(&mut self) {
-        self.overall_working = self.overall_working.cycle();
-    }
-
-    /// Toggle has errors
-    pub fn toggle_has_errors(&mut self) {
-        self.has_errors = !self.has_errors;
-    }
-
-    /// Toggle seems slower
-    pub fn toggle_seems_slower(&mut self) {
-        self.seems_slower = !self.seems_slower;
+        self.update_dependent_fields();
     }
 
     /// Toggle needs login
     pub fn toggle_needs_login(&mut self) {
         self.needs_login = !self.needs_login;
+        self.update_dependent_fields();
     }
 
     /// Toggle is popup broken
     pub fn toggle_is_popup_broken(&mut self) {
         self.is_popup_broken = !self.is_popup_broken;
+        self.update_dependent_fields();
     }
 
     /// Toggle is settings broken
     pub fn toggle_is_settings_broken(&mut self) {
         self.is_settings_broken = !self.is_settings_broken;
+        self.update_dependent_fields();
+    }
+
+    /// Update dependent fields based on current values
+    /// Rules:
+    /// - If needs_login is true -> overall_working should be CouldNotTest
+    /// - If works_in_mv2 is false -> overall_working should be CouldNotTest
+    /// - If installs is false -> overall_working should be No
+    /// - If is_popup_broken is true -> overall_working should be No
+    /// - If is_settings_broken is true -> overall_working should be No
+    pub fn update_dependent_fields(&mut self) {
+        // If extension doesn't install, it definitely doesn't work
+        if !self.installs {
+            self.overall_working = WorkingStatus::No;
+        }
+        // If it doesn't work in MV2, we can't properly test the migration
+        else if !self.works_in_mv2 {
+            self.overall_working = WorkingStatus::CouldNotTest;
+        }
+        // If it needs login, we can't test it properly
+        else if self.needs_login {
+            self.overall_working = WorkingStatus::CouldNotTest;
+        }
+        // If popup is broken (and extension has popup), it's not working properly
+        else if self.has_popup && self.is_popup_broken {
+            self.overall_working = WorkingStatus::No;
+        }
+        // If settings are broken (and extension has settings), it's not working properly
+        else if self.has_settings && self.is_settings_broken {
+            self.overall_working = WorkingStatus::No;
+        }
     }
 
     /// Toggle interesting flag
     pub fn toggle_interesting(&mut self) {
         self.is_interesting = !self.is_interesting;
+    }
+
+    /// Toggle overall working (cycle through Yes -> No -> Could not test -> Yes)
+    pub fn toggle_overall_working(&mut self) {
+        self.overall_working = self.overall_working.cycle();
     }
 
     /// Add character to notes
@@ -502,11 +515,9 @@ impl ReportForm {
             // Quick assessment fields
             "installs": self.installs,
             "works_in_mv2": self.works_in_mv2,
-            "overall_working": self.overall_working.as_str(),
-            "has_errors": self.has_errors,
-            "seems_slower": self.seems_slower,
             "needs_login": self.needs_login,
             "is_interesting": self.is_interesting,
+            "overall_working": self.overall_working.as_str(),
             "notes": self.notes,
             // Listener details
             "listeners": self.listeners.iter().map(|l| {
@@ -627,9 +638,6 @@ impl ReportForm {
             Constraint::Min(0),    // Listeners
             Constraint::Length(3), // Installs
             Constraint::Length(3), // Works in MV2
-            Constraint::Length(3), // Overall Working
-            Constraint::Length(3), // Has Errors
-            Constraint::Length(3), // Seems Slower
             Constraint::Length(3), // Needs Login
         ];
 
@@ -642,6 +650,7 @@ impl ReportForm {
         }
 
         constraints.push(Constraint::Length(3)); // Is Interesting
+        constraints.push(Constraint::Length(3)); // Overall Working
 
         let chunks = Layout::default()
             .direction(Direction::Vertical)
@@ -669,36 +678,6 @@ impl ReportForm {
             FormField::WorksInMv2,
             "Works in MV2",
             self.works_in_mv2,
-        );
-        chunk_idx += 1;
-
-        self.render_tristate_field(
-            f,
-            chunks[chunk_idx],
-            state,
-            FormField::OverallWorking,
-            "Overall Working",
-            self.overall_working,
-        );
-        chunk_idx += 1;
-
-        self.render_toggle_field(
-            f,
-            chunks[chunk_idx],
-            state,
-            FormField::HasErrors,
-            "Has Errors",
-            self.has_errors,
-        );
-        chunk_idx += 1;
-
-        self.render_toggle_field(
-            f,
-            chunks[chunk_idx],
-            state,
-            FormField::SeemsSlower,
-            "Seems Slower",
-            self.seems_slower,
         );
         chunk_idx += 1;
 
@@ -743,6 +722,16 @@ impl ReportForm {
             FormField::IsInteresting,
             "Is Interesting",
             self.is_interesting,
+        );
+        chunk_idx += 1;
+
+        self.render_tristate_field(
+            f,
+            chunks[chunk_idx],
+            state,
+            FormField::OverallWorking,
+            "Overall Working",
+            self.overall_working,
         );
     }
 
@@ -1076,10 +1065,9 @@ mod tests {
         assert_eq!(form.listeners.len(), 2);
         assert!(form.installs);
         assert!(form.works_in_mv2);
-        assert_eq!(form.overall_working, WorkingStatus::Yes);
-        assert!(!form.has_errors);
-        assert!(!form.seems_slower);
+        assert!(!form.needs_login);
         assert!(!form.is_interesting);
+        assert_eq!(form.overall_working, WorkingStatus::Yes);
         assert_eq!(form.notes, "");
     }
 
@@ -1112,9 +1100,9 @@ mod tests {
         form.next_field();
         assert_eq!(form.active_field, FormField::WorksInMv2);
         form.next_field();
-        assert_eq!(form.active_field, FormField::OverallWorking);
+        assert_eq!(form.active_field, FormField::NeedsLogin);
         form.next_field();
-        assert_eq!(form.active_field, FormField::HasErrors);
+        assert_eq!(form.active_field, FormField::IsInteresting);
     }
 
     #[test]
@@ -1124,8 +1112,7 @@ mod tests {
         form.installs = false;
         form.works_in_mv2 = false;
         form.overall_working = WorkingStatus::No;
-        form.has_errors = true;
-        form.seems_slower = true;
+        form.needs_login = true;
         form.is_interesting = true;
         form.notes = "Test notes".to_string();
         form.toggle_listener_status(0);
@@ -1136,8 +1123,7 @@ mod tests {
         assert_eq!(json["installs"], false);
         assert_eq!(json["works_in_mv2"], false);
         assert_eq!(json["overall_working"], "no");
-        assert_eq!(json["has_errors"], true);
-        assert_eq!(json["seems_slower"], true);
+        assert_eq!(json["needs_login"], true);
         assert_eq!(json["is_interesting"], true);
         assert_eq!(json["notes"], "Test notes");
         assert_eq!(json["listeners"][0]["status"], "yes");
