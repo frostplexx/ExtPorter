@@ -784,14 +784,84 @@ fn render_help_text(
     state: &AppState,
     form_mode: bool,
 ) {
-    let help_text = if form_mode {
-        "Tab/Shift+Tab: Navigate • Space: Toggle • Type: Edit Notes • Enter: Submit • Esc: Cancel • D: Toggle Description"
+    let help_line = if form_mode {
+        Line::from(vec![
+            Span::styled(
+                "Tab/Shift+Tab: ",
+                Style::default().add_modifier(Modifier::DIM),
+            ),
+            Span::styled("Navigate", Style::default()),
+            Span::styled(" • ", Style::default().add_modifier(Modifier::DIM)),
+            Span::styled("Space: ", Style::default().add_modifier(Modifier::DIM)),
+            Span::styled("Toggle", Style::default()),
+            Span::styled(" • ", Style::default().add_modifier(Modifier::DIM)),
+            Span::styled("Type: ", Style::default().add_modifier(Modifier::DIM)),
+            Span::styled("Edit Notes", Style::default()),
+            Span::styled(" • ", Style::default().add_modifier(Modifier::DIM)),
+            Span::styled(
+                "Enter: ",
+                Style::default()
+                    .fg(state.theme.status_running)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(
+                "Submit",
+                Style::default()
+                    .fg(state.theme.status_running)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(" • ", Style::default().add_modifier(Modifier::DIM)),
+            Span::styled("Esc: ", Style::default().add_modifier(Modifier::DIM)),
+            Span::styled("Cancel", Style::default()),
+            Span::styled(" • ", Style::default().add_modifier(Modifier::DIM)),
+            Span::styled("D: ", Style::default().add_modifier(Modifier::DIM)),
+            Span::styled("Toggle Description", Style::default()),
+        ])
     } else if state.selected_extension_id.is_some() {
-        "Enter: Start Testing • O: Launch Both • Q: Close Both • N: Next • P: Previous • D: Toggle Description"
+        Line::from(vec![
+            Span::styled("▶ ", Style::default().fg(state.theme.status_running)),
+            Span::styled(
+                "Enter: ",
+                Style::default()
+                    .fg(state.theme.status_running)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(
+                "Start Testing",
+                Style::default()
+                    .fg(state.theme.status_running)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(" • ", Style::default().add_modifier(Modifier::DIM)),
+            Span::styled("O: ", Style::default().add_modifier(Modifier::DIM)),
+            Span::styled("Launch Both", Style::default()),
+            Span::styled(" • ", Style::default().add_modifier(Modifier::DIM)),
+            Span::styled("Q: ", Style::default().add_modifier(Modifier::DIM)),
+            Span::styled("Close Both", Style::default()),
+            Span::styled(" • ", Style::default().add_modifier(Modifier::DIM)),
+            Span::styled("N: ", Style::default().add_modifier(Modifier::DIM)),
+            Span::styled("Next", Style::default()),
+            Span::styled(" • ", Style::default().add_modifier(Modifier::DIM)),
+            Span::styled("B: ", Style::default().add_modifier(Modifier::DIM)),
+            Span::styled("Back", Style::default()),
+            Span::styled(" • ", Style::default().add_modifier(Modifier::DIM)),
+            Span::styled("D: ", Style::default().add_modifier(Modifier::DIM)),
+            Span::styled("Toggle Description", Style::default()),
+        ])
     } else {
-        "No extension loaded • Go to Explorer tab and press 'A' to send an extension here"
+        Line::from(vec![
+            Span::styled(
+                "No extension loaded",
+                Style::default().add_modifier(Modifier::DIM),
+            ),
+            Span::styled(" • ", Style::default().add_modifier(Modifier::DIM)),
+            Span::styled(
+                "Go to Explorer tab and press 'A' to send an extension here",
+                Style::default().add_modifier(Modifier::DIM),
+            ),
+        ])
     };
-    let help = Paragraph::new(help_text).style(Style::default().add_modifier(Modifier::DIM));
 
+    let help = Paragraph::new(help_line);
     f.render_widget(help, *area);
 }

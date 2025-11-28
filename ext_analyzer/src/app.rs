@@ -426,6 +426,51 @@ impl App {
             return;
         }
 
+        // Handle browser launch success
+        if msg == "DUAL_BROWSERS_LAUNCHED" {
+            if self.state.message_scroll_offset > 0 {
+                self.state.message_scroll_offset += 1;
+            }
+            self.state.messages.push(Message {
+                msg_type: MessageType::System,
+                content: "✓ Browsers launched successfully".to_string(),
+                timestamp: chrono::Utc::now(),
+            });
+            return;
+        }
+
+        // Handle browser close success
+        if msg == "BROWSERS_CLOSED" {
+            if self.state.message_scroll_offset > 0 {
+                self.state.message_scroll_offset += 1;
+            }
+            self.state.messages.push(Message {
+                msg_type: MessageType::System,
+                content: "✓ Browsers closed".to_string(),
+                timestamp: chrono::Utc::now(),
+            });
+            return;
+        }
+
+        // Handle ERROR messages from server (e.g., browser launch failures)
+        if msg.starts_with("ERROR:") || msg.starts_with("ERROR ") {
+            let error_msg = msg
+                .strip_prefix("ERROR:")
+                .or_else(|| msg.strip_prefix("ERROR "))
+                .unwrap_or(&msg)
+                .trim();
+
+            if self.state.message_scroll_offset > 0 {
+                self.state.message_scroll_offset += 1;
+            }
+            self.state.messages.push(Message {
+                msg_type: MessageType::System,
+                content: format!("✗ Error: {}", error_msg),
+                timestamp: chrono::Utc::now(),
+            });
+            return;
+        }
+
         if msg.starts_with("MIGRATION_STATUS:") {
             if let Some(status) = msg.strip_prefix("MIGRATION_STATUS:") {
                 let was_running = self.state.migration_running;

@@ -80,8 +80,8 @@ fn handle_normal_input(
             // Load next untested extension
             let _ = tx.send(AppEvent::LoadNextUntestedExtension);
         }
-        KeyCode::Char('p') | KeyCode::Char('P') => {
-            // Load previous untested extension
+        KeyCode::Char('b') | KeyCode::Char('B') => {
+            // Load previous untested extension (Back)
             let _ = tx.send(AppEvent::LoadPreviousUntestedExtension);
         }
         KeyCode::Char('d') | KeyCode::Char('D') => {
@@ -160,18 +160,6 @@ fn handle_form_input(
                             form.toggle_works_in_mv2();
                             false
                         }
-                        FormField::OverallWorking => {
-                            form.toggle_overall_working();
-                            false
-                        }
-                        FormField::HasErrors => {
-                            form.toggle_has_errors();
-                            false
-                        }
-                        FormField::SeemsSlower => {
-                            form.toggle_seems_slower();
-                            false
-                        }
                         FormField::NeedsLogin => {
                             form.toggle_needs_login();
                             false
@@ -186,6 +174,10 @@ fn handle_form_input(
                         }
                         FormField::IsInteresting => {
                             form.toggle_interesting();
+                            false
+                        }
+                        FormField::OverallWorking => {
+                            form.toggle_overall_working();
                             false
                         }
                         _ => false,
