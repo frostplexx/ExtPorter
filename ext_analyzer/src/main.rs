@@ -12,6 +12,7 @@ use std::{io, sync::Arc};
 use tokio::sync::{mpsc, Mutex};
 
 mod app;
+mod listener_labels;
 mod tabs;
 mod theme;
 mod types;

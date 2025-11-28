@@ -147,32 +147,53 @@ fn handle_form_input(
                     form.add_char_to_notes(' ');
                 } else {
                     // Toggle current field
-                    match form.active_field {
+                    let should_advance = match form.active_field {
                         FormField::Listener(idx) => {
                             form.toggle_listener_status(idx);
+                            true // Auto-advance after toggling listener
+                        }
+                        FormField::Installs => {
+                            form.toggle_installs();
+                            false
+                        }
+                        FormField::WorksInMv2 => {
+                            form.toggle_works_in_mv2();
+                            false
                         }
                         FormField::OverallWorking => {
                             form.toggle_overall_working();
+                            false
                         }
                         FormField::HasErrors => {
                             form.toggle_has_errors();
+                            false
                         }
                         FormField::SeemsSlower => {
                             form.toggle_seems_slower();
+                            false
                         }
                         FormField::NeedsLogin => {
                             form.toggle_needs_login();
+                            false
                         }
                         FormField::IsPopupBroken => {
                             form.toggle_is_popup_broken();
+                            false
                         }
                         FormField::IsSettingsBroken => {
                             form.toggle_is_settings_broken();
+                            false
                         }
                         FormField::IsInteresting => {
                             form.toggle_interesting();
+                            false
                         }
-                        _ => {}
+                        _ => false,
+                    };
+
+                    // Auto-advance to next field if it was a listener
+                    if should_advance {
+                        form.next_field();
                     }
                 }
             }
@@ -195,26 +216,34 @@ fn handle_form_input(
 
                 // Handle listener shortcuts when a listener is focused
                 if let FormField::Listener(idx) = form.active_field {
-                    match c {
+                    let should_advance = match c {
                         'y' | 'Y' => {
                             form.set_listener_status(
                                 idx,
                                 super::report_form::ListenerStatus::Working,
                             );
+                            true
                         }
                         'n' | 'N' => {
                             form.set_listener_status(
                                 idx,
                                 super::report_form::ListenerStatus::NotWorking,
                             );
+                            true
                         }
                         'u' | 'U' | '?' => {
                             form.set_listener_status(
                                 idx,
                                 super::report_form::ListenerStatus::Untested,
                             );
+                            true
                         }
-                        _ => {}
+                        _ => false,
+                    };
+
+                    // Auto-advance to next listener if status was set
+                    if should_advance {
+                        form.next_field();
                     }
                 } else if form.active_field == FormField::Notes {
                     // Only add characters to notes field

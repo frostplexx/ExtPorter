@@ -8,7 +8,7 @@ use ratatui::{
 use serde::{Deserialize, Serialize};
 use std::time::Instant;
 
-use crate::{app::AppState, types::Extension};
+use crate::{app::AppState, listener_labels::get_listener_label, types::Extension};
 
 /// Status of a listener test
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -44,6 +44,40 @@ impl ListenerStatus {
     }
 }
 
+/// Overall working status (tri-state)
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum WorkingStatus {
+    Yes,
+    No,
+    CouldNotTest,
+}
+
+impl WorkingStatus {
+    pub fn cycle(&self) -> Self {
+        match self {
+            WorkingStatus::Yes => WorkingStatus::No,
+            WorkingStatus::No => WorkingStatus::CouldNotTest,
+            WorkingStatus::CouldNotTest => WorkingStatus::Yes,
+        }
+    }
+
+    pub fn as_str(&self) -> &str {
+        match self {
+            WorkingStatus::Yes => "yes",
+            WorkingStatus::No => "no",
+            WorkingStatus::CouldNotTest => "could_not_test",
+        }
+    }
+
+    pub fn display_str(&self) -> &str {
+        match self {
+            WorkingStatus::Yes => "Yes",
+            WorkingStatus::No => "No",
+            WorkingStatus::CouldNotTest => "Could not test",
+        }
+    }
+}
+
 /// Test result for a single listener
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ListenerTestResult {
@@ -57,7 +91,9 @@ pub struct ListenerTestResult {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FormField {
     Listener(usize),  // Index into listeners vec
-    OverallWorking,   // Does it basically work?
+    Installs,         // Does the extension install successfully?
+    WorksInMv2,       // Does it work in MV2?
+    OverallWorking,   // Does it basically work? (tri-state)
     HasErrors,        // Did you see errors?
     SeemsSlower,      // Performance check
     NeedsLogin,       // Does it need login to test?
@@ -89,14 +125,16 @@ pub struct ReportForm {
     verification_duration_secs: Option<f64>,
 
     // Manually collected data - Quick Assessment
-    pub overall_working: bool,    // Does it basically work?
-    pub has_errors: bool,         // Did you see errors?
-    pub seems_slower: bool,       // Noticeably slower?
-    pub needs_login: bool,        // Does it need login to test?
-    pub is_popup_broken: bool,    // Is the popup broken?
-    pub is_settings_broken: bool, // Are the settings broken?
-    pub is_interesting: bool,     // Is it interesting for research?
-    pub notes: String,            // Optional notes
+    pub installs: bool,                 // Does it install successfully?
+    pub works_in_mv2: bool,             // Does it work in MV2?
+    pub overall_working: WorkingStatus, // Does it basically work? (tri-state)
+    pub has_errors: bool,               // Did you see errors?
+    pub seems_slower: bool,             // Noticeably slower?
+    pub needs_login: bool,              // Does it need login to test?
+    pub is_popup_broken: bool,          // Is the popup broken?
+    pub is_settings_broken: bool,       // Are the settings broken?
+    pub is_interesting: bool,           // Is it interesting for research?
+    pub notes: String,                  // Optional notes
 
     // Per-listener testing
     pub listeners: Vec<ListenerTestResult>,
@@ -163,7 +201,7 @@ impl ReportForm {
         let first_field = if !listeners.is_empty() {
             FormField::Listener(0)
         } else {
-            FormField::OverallWorking
+            FormField::Installs
         };
 
         Self {
@@ -173,7 +211,9 @@ impl ReportForm {
             extension_id: extension.get_id(),
             verification_start_time: None,
             verification_duration_secs: None,
-            overall_working: true, // Default optimistic
+            installs: true,                      // Default to true
+            works_in_mv2: true,                  // Default to true
+            overall_working: WorkingStatus::Yes, // Default optimistic
             has_errors: false,
             seems_slower: false,
             needs_login: false,
@@ -203,7 +243,14 @@ impl ReportForm {
         form.report_id = Some(report.id.clone());
         form.created_at = Some(report.created_at);
         form.verification_duration_secs = report.verification_duration_secs;
-        form.overall_working = report.overall_working.unwrap_or(true);
+        form.installs = report.installs.unwrap_or(true);
+        form.works_in_mv2 = report.works_in_mv2.unwrap_or(true);
+        form.overall_working = match report.overall_working.as_deref() {
+            Some("yes") => WorkingStatus::Yes,
+            Some("no") => WorkingStatus::No,
+            Some("could_not_test") => WorkingStatus::CouldNotTest,
+            _ => WorkingStatus::Yes,
+        };
         form.has_errors = report.has_errors.unwrap_or(false);
         form.seems_slower = report.seems_slower.unwrap_or(false);
         form.needs_login = report.needs_login.unwrap_or(false);
@@ -267,9 +314,11 @@ impl ReportForm {
                 if idx + 1 < self.listeners.len() {
                     FormField::Listener(idx + 1)
                 } else {
-                    FormField::OverallWorking
+                    FormField::Installs
                 }
             }
+            FormField::Installs => FormField::WorksInMv2,
+            FormField::WorksInMv2 => FormField::OverallWorking,
             FormField::OverallWorking => FormField::HasErrors,
             FormField::HasErrors => FormField::SeemsSlower,
             FormField::SeemsSlower => FormField::NeedsLogin,
@@ -297,7 +346,7 @@ impl ReportForm {
                 if !self.listeners.is_empty() {
                     FormField::Listener(0)
                 } else {
-                    FormField::OverallWorking
+                    FormField::Installs
                 }
             }
         };
@@ -313,13 +362,15 @@ impl ReportForm {
                     FormField::Cancel
                 }
             }
-            FormField::OverallWorking => {
+            FormField::Installs => {
                 if !self.listeners.is_empty() {
                     FormField::Listener(self.listeners.len() - 1)
                 } else {
                     FormField::Cancel
                 }
             }
+            FormField::WorksInMv2 => FormField::Installs,
+            FormField::OverallWorking => FormField::WorksInMv2,
             FormField::HasErrors => FormField::OverallWorking,
             FormField::SeemsSlower => FormField::HasErrors,
             FormField::NeedsLogin => FormField::SeemsSlower,
@@ -360,9 +411,19 @@ impl ReportForm {
         }
     }
 
-    /// Toggle overall working
+    /// Toggle installs
+    pub fn toggle_installs(&mut self) {
+        self.installs = !self.installs;
+    }
+
+    /// Toggle works in MV2
+    pub fn toggle_works_in_mv2(&mut self) {
+        self.works_in_mv2 = !self.works_in_mv2;
+    }
+
+    /// Toggle overall working (cycle through Yes -> No -> Could not test -> Yes)
     pub fn toggle_overall_working(&mut self) {
-        self.overall_working = !self.overall_working;
+        self.overall_working = self.overall_working.cycle();
     }
 
     /// Toggle has errors
@@ -439,7 +500,9 @@ impl ReportForm {
             "tested": true,
             "verification_duration_secs": self.get_verification_duration(),
             // Quick assessment fields
-            "overall_working": self.overall_working,
+            "installs": self.installs,
+            "works_in_mv2": self.works_in_mv2,
+            "overall_working": self.overall_working.as_str(),
             "has_errors": self.has_errors,
             "seems_slower": self.seems_slower,
             "needs_login": self.needs_login,
@@ -562,6 +625,8 @@ impl ReportForm {
         // Build constraints dynamically based on which fields are applicable
         let mut constraints = vec![
             Constraint::Min(0),    // Listeners
+            Constraint::Length(3), // Installs
+            Constraint::Length(3), // Works in MV2
             Constraint::Length(3), // Overall Working
             Constraint::Length(3), // Has Errors
             Constraint::Length(3), // Seems Slower
@@ -588,6 +653,26 @@ impl ReportForm {
         chunk_idx += 1;
 
         self.render_toggle_field(
+            f,
+            chunks[chunk_idx],
+            state,
+            FormField::Installs,
+            "Installs",
+            self.installs,
+        );
+        chunk_idx += 1;
+
+        self.render_toggle_field(
+            f,
+            chunks[chunk_idx],
+            state,
+            FormField::WorksInMv2,
+            "Works in MV2",
+            self.works_in_mv2,
+        );
+        chunk_idx += 1;
+
+        self.render_tristate_field(
             f,
             chunks[chunk_idx],
             state,
@@ -687,10 +772,12 @@ impl ReportForm {
 
                     let prefix = if is_active { "▶ " } else { "  " };
 
+                    let human_label = get_listener_label(&listener.api);
+
                     let name_line = ListItem::new(Line::from(vec![
                         Span::styled(prefix, name_style),
                         Span::styled(
-                            &listener.api,
+                            human_label,
                             name_style.fg(state.theme.analyzer_listener_api),
                         ),
                         Span::raw(" "),
@@ -769,6 +856,52 @@ impl ReportForm {
             state.theme.status_running
         } else {
             state.theme.text_muted
+        };
+
+        let style = if is_active {
+            Style::default().add_modifier(Modifier::BOLD)
+        } else {
+            Style::default()
+        };
+
+        let border_style = if is_active {
+            Style::default()
+                .fg(state.theme.search_border_active)
+                .add_modifier(Modifier::BOLD)
+        } else {
+            Style::default().fg(state.theme.menubar_border)
+        };
+
+        let line = Line::from(vec![
+            Span::styled(format!("{}: ", label), style),
+            Span::styled(value_str, style.fg(value_color)),
+            Span::styled(" (Space)", style.fg(state.theme.text_muted)),
+        ]);
+
+        let block = Paragraph::new(line).block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_style(border_style),
+        );
+
+        f.render_widget(block, area);
+    }
+
+    fn render_tristate_field(
+        &self,
+        f: &mut Frame,
+        area: Rect,
+        state: &AppState,
+        field: FormField,
+        label: &str,
+        value: WorkingStatus,
+    ) {
+        let is_active = self.active_field == field;
+        let value_str = value.display_str();
+        let value_color = match value {
+            WorkingStatus::Yes => state.theme.status_running,
+            WorkingStatus::No => state.theme.status_stopped,
+            WorkingStatus::CouldNotTest => state.theme.text_muted,
         };
 
         let style = if is_active {
@@ -908,6 +1041,8 @@ mod tests {
             input_path: None,
             manifest_v3_path: None,
             cws_info: None,
+            llm_description: None,
+            showing_llm_description: false,
             event_listeners: vec![
                 EventListener {
                     api: "chrome.tabs.onUpdated".to_string(),
@@ -939,11 +1074,12 @@ mod tests {
         assert_eq!(form.mv2_id, Some("mv2-id".to_string()));
         assert_eq!(form.mv3_id, Some("mv3-id".to_string()));
         assert_eq!(form.listeners.len(), 2);
-        assert!(form.overall_working);
+        assert!(form.installs);
+        assert!(form.works_in_mv2);
+        assert_eq!(form.overall_working, WorkingStatus::Yes);
         assert!(!form.has_errors);
         assert!(!form.seems_slower);
         assert!(!form.is_interesting);
-        assert_eq!(form.confidence, ConfidenceLevel::Medium);
         assert_eq!(form.notes, "");
     }
 
@@ -956,11 +1092,11 @@ mod tests {
     }
 
     #[test]
-    fn test_confidence_cycle() {
-        let conf = ConfidenceLevel::Low;
-        assert_eq!(conf.cycle(), ConfidenceLevel::Medium);
-        assert_eq!(conf.cycle().cycle(), ConfidenceLevel::High);
-        assert_eq!(conf.cycle().cycle().cycle(), ConfidenceLevel::Low);
+    fn test_working_status_cycle() {
+        let status = WorkingStatus::Yes;
+        assert_eq!(status.cycle(), WorkingStatus::No);
+        assert_eq!(status.cycle().cycle(), WorkingStatus::CouldNotTest);
+        assert_eq!(status.cycle().cycle().cycle(), WorkingStatus::Yes);
     }
 
     #[test]
@@ -972,6 +1108,10 @@ mod tests {
         form.next_field();
         assert_eq!(form.active_field, FormField::Listener(1));
         form.next_field();
+        assert_eq!(form.active_field, FormField::Installs);
+        form.next_field();
+        assert_eq!(form.active_field, FormField::WorksInMv2);
+        form.next_field();
         assert_eq!(form.active_field, FormField::OverallWorking);
         form.next_field();
         assert_eq!(form.active_field, FormField::HasErrors);
@@ -981,22 +1121,24 @@ mod tests {
     fn test_json_serialization() {
         let ext = create_test_extension();
         let mut form = ReportForm::new(&ext);
-        form.overall_working = false;
+        form.installs = false;
+        form.works_in_mv2 = false;
+        form.overall_working = WorkingStatus::No;
         form.has_errors = true;
         form.seems_slower = true;
         form.is_interesting = true;
-        form.confidence = ConfidenceLevel::High;
         form.notes = "Test notes".to_string();
         form.toggle_listener_status(0);
 
         let json = form.to_report_json();
         assert_eq!(json["extension_id"], "test123");
         assert_eq!(json["tested"], true);
-        assert_eq!(json["overall_working"], false);
+        assert_eq!(json["installs"], false);
+        assert_eq!(json["works_in_mv2"], false);
+        assert_eq!(json["overall_working"], "no");
         assert_eq!(json["has_errors"], true);
         assert_eq!(json["seems_slower"], true);
         assert_eq!(json["is_interesting"], true);
-        assert_eq!(json["confidence"], "high");
         assert_eq!(json["notes"], "Test notes");
         assert_eq!(json["listeners"][0]["status"], "yes");
     }

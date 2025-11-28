@@ -11,10 +11,7 @@ use std::collections::{HashMap, HashSet};
 use tokio::sync::mpsc;
 
 use crate::{
-    tabs::{
-        analyzer::AnalyzerTab, database::DatabaseTab, explorer::ExplorerTab, migrator::MigratorTab,
-        Tab,
-    },
+    tabs::{analyzer::AnalyzerTab, explorer::ExplorerTab, migrator::MigratorTab, ReportsTab, Tab},
     theme::ColorScheme,
     types::{
         AppEvent, ConnectionState, Extension, ExtensionStats, ExtensionsWithStats, Message,
@@ -70,7 +67,7 @@ impl App {
             Box::new(MigratorTab::new()),
             Box::new(ExplorerTab::new()),
             Box::new(AnalyzerTab::new()),
-            Box::new(DatabaseTab::new()),
+            Box::new(ReportsTab::new()),
         ];
 
         Self {
@@ -100,16 +97,24 @@ impl App {
         use ratatui::layout::{Alignment, Constraint, Direction, Layout};
         use ratatui::widgets::Paragraph;
 
-        // Split the menu bar area into tabs section and connection status section
+        // Split the menu bar area into three sections: left padding, tabs, right status
+        // Calculate tab width (approximately 15 chars per tab * 4 tabs)
+        let tab_width = 60;
+        let status_width = 16;
+        let available_width = area.width.saturating_sub(status_width + 2); // -2 for borders
+        let left_padding = (available_width.saturating_sub(tab_width)) / 2;
+
         let menu_chunks = Layout::default()
             .direction(Direction::Horizontal)
             .constraints([
-                Constraint::Min(0),     // Tabs take remaining space
-                Constraint::Length(16), // Connection status fixed width
+                Constraint::Length(left_padding), // Left padding for centering
+                Constraint::Length(tab_width),    // Tabs centered
+                Constraint::Min(0),               // Flexible space
+                Constraint::Length(status_width), // Connection status fixed width
             ])
             .split(area);
 
-        let tab_names = vec!["Migrator", "Explorer", "Analyzer", "Database"];
+        let tab_names = vec!["Migrator", "Explorer", "Analyzer", "Reports"];
         let titles: Vec<Line> = tab_names
             .iter()
             .enumerate()
@@ -128,12 +133,19 @@ impl App {
             })
             .collect();
 
+        // Render left padding block with title
+        let left_block = Block::default()
+            .borders(Borders::TOP | Borders::BOTTOM | Borders::LEFT)
+            .border_style(Style::new().fg(self.state.theme.menubar_border))
+            .title("ExtPorter");
+        f.render_widget(left_block, menu_chunks[0]);
+
+        // Render tabs in center
         let tabs = Tabs::new(titles)
             .block(
                 Block::default()
-                    .borders(Borders::ALL)
-                    .border_style(Style::new().fg(self.state.theme.menubar_border))
-                    .title("ExtPorter"),
+                    .borders(Borders::TOP | Borders::BOTTOM)
+                    .border_style(Style::new().fg(self.state.theme.menubar_border)),
             )
             .select(self.active_tab)
             .style(Style::default())
@@ -143,7 +155,13 @@ impl App {
                     .add_modifier(Modifier::BOLD),
             );
 
-        f.render_widget(tabs, menu_chunks[0]);
+        f.render_widget(tabs, menu_chunks[1]);
+
+        // Render right padding block
+        let right_block = Block::default()
+            .borders(Borders::TOP | Borders::BOTTOM)
+            .border_style(Style::new().fg(self.state.theme.menubar_border));
+        f.render_widget(right_block, menu_chunks[2]);
 
         // Create connection status indicator
         // Ensure connecting state shows for at least 500ms to avoid blinking
@@ -170,24 +188,37 @@ impl App {
         ]))
         .block(
             Block::default()
-                .borders(Borders::ALL)
+                .borders(Borders::TOP | Borders::BOTTOM | Borders::RIGHT)
                 .border_style(Style::new().fg(self.state.theme.menubar_border)),
         )
         .alignment(Alignment::Center);
 
-        f.render_widget(connection_status, menu_chunks[1]);
+        f.render_widget(connection_status, menu_chunks[3]);
     }
 
     pub fn handle_input(&mut self, key: KeyEvent) -> Result<()> {
-        // Tab navigation with numbers 1-5
-        let new_tab = match key.code {
-            KeyCode::Char('1') => Some(0),
-            KeyCode::Char('2') => Some(1),
-            KeyCode::Char('3') => Some(2),
-            KeyCode::Char('4') => Some(3),
-            KeyCode::Left if self.active_tab > 0 => Some(self.active_tab - 1),
-            KeyCode::Right if self.active_tab < self.tabs.len() - 1 => Some(self.active_tab + 1),
-            _ => None,
+        // Check if the current tab is in text input mode
+        let is_text_input = if let Some(tab) = self.tabs.get(self.active_tab) {
+            tab.is_in_text_input_mode()
+        } else {
+            false
+        };
+
+        // Only handle tab navigation if NOT in text input mode
+        let new_tab = if !is_text_input {
+            match key.code {
+                KeyCode::Char('1') => Some(0),
+                KeyCode::Char('2') => Some(1),
+                KeyCode::Char('3') => Some(2),
+                KeyCode::Char('4') => Some(3),
+                KeyCode::Left if self.active_tab > 0 => Some(self.active_tab - 1),
+                KeyCode::Right if self.active_tab < self.tabs.len() - 1 => {
+                    Some(self.active_tab + 1)
+                }
+                _ => None,
+            }
+        } else {
+            None
         };
 
         if let Some(tab_index) = new_tab {

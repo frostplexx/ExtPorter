@@ -4,22 +4,146 @@ use tokio::sync::mpsc;
 
 use crate::{app::AppState, types::AppEvent};
 
-use super::ViewMode;
-
 pub fn handle_input(
     key: KeyEvent,
-    _state: &mut AppState,
-    _tx: mpsc::UnboundedSender<AppEvent>,
-    view_mode: &mut ViewMode,
+    state: &mut AppState,
+    tx: mpsc::UnboundedSender<AppEvent>,
+    selected_index: &mut usize,
+    scroll_offset: &mut usize,
+    search_query: &mut String,
+    search_focused: &mut bool,
+    show_tested_only: &mut bool,
+    show_untested_only: &mut bool,
 ) -> Result<()> {
+    // Handle search input mode
+    if *search_focused {
+        match key.code {
+            KeyCode::Esc => {
+                *search_focused = false;
+            }
+            KeyCode::Char(c) => {
+                search_query.push(c);
+                *selected_index = 0;
+                *scroll_offset = 0;
+            }
+            KeyCode::Backspace => {
+                search_query.pop();
+                *selected_index = 0;
+                *scroll_offset = 0;
+            }
+            _ => {}
+        }
+        return Ok(());
+    }
+
+    // Get filtered reports
+    let filtered_reports =
+        get_filtered_reports(state, search_query, *show_tested_only, *show_untested_only);
+    let total_reports = filtered_reports.len();
+
+    // Handle normal navigation
     match key.code {
-        KeyCode::Char('m') => {
-            *view_mode = match *view_mode {
-                ViewMode::Collections => ViewMode::Query,
-                ViewMode::Query => ViewMode::Collections,
-            };
+        KeyCode::Char('/') => {
+            *search_focused = true;
+        }
+        KeyCode::Char('t') => {
+            // Toggle show tested only
+            *show_tested_only = !*show_tested_only;
+            if *show_tested_only {
+                *show_untested_only = false;
+            }
+            *selected_index = 0;
+            *scroll_offset = 0;
+        }
+        KeyCode::Char('u') => {
+            // Toggle show untested only
+            *show_untested_only = !*show_untested_only;
+            if *show_untested_only {
+                *show_tested_only = false;
+            }
+            *selected_index = 0;
+            *scroll_offset = 0;
+        }
+        KeyCode::Char('c') => {
+            // Clear all filters
+            *show_tested_only = false;
+            *show_untested_only = false;
+            search_query.clear();
+            *selected_index = 0;
+            *scroll_offset = 0;
+        }
+        KeyCode::Up | KeyCode::Char('k') => {
+            if *selected_index > 0 {
+                *selected_index -= 1;
+            }
+        }
+        KeyCode::Down | KeyCode::Char('j') => {
+            if total_reports > 0 && *selected_index < total_reports - 1 {
+                *selected_index += 1;
+            }
+        }
+        KeyCode::Enter => {
+            // Load the selected extension in the Analyzer tab
+            if let Some(report) = filtered_reports.get(*selected_index) {
+                state.selected_extension_id = Some(report.extension_id.clone());
+                let _ = tx.send(AppEvent::SwitchToTab(2)); // Switch to Analyzer tab
+            }
         }
         _ => {}
     }
+
     Ok(())
+}
+
+fn get_filtered_reports<'a>(
+    state: &'a AppState,
+    search_query: &str,
+    show_tested_only: bool,
+    show_untested_only: bool,
+) -> Vec<&'a crate::types::Report> {
+    state
+        .reports
+        .iter()
+        .filter(|report| {
+            // Apply tested/untested filter
+            if show_tested_only && !report.tested {
+                return false;
+            }
+            if show_untested_only && report.tested {
+                return false;
+            }
+
+            // Apply search query
+            if !search_query.is_empty() {
+                let query_lower = search_query.to_lowercase();
+
+                // Search in extension name
+                if let Some(ext) = state
+                    .extensions
+                    .iter()
+                    .find(|e| e.get_id() == report.extension_id)
+                {
+                    if ext.name.to_lowercase().contains(&query_lower) {
+                        return true;
+                    }
+                }
+
+                // Search in notes
+                if let Some(ref notes) = report.notes {
+                    if notes.to_lowercase().contains(&query_lower) {
+                        return true;
+                    }
+                }
+
+                // Search in extension ID
+                if report.extension_id.to_lowercase().contains(&query_lower) {
+                    return true;
+                }
+
+                return false;
+            }
+
+            true
+        })
+        .collect()
 }
