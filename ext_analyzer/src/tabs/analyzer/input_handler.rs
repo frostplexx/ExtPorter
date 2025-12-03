@@ -98,6 +98,15 @@ fn handle_normal_input(
                 }
             }
         }
+        KeyCode::Char('f') | KeyCode::Char('F') => {
+            // Trigger LLM fix for current extension
+            if let Some(ref ext_id) = state.selected_extension_id {
+                // Send fix request
+                let msg = format!("FIX_EXTENSION:{}", ext_id);
+                let _ = tx.send(AppEvent::SendWebSocketMessage(msg));
+                let _ = tx.send(AppEvent::LLMFixStarted(ext_id.clone()));
+            }
+        }
         KeyCode::Char('j') | KeyCode::Char('J') | KeyCode::Down => {
             // Scroll listeners panel down
             *listeners_scroll_offset = listeners_scroll_offset.saturating_add(1);
