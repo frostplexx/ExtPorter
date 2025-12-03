@@ -12,8 +12,7 @@ pub struct ReportsTab {
     scroll_offset: usize,
     search_query: String,
     search_focused: bool,
-    show_tested_only: bool,
-    show_untested_only: bool,
+    show_interesting_only: bool,
 }
 
 impl ReportsTab {
@@ -23,8 +22,7 @@ impl ReportsTab {
             scroll_offset: 0,
             search_query: String::new(),
             search_focused: false,
-            show_tested_only: false,
-            show_untested_only: false,
+            show_interesting_only: false,
         }
     }
 }
@@ -45,8 +43,7 @@ impl super::Tab for ReportsTab {
             &mut self.scroll_offset,
             &self.search_query,
             self.search_focused,
-            self.show_tested_only,
-            self.show_untested_only,
+            self.show_interesting_only,
         );
     }
 
@@ -64,8 +61,7 @@ impl super::Tab for ReportsTab {
             &mut self.scroll_offset,
             &mut self.search_query,
             &mut self.search_focused,
-            &mut self.show_tested_only,
-            &mut self.show_untested_only,
+            &mut self.show_interesting_only,
         )
     }
 

@@ -17,8 +17,7 @@ pub fn render(
     scroll_offset: &mut usize,
     search_query: &str,
     search_focused: bool,
-    show_tested_only: bool,
-    show_untested_only: bool,
+    show_interesting_only: bool,
 ) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
@@ -31,7 +30,7 @@ pub fn render(
         .split(area);
 
     render_search_bar(f, chunks[0], state, search_query, search_focused);
-    render_filter_status(f, chunks[1], state, show_tested_only, show_untested_only);
+    render_filter_status(f, chunks[1], state, show_interesting_only);
 
     // Split main area into list and detail
     let main_chunks = Layout::default()
@@ -46,8 +45,7 @@ pub fn render(
         selected_index,
         scroll_offset,
         search_query,
-        show_tested_only,
-        show_untested_only,
+        show_interesting_only,
     );
 
     render_report_detail(
@@ -56,8 +54,7 @@ pub fn render(
         state,
         selected_index,
         search_query,
-        show_tested_only,
-        show_untested_only,
+        show_interesting_only,
     );
 
     render_help_text(f, chunks[3], search_focused);
@@ -103,22 +100,11 @@ fn render_search_bar(
     f.render_widget(search_box, area);
 }
 
-fn render_filter_status(
-    f: &mut Frame,
-    area: Rect,
-    state: &AppState,
-    show_tested_only: bool,
-    show_untested_only: bool,
-) {
-    let filter_text = if show_tested_only {
+fn render_filter_status(f: &mut Frame, area: Rect, state: &AppState, show_interesting_only: bool) {
+    let filter_text = if show_interesting_only {
         Span::styled(
-            "Filter: Tested only",
+            "Filter: Interesting only",
             Style::default().fg(state.theme.stats_mv3),
-        )
-    } else if show_untested_only {
-        Span::styled(
-            "Filter: Untested only",
-            Style::default().fg(state.theme.stats_mv2_only),
         )
     } else {
         Span::styled(
@@ -140,11 +126,9 @@ fn render_reports_list(
     selected_index: usize,
     scroll_offset: &mut usize,
     search_query: &str,
-    show_tested_only: bool,
-    show_untested_only: bool,
+    show_interesting_only: bool,
 ) {
-    let filtered_reports =
-        get_filtered_reports(state, search_query, show_tested_only, show_untested_only);
+    let filtered_reports = get_filtered_reports(state, search_query, show_interesting_only);
     let total_reports = filtered_reports.len();
 
     // Update scroll offset to keep selected item visible
@@ -248,11 +232,9 @@ fn render_report_detail(
     state: &AppState,
     selected_index: usize,
     search_query: &str,
-    show_tested_only: bool,
-    show_untested_only: bool,
+    show_interesting_only: bool,
 ) {
-    let filtered_reports =
-        get_filtered_reports(state, search_query, show_tested_only, show_untested_only);
+    let filtered_reports = get_filtered_reports(state, search_query, show_interesting_only);
 
     let detail_text = if let Some(report) = filtered_reports.get(selected_index) {
         let ext = state
@@ -325,7 +307,10 @@ fn render_report_detail(
                 match working_str.as_str() {
                     "yes" => Span::styled("Yes", Style::default().fg(state.theme.score_high)),
                     "no" => Span::styled("No", Style::default().fg(state.theme.score_low)),
-                    "could_not_test" => Span::styled( "Could not test", Style::default().fg(state.theme.could_not_test),),
+                    "could_not_test" => Span::styled(
+                        "Could not test",
+                        Style::default().fg(state.theme.could_not_test),
+                    ),
                     _ => Span::styled("Unknown", Style::default().fg(state.theme.could_not_test)),
                 },
             ]));
@@ -368,32 +353,47 @@ fn render_report_detail(
             ]));
         }
 
-        // Popup broken
-        if let Some(is_popup_broken) = report.is_popup_broken {
+        // Popup working
+        if let Some(is_popup_working) = report.is_popup_working {
             lines.push(Line::from(vec![
                 Span::styled(
-                    "Popup Broken: ",
+                    "Popup Working: ",
                     Style::default().fg(state.theme.detail_label),
                 ),
-                if is_popup_broken {
-                    Span::styled("Yes", Style::default().fg(state.theme.score_low))
+                if is_popup_working {
+                    Span::styled("Yes", Style::default().fg(state.theme.score_high))
                 } else {
-                    Span::styled("No", Style::default().fg(state.theme.score_high))
+                    Span::styled("No", Style::default().fg(state.theme.score_low))
                 },
             ]));
         }
 
-        // Settings broken
-        if let Some(is_settings_broken) = report.is_settings_broken {
+        // Settings working
+        if let Some(is_settings_working) = report.is_settings_working {
             lines.push(Line::from(vec![
                 Span::styled(
-                    "Settings Broken: ",
+                    "Settings Working: ",
                     Style::default().fg(state.theme.detail_label),
                 ),
-                if is_settings_broken {
-                    Span::styled("Yes", Style::default().fg(state.theme.score_low))
+                if is_settings_working {
+                    Span::styled("Yes", Style::default().fg(state.theme.score_high))
                 } else {
-                    Span::styled("No", Style::default().fg(state.theme.score_high))
+                    Span::styled("No", Style::default().fg(state.theme.score_low))
+                },
+            ]));
+        }
+
+        // New tab working
+        if let Some(is_new_tab_working) = report.is_new_tab_working {
+            lines.push(Line::from(vec![
+                Span::styled(
+                    "New Tab Working: ",
+                    Style::default().fg(state.theme.detail_label),
+                ),
+                if is_new_tab_working {
+                    Span::styled("Yes", Style::default().fg(state.theme.score_high))
+                } else {
+                    Span::styled("No", Style::default().fg(state.theme.score_low))
                 },
             ]));
         }
@@ -527,7 +527,7 @@ fn render_help_text(f: &mut Frame, area: Rect, search_focused: bool) {
     let help_text = if search_focused {
         "ESC: Exit search • Type to filter"
     } else {
-        "↑/↓: Navigate • /: Search • T: Tested only • U: Untested only • C: Clear filters • Enter: View in Analyzer"
+        "↑/↓: Navigate • /: Search • I: Interesting only • C: Clear filters • Enter: View in Analyzer"
     };
 
     let help = Paragraph::new(help_text).style(Style::default().add_modifier(Modifier::DIM));
@@ -537,19 +537,22 @@ fn render_help_text(f: &mut Frame, area: Rect, search_focused: bool) {
 fn get_filtered_reports<'a>(
     state: &'a AppState,
     search_query: &str,
-    show_tested_only: bool,
-    show_untested_only: bool,
+    show_interesting_only: bool,
 ) -> Vec<&'a crate::types::Report> {
     state
         .reports
         .iter()
         .filter(|report| {
-            // Apply tested/untested filter
-            if show_tested_only && !report.tested {
-                return false;
-            }
-            if show_untested_only && report.tested {
-                return false;
+            // Apply interesting filter
+            if show_interesting_only {
+                if let Some(is_interesting) = report.is_interesting {
+                    if !is_interesting {
+                        return false;
+                    }
+                } else {
+                    // If is_interesting is None, exclude when filtering
+                    return false;
+                }
             }
 
             // Apply search query
