@@ -215,9 +215,11 @@ pub struct Report {
     #[serde(default)]
     pub needs_login: Option<bool>,
     #[serde(default)]
-    pub is_popup_broken: Option<bool>,
+    pub is_popup_working: Option<bool>,
     #[serde(default)]
-    pub is_settings_broken: Option<bool>,
+    pub is_settings_working: Option<bool>,
+    #[serde(default)]
+    pub is_new_tab_working: Option<bool>,
     #[serde(default)]
     pub is_interesting: Option<bool>,
     #[serde(default)]

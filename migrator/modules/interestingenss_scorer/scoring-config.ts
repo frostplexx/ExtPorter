@@ -3,14 +3,14 @@
  * Similar to extension_analyzer.py
  */
 export const WEIGHTS = {
-    webRequest: 25, // +25 per webRequest occurrence
+    webRequest: 5, // +25 per webRequest occurrence
     html_lines: 0.25, // +0.25 per line of HTML
     storage_local: 5, // +5 per storage.local occurrence
     background_page: 10, // +10 if has background page/service worker
     content_scripts: 4, // +4 if has content scripts
-    dangerous_permissions: 8, // +8 per dangerous permission (tabs, cookies, history, etc.)
+    dangerous_permissions: 3, // +8 per dangerous permission (tabs, cookies, history, etc.)
     host_permissions: 3, // +3 per external host permission
-    crypto_patterns: 15, // +15 per crypto/obfuscation pattern (eval, Function, btoa, etc.)
+    crypto_patterns: 5, // +15 per crypto/obfuscation pattern (eval, Function, btoa, etc.)
     network_requests: 2, // +2 per network request pattern (fetch, XMLHttpRequest, etc.)
     extension_size: 1, // +1 per 100KB of extension size
 

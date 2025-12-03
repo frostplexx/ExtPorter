@@ -170,12 +170,16 @@ fn handle_form_input(
                             form.toggle_needs_login();
                             false
                         }
-                        FormField::IsPopupBroken => {
-                            form.toggle_is_popup_broken();
+                        FormField::IsPopupWorking => {
+                            form.toggle_is_popup_working();
                             false
                         }
-                        FormField::IsSettingsBroken => {
-                            form.toggle_is_settings_broken();
+                        FormField::IsSettingsWorking => {
+                            form.toggle_is_settings_working();
+                            false
+                        }
+                        FormField::IsNewTabWorking => {
+                            form.toggle_is_new_tab_working();
                             false
                         }
                         FormField::IsInteresting => {

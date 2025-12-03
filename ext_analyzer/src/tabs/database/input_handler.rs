@@ -12,8 +12,7 @@ pub fn handle_input(
     scroll_offset: &mut usize,
     search_query: &mut String,
     search_focused: &mut bool,
-    show_tested_only: &mut bool,
-    show_untested_only: &mut bool,
+    show_interesting_only: &mut bool,
 ) -> Result<()> {
     // Handle search input mode
     if *search_focused {
@@ -37,8 +36,7 @@ pub fn handle_input(
     }
 
     // Get filtered reports
-    let filtered_reports =
-        get_filtered_reports(state, search_query, *show_tested_only, *show_untested_only);
+    let filtered_reports = get_filtered_reports(state, search_query, *show_interesting_only);
     let total_reports = filtered_reports.len();
 
     // Handle normal navigation
@@ -46,28 +44,15 @@ pub fn handle_input(
         KeyCode::Char('/') => {
             *search_focused = true;
         }
-        KeyCode::Char('t') => {
-            // Toggle show tested only
-            *show_tested_only = !*show_tested_only;
-            if *show_tested_only {
-                *show_untested_only = false;
-            }
-            *selected_index = 0;
-            *scroll_offset = 0;
-        }
-        KeyCode::Char('u') => {
-            // Toggle show untested only
-            *show_untested_only = !*show_untested_only;
-            if *show_untested_only {
-                *show_tested_only = false;
-            }
+        KeyCode::Char('i') => {
+            // Toggle show interesting only
+            *show_interesting_only = !*show_interesting_only;
             *selected_index = 0;
             *scroll_offset = 0;
         }
         KeyCode::Char('c') => {
             // Clear all filters
-            *show_tested_only = false;
-            *show_untested_only = false;
+            *show_interesting_only = false;
             search_query.clear();
             *selected_index = 0;
             *scroll_offset = 0;
@@ -98,19 +83,22 @@ pub fn handle_input(
 fn get_filtered_reports<'a>(
     state: &'a AppState,
     search_query: &str,
-    show_tested_only: bool,
-    show_untested_only: bool,
+    show_interesting_only: bool,
 ) -> Vec<&'a crate::types::Report> {
     state
         .reports
         .iter()
         .filter(|report| {
-            // Apply tested/untested filter
-            if show_tested_only && !report.tested {
-                return false;
-            }
-            if show_untested_only && report.tested {
-                return false;
+            // Apply interesting filter
+            if show_interesting_only {
+                if let Some(is_interesting) = report.is_interesting {
+                    if !is_interesting {
+                        return false;
+                    }
+                } else {
+                    // If is_interesting is None, exclude when filtering
+                    return false;
+                }
             }
 
             // Apply search query

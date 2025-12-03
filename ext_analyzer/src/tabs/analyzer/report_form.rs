@@ -90,15 +90,16 @@ pub struct ListenerTestResult {
 /// Field types in the form
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FormField {
-    Listener(usize),  // Index into listeners vec
-    Installs,         // Does the extension install successfully?
-    WorksInMv2,       // Does it work in MV2?
-    NeedsLogin,       // Does it need login to test?
-    IsPopupBroken,    // Is the popup broken? (conditional - only if has popup)
-    IsSettingsBroken, // Are the settings broken? (conditional - only if has settings)
-    IsInteresting,    // Is this extension interesting for research?
-    OverallWorking,   // Does it basically work? (tri-state) - moved to bottom
-    Notes,            // Freeform text (optional)
+    Listener(usize),   // Index into listeners vec
+    Installs,          // Does the extension install successfully?
+    WorksInMv2,        // Does it work in MV2?
+    NeedsLogin,        // Does it need login to test?
+    IsPopupWorking,    // Is the popup working? (conditional - only if has popup)
+    IsSettingsWorking, // Are the settings working? (conditional - only if has settings)
+    IsNewTabWorking,   // Is the new tab working? (conditional - only if new tab extension)
+    IsInteresting,     // Is this extension interesting for research?
+    OverallWorking,    // Does it basically work? (tri-state) - moved to bottom
+    Notes,             // Freeform text (optional)
     Submit,
 }
 
@@ -125,8 +126,9 @@ pub struct ReportForm {
     pub installs: bool,                 // Does it install successfully?
     pub works_in_mv2: bool,             // Does it work in MV2?
     pub needs_login: bool,              // Does it need login to test?
-    pub is_popup_broken: bool,          // Is the popup broken?
-    pub is_settings_broken: bool,       // Are the settings broken?
+    pub is_popup_working: bool,         // Is the popup working?
+    pub is_settings_working: bool,      // Are the settings working?
+    pub is_new_tab_working: bool,       // Is the new tab working?
     pub is_interesting: bool,           // Is it interesting for research?
     pub overall_working: WorkingStatus, // Does it basically work? (tri-state)
     pub notes: String,                  // Optional notes
@@ -137,6 +139,7 @@ pub struct ReportForm {
     // Manifest metadata (for conditional fields)
     pub has_popup: bool,
     pub has_settings: bool,
+    pub is_new_tab_extension: bool,
 
     // Form state
     pub active_field: FormField,
@@ -193,6 +196,14 @@ impl ReportForm {
             })
             .unwrap_or(false);
 
+        let is_new_tab_extension = manifest
+            .and_then(|m| m.as_object())
+            .and_then(|obj| obj.get("chrome_url_overrides"))
+            .and_then(|overrides| overrides.get("newtab"))
+            .and_then(|newtab| newtab.as_str())
+            .map(|s| !s.is_empty())
+            .unwrap_or(false);
+
         let first_field = if !listeners.is_empty() {
             FormField::Listener(0)
         } else {
@@ -209,14 +220,16 @@ impl ReportForm {
             installs: true,     // Default to true
             works_in_mv2: true, // Default to true
             needs_login: false,
-            is_popup_broken: false,
-            is_settings_broken: false,
+            is_popup_working: true,    // Default to true
+            is_settings_working: true, // Default to true
+            is_new_tab_working: true,  // Default to true
             is_interesting: false,
             overall_working: WorkingStatus::Yes, // Default optimistic
             notes: String::new(),
             listeners,
             has_popup,
             has_settings,
+            is_new_tab_extension,
             active_field: first_field,
             visible: false,
             notes_cursor_pos: 0,
@@ -239,8 +252,9 @@ impl ReportForm {
         form.installs = report.installs.unwrap_or(true);
         form.works_in_mv2 = report.works_in_mv2.unwrap_or(true);
         form.needs_login = report.needs_login.unwrap_or(false);
-        form.is_popup_broken = report.is_popup_broken.unwrap_or(false);
-        form.is_settings_broken = report.is_settings_broken.unwrap_or(false);
+        form.is_popup_working = report.is_popup_working.unwrap_or(true);
+        form.is_settings_working = report.is_settings_working.unwrap_or(true);
+        form.is_new_tab_working = report.is_new_tab_working.unwrap_or(true);
         form.is_interesting = report.is_interesting.unwrap_or(false);
         form.overall_working = match report.overall_working.as_deref() {
             Some("yes") => WorkingStatus::Yes,
@@ -312,21 +326,32 @@ impl ReportForm {
             FormField::WorksInMv2 => FormField::NeedsLogin,
             FormField::NeedsLogin => {
                 if self.has_popup {
-                    FormField::IsPopupBroken
+                    FormField::IsPopupWorking
                 } else if self.has_settings {
-                    FormField::IsSettingsBroken
+                    FormField::IsSettingsWorking
+                } else if self.is_new_tab_extension {
+                    FormField::IsNewTabWorking
                 } else {
                     FormField::IsInteresting
                 }
             }
-            FormField::IsPopupBroken => {
+            FormField::IsPopupWorking => {
                 if self.has_settings {
-                    FormField::IsSettingsBroken
+                    FormField::IsSettingsWorking
+                } else if self.is_new_tab_extension {
+                    FormField::IsNewTabWorking
                 } else {
                     FormField::IsInteresting
                 }
             }
-            FormField::IsSettingsBroken => FormField::IsInteresting,
+            FormField::IsSettingsWorking => {
+                if self.is_new_tab_extension {
+                    FormField::IsNewTabWorking
+                } else {
+                    FormField::IsInteresting
+                }
+            }
+            FormField::IsNewTabWorking => FormField::IsInteresting,
             FormField::IsInteresting => FormField::OverallWorking,
             FormField::OverallWorking => FormField::Notes,
             FormField::Notes => FormField::Submit,
@@ -359,19 +384,30 @@ impl ReportForm {
             }
             FormField::WorksInMv2 => FormField::Installs,
             FormField::NeedsLogin => FormField::WorksInMv2,
-            FormField::IsPopupBroken => FormField::NeedsLogin,
-            FormField::IsSettingsBroken => {
+            FormField::IsPopupWorking => FormField::NeedsLogin,
+            FormField::IsSettingsWorking => {
                 if self.has_popup {
-                    FormField::IsPopupBroken
+                    FormField::IsPopupWorking
+                } else {
+                    FormField::NeedsLogin
+                }
+            }
+            FormField::IsNewTabWorking => {
+                if self.has_settings {
+                    FormField::IsSettingsWorking
+                } else if self.has_popup {
+                    FormField::IsPopupWorking
                 } else {
                     FormField::NeedsLogin
                 }
             }
             FormField::IsInteresting => {
-                if self.has_settings {
-                    FormField::IsSettingsBroken
+                if self.is_new_tab_extension {
+                    FormField::IsNewTabWorking
+                } else if self.has_settings {
+                    FormField::IsSettingsWorking
                 } else if self.has_popup {
-                    FormField::IsPopupBroken
+                    FormField::IsPopupWorking
                 } else {
                     FormField::NeedsLogin
                 }
@@ -414,15 +450,21 @@ impl ReportForm {
         self.update_dependent_fields();
     }
 
-    /// Toggle is popup broken
-    pub fn toggle_is_popup_broken(&mut self) {
-        self.is_popup_broken = !self.is_popup_broken;
+    /// Toggle is popup working
+    pub fn toggle_is_popup_working(&mut self) {
+        self.is_popup_working = !self.is_popup_working;
         self.update_dependent_fields();
     }
 
-    /// Toggle is settings broken
-    pub fn toggle_is_settings_broken(&mut self) {
-        self.is_settings_broken = !self.is_settings_broken;
+    /// Toggle is settings working
+    pub fn toggle_is_settings_working(&mut self) {
+        self.is_settings_working = !self.is_settings_working;
+        self.update_dependent_fields();
+    }
+
+    /// Toggle is new tab working
+    pub fn toggle_is_new_tab_working(&mut self) {
+        self.is_new_tab_working = !self.is_new_tab_working;
         self.update_dependent_fields();
     }
 
@@ -431,27 +473,28 @@ impl ReportForm {
     /// - If needs_login is true -> overall_working should be CouldNotTest
     /// - If works_in_mv2 is false -> overall_working should be CouldNotTest
     /// - If installs is false -> overall_working should be No
-    /// - If is_popup_broken is true -> overall_working should be No
-    /// - If is_settings_broken is true -> overall_working should be No
+    /// - If is_popup_working is false -> overall_working should be No
+    /// - If is_settings_working is false -> overall_working should be No
+    /// - If is_new_tab_working is false -> overall_working should be No
     pub fn update_dependent_fields(&mut self) {
         // If extension doesn't install, it definitely doesn't work
         if !self.installs {
             self.overall_working = WorkingStatus::No;
         }
-        // If it doesn't work in MV2, we can't properly test the migration
-        else if !self.works_in_mv2 {
-            self.overall_working = WorkingStatus::CouldNotTest;
-        }
         // If it needs login, we can't test it properly
         else if self.needs_login {
             self.overall_working = WorkingStatus::CouldNotTest;
         }
-        // If popup is broken (and extension has popup), it's not working properly
-        else if self.has_popup && self.is_popup_broken {
+        // If popup is not working (and extension has popup), it's not working properly
+        else if self.has_popup && !self.is_popup_working {
             self.overall_working = WorkingStatus::No;
         }
-        // If settings are broken (and extension has settings), it's not working properly
-        else if self.has_settings && self.is_settings_broken {
+        // If settings are not working (and extension has settings), it's not working properly
+        else if self.has_settings && !self.is_settings_working {
+            self.overall_working = WorkingStatus::No;
+        }
+        // If new tab is not working (and extension is new tab extension), it's not working properly
+        else if self.is_new_tab_extension && !self.is_new_tab_working {
             self.overall_working = WorkingStatus::No;
         }
     }
@@ -537,10 +580,13 @@ impl ReportForm {
 
         // Add conditional fields only if applicable
         if self.has_popup {
-            json["is_popup_broken"] = serde_json::json!(self.is_popup_broken);
+            json["is_popup_working"] = serde_json::json!(self.is_popup_working);
         }
         if self.has_settings {
-            json["is_settings_broken"] = serde_json::json!(self.is_settings_broken);
+            json["is_settings_working"] = serde_json::json!(self.is_settings_working);
+        }
+        if self.is_new_tab_extension {
+            json["is_new_tab_working"] = serde_json::json!(self.is_new_tab_working);
         }
 
         // Add custom fields
@@ -640,10 +686,13 @@ impl ReportForm {
 
         // Add conditional fields
         if self.has_popup {
-            constraints.push(Constraint::Length(3)); // Is Popup Broken
+            constraints.push(Constraint::Length(3)); // Is Popup Working
         }
         if self.has_settings {
-            constraints.push(Constraint::Length(3)); // Is Settings Broken
+            constraints.push(Constraint::Length(3)); // Is Settings Working
+        }
+        if self.is_new_tab_extension {
+            constraints.push(Constraint::Length(3)); // Is New Tab Working
         }
 
         constraints.push(Constraint::Length(3)); // Is Interesting
@@ -693,9 +742,9 @@ impl ReportForm {
                 f,
                 chunks[chunk_idx],
                 state,
-                FormField::IsPopupBroken,
-                "Is Popup Broken",
-                self.is_popup_broken,
+                FormField::IsPopupWorking,
+                "Is Popup Working",
+                self.is_popup_working,
             );
             chunk_idx += 1;
         }
@@ -705,9 +754,21 @@ impl ReportForm {
                 f,
                 chunks[chunk_idx],
                 state,
-                FormField::IsSettingsBroken,
-                "Is Settings Broken",
-                self.is_settings_broken,
+                FormField::IsSettingsWorking,
+                "Is Settings Working",
+                self.is_settings_working,
+            );
+            chunk_idx += 1;
+        }
+
+        if self.is_new_tab_extension {
+            self.render_toggle_field(
+                f,
+                chunks[chunk_idx],
+                state,
+                FormField::IsNewTabWorking,
+                "Is New Tab Working",
+                self.is_new_tab_working,
             );
             chunk_idx += 1;
         }
