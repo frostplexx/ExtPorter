@@ -19,6 +19,9 @@ pub enum AppEvent {
     LoadFirstUntestedExtension,
     LLMDescriptionReceived(String, String), // (extension_id, description)
     LLMDescriptionError(String, String),    // (extension_id, error)
+    LLMFixStarted(String),                  // extension_id
+    LLMFixSuccess(String, String),          // (extension_id, modified_files_json)
+    LLMFixError(String, String),            // (extension_id, error)
 }
 
 #[derive(Debug, Clone, PartialEq)]

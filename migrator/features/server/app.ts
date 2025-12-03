@@ -263,6 +263,8 @@ export class MigrationServer {
                     this.handleCloseBrowsers(ws);
                 } else if (command.startsWith('GENERATE_DESCRIPTION:')) {
                     this.handleGenerateDescription(ws, command);
+                } else if (command.startsWith('FIX_EXTENSION:')) {
+                    this.handleFixExtension(ws, command);
                 } else {
                     ws.send(`Server received: ${command}`);
                 }
@@ -913,6 +915,102 @@ export class MigrationServer {
 
             ws.send(`LLM_DESCRIPTION_ERROR:${extensionId}:${errorMessage}`);
             ws.send(`ERROR generating LLM description: ${errorMessage}`);
+        }
+    }
+
+    // Handle LLM-powered extension fixing
+    private async handleFixExtension(ws: WebSocket, command: string): Promise<void> {
+        const extensionId = command.replace('FIX_EXTENSION:', '').trim();
+
+        try {
+            console.log(`[LLM Fixer] Processing fix request for extension: ${extensionId}`);
+
+            // Check if LLM is initialized
+            if (!this.llmInitialized) {
+                console.log(`[LLM Fixer] Service not initialized, sending error`);
+                ws.send(
+                    `FIX_EXTENSION_ERROR:${extensionId}:LLM service not initialized. Check server logs for details.`
+                );
+                return;
+            }
+
+            if (!extensionId) {
+                ws.send('FIX_EXTENSION_ERROR:INVALID:Extension ID is required');
+                return;
+            }
+
+            // Get extension from database
+            console.log(`[LLM Fixer] Fetching extension from database...`);
+            const extensionDoc = await Database.shared.findExtension({ id: extensionId });
+
+            if (!extensionDoc) {
+                console.log(`[LLM Fixer] Extension not found in database`);
+                ws.send(`FIX_EXTENSION_ERROR:${extensionId}:Extension not found in database`);
+                return;
+            }
+
+            // Get report for this extension
+            console.log(`[LLM Fixer] Fetching report for extension...`);
+            const report = await Database.shared.getReportByExtensionId(extensionId);
+
+            if (!report) {
+                console.log(`[LLM Fixer] No test report found for extension`);
+                ws.send(
+                    `FIX_EXTENSION_ERROR:${extensionId}:No test report found. Please test the extension first.`
+                );
+                return;
+            }
+
+            const ext = extensionDoc as any;
+            console.log(`[LLM Fixer] Found extension: ${ext.name}`);
+            ws.send(`Starting LLM-powered fix for: ${ext.name}...`);
+
+            // Get LLM service (already initialized, will reuse connection)
+            console.log(`[LLM Fixer] Getting LLM service...`);
+            const llmService = await llmManager.getService();
+
+            // Import ExtensionFixer
+            const { ExtensionFixer } = await import('../llm/extension-fixer.js');
+
+            // Create fixer
+            console.log(`[LLM Fixer] Creating fixer instance...`);
+            const fixer = await ExtensionFixer.fromExtension(llmService, ext, report);
+
+            ws.send(`Analyzing extension and generating fixes (this may take several minutes)...`);
+            console.log(`[LLM Fixer] Starting fix process...`);
+
+            // Fix the extension
+            const result = await fixer.fixExtension();
+
+            console.log(`[LLM Fixer] Fix process completed:`, result);
+
+            if (result.success) {
+                ws.send(
+                    `FIX_EXTENSION_SUCCESS:${extensionId}:${JSON.stringify({
+                        message: result.message,
+                        filesModified: result.filesModified,
+                    })}`
+                );
+                ws.send(`Extension fixed successfully!`);
+                ws.send(`Files modified: ${result.filesModified.join(', ')}`);
+                ws.send(`Summary: ${result.message}`);
+            } else {
+                ws.send(`FIX_EXTENSION_ERROR:${extensionId}:${result.error || result.message}`);
+                ws.send(`Failed to fix extension: ${result.error || result.message}`);
+            }
+
+            console.log(`[LLM Fixer] Response sent to client for ${ext.name}`);
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            const errorStack = error instanceof Error ? error.stack : '';
+
+            console.error(`[LLM Fixer] Error fixing extension ${extensionId}:`, errorMessage);
+            if (errorStack) {
+                console.error(`[LLM Fixer] Stack trace:`, errorStack);
+            }
+
+            ws.send(`FIX_EXTENSION_ERROR:${extensionId}:${errorMessage}`);
+            ws.send(`ERROR fixing extension: ${errorMessage}`);
         }
     }
 

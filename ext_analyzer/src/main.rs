@@ -155,6 +155,15 @@ async fn run_app(
                     AppEvent::LLMDescriptionError(ext_id, error) => {
                         app.handle_llm_description_error(ext_id, error);
                     }
+                    AppEvent::LLMFixStarted(ext_id) => {
+                        app.handle_llm_fix_started(ext_id);
+                    }
+                    AppEvent::LLMFixSuccess(ext_id, modified_files) => {
+                        app.handle_llm_fix_success(ext_id, modified_files);
+                    }
+                    AppEvent::LLMFixError(ext_id, error) => {
+                        app.handle_llm_fix_error(ext_id, error);
+                    }
                 }
             }
             

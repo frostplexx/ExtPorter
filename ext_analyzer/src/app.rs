@@ -35,6 +35,7 @@ pub struct AppState {
     pub reports: Vec<Report>,
     pub llm_description_cache: HashMap<String, String>,
     pub llm_generating: HashSet<String>, // Track which extensions are currently generating
+    pub llm_fixing: HashSet<String>,     // Track which extensions are currently being fixed
 }
 
 pub struct App {
@@ -61,6 +62,7 @@ impl App {
             reports: Vec::new(),
             llm_description_cache: HashMap::new(),
             llm_generating: HashSet::new(),
+            llm_fixing: HashSet::new(),
         };
 
         let tabs: Vec<Box<dyn Tab>> = vec![
@@ -567,6 +569,33 @@ impl App {
             return;
         }
 
+        // Parse LLM fix messages
+        if msg.starts_with("FIX_EXTENSION_SUCCESS:") {
+            if let Some(rest) = msg.strip_prefix("FIX_EXTENSION_SUCCESS:") {
+                let parts: Vec<&str> = rest.splitn(2, ':').collect();
+                if parts.len() == 2 {
+                    let extension_id = parts[0].to_string();
+                    let modified_files_json = parts[1].to_string();
+                    let _ = self
+                        .tx
+                        .send(AppEvent::LLMFixSuccess(extension_id, modified_files_json));
+                }
+            }
+            return;
+        }
+
+        if msg.starts_with("FIX_EXTENSION_ERROR:") {
+            if let Some(rest) = msg.strip_prefix("FIX_EXTENSION_ERROR:") {
+                let parts: Vec<&str> = rest.splitn(2, ':').collect();
+                if parts.len() == 2 {
+                    let extension_id = parts[0].to_string();
+                    let error = parts[1].to_string();
+                    let _ = self.tx.send(AppEvent::LLMFixError(extension_id, error));
+                }
+            }
+            return;
+        }
+
         // Parse message type
         let (msg_type, content) = if msg.starts_with("STDOUT: ") {
             (
@@ -935,5 +964,62 @@ impl App {
                 });
             }
         }
+    }
+
+    /// Handle LLM fix started
+    pub fn handle_llm_fix_started(&mut self, ext_id: String) {
+        // Add to fixing set
+        self.state.llm_fixing.insert(ext_id.clone());
+
+        if self.state.message_scroll_offset > 0 {
+            self.state.message_scroll_offset += 1;
+        }
+        self.state.messages.push(Message {
+            msg_type: MessageType::System,
+            content: format!("🔧 Starting LLM fix for extension..."),
+            timestamp: chrono::Utc::now(),
+        });
+    }
+
+    /// Handle LLM fix success
+    pub fn handle_llm_fix_success(&mut self, ext_id: String, modified_files_json: String) {
+        // Remove from fixing set
+        self.state.llm_fixing.remove(&ext_id);
+
+        // Parse modified files list
+        let files_msg = if let Ok(files) = serde_json::from_str::<Vec<String>>(&modified_files_json)
+        {
+            if files.is_empty() {
+                "No files were modified".to_string()
+            } else {
+                format!("Modified {} file(s): {}", files.len(), files.join(", "))
+            }
+        } else {
+            modified_files_json
+        };
+
+        if self.state.message_scroll_offset > 0 {
+            self.state.message_scroll_offset += 1;
+        }
+        self.state.messages.push(Message {
+            msg_type: MessageType::System,
+            content: format!("✓ LLM fix completed successfully. {}", files_msg),
+            timestamp: chrono::Utc::now(),
+        });
+    }
+
+    /// Handle LLM fix error
+    pub fn handle_llm_fix_error(&mut self, ext_id: String, error: String) {
+        // Remove from fixing set
+        self.state.llm_fixing.remove(&ext_id);
+
+        if self.state.message_scroll_offset > 0 {
+            self.state.message_scroll_offset += 1;
+        }
+        self.state.messages.push(Message {
+            msg_type: MessageType::System,
+            content: format!("✗ LLM fix failed: {}", error),
+            timestamp: chrono::Utc::now(),
+        });
     }
 }

@@ -848,7 +848,7 @@ fn render_status_bar(
     event_count: u32,
 ) {
     let status_text = if let Some(ext) = selected_ext {
-        Line::from(vec![
+        let mut spans = vec![
             Span::styled(
                 "Extension ID: ",
                 Style::default().fg(state.theme.analyzer_ext_name),
@@ -859,7 +859,23 @@ fn render_status_bar(
                 format!("Events Logged: {}", event_count),
                 Style::default().fg(state.theme.status_running),
             ),
-        ])
+        ];
+
+        // Show LLM fix status if in progress
+        if state.llm_fixing.contains(&ext.get_id()) {
+            spans.push(Span::styled(
+                " • ",
+                Style::default().fg(state.theme.text_muted),
+            ));
+            spans.push(Span::styled(
+                "🔧 LLM Fix In Progress...",
+                Style::default()
+                    .fg(state.theme.status_running)
+                    .add_modifier(Modifier::BOLD),
+            ));
+        }
+
+        Line::from(spans)
     } else {
         Line::from(Span::raw("No extension selected"))
     };
@@ -918,6 +934,9 @@ fn render_help_text(
             Span::styled(" • ", Style::default().add_modifier(Modifier::DIM)),
             Span::styled("D: ", Style::default().add_modifier(Modifier::DIM)),
             Span::styled("Toggle Description", Style::default()),
+            Span::styled(" • ", Style::default().add_modifier(Modifier::DIM)),
+            Span::styled("F: ", Style::default().add_modifier(Modifier::DIM)),
+            Span::styled("Fix with LLM", Style::default()),
         ])
     } else if state.selected_extension_id.is_some() {
         Line::from(vec![
@@ -949,6 +968,9 @@ fn render_help_text(
             Span::styled(" • ", Style::default().add_modifier(Modifier::DIM)),
             Span::styled("D: ", Style::default().add_modifier(Modifier::DIM)),
             Span::styled("Toggle Description", Style::default()),
+            Span::styled(" • ", Style::default().add_modifier(Modifier::DIM)),
+            Span::styled("F: ", Style::default().add_modifier(Modifier::DIM)),
+            Span::styled("Fix with LLM", Style::default()),
         ])
     } else {
         Line::from(vec![

@@ -19,3 +19,6 @@ export {
 } from './prompt-template';
 export type { PromptVariables } from './prompt-template';
 export { llmManager } from './llm-manager';
+export { MCPServer } from './mcp-server';
+export { ExtensionFixer } from './extension-fixer';
+export type { ExtensionFixContext, FixResult } from './extension-fixer';
