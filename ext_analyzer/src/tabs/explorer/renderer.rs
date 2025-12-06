@@ -64,10 +64,6 @@ fn render_stats_bar(f: &mut Frame, area: &ratatui::layout::Rect, state: &AppStat
     let stats = Paragraph::new(Line::from(vec![
         Span::styled("Total:", Style::default().fg(state.theme.stats_total)),
         Span::raw(format!(" {} ", state.extension_stats.total)),
-        Span::styled("• Succeeded:", Style::default().fg(state.theme.stats_mv3)),
-        Span::raw(format!(" {} ", state.extension_stats.with_mv3)),
-        Span::styled("• Failed:", Style::default().fg(state.theme.stats_mv2_only)),
-        Span::raw(format!(" {} ", state.extension_stats.with_mv2_only)),
         Span::styled(
             "• Avg Score:",
             Style::default().fg(state.theme.stats_avg_score),

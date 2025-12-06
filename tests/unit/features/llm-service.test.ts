@@ -1,24 +1,13 @@
-import { describe, it, expect, jest } from '@jest/globals';
-
-// Mock chalk before importing LLMService
-jest.mock('chalk', () => ({
-    default: {
-        yellow: (str: string) => str,
-        green: (str: string) => str,
-        red: (str: string) => str,
-        dim: (str: string) => str,
-    },
-}));
-
+import { describe, it, expect } from '@jest/globals';
 import { LLMService } from '../../../migrator/features/llm/llm-service';
-import { RemoteLLMConfig } from '../../../migrator/features/llm/types';
+import { CopilotConfig } from '../../../migrator/features/llm/types';
 
 describe('LLM Service', () => {
     describe('Constructor', () => {
-        it('should create service with default parameters', () => {
-            const config: RemoteLLMConfig = {
-                endpoint: 'http://localhost:11434',
-                model: 'test-model',
+        it('should create service with minimal config', () => {
+            const config: CopilotConfig = {
+                apiKey: 'test-key',
+                model: 'gpt-4o',
             };
 
             const service = new LLMService(config);
@@ -27,10 +16,12 @@ describe('LLM Service', () => {
         });
 
         it('should merge provided config with defaults', () => {
-            const config: RemoteLLMConfig = {
-                endpoint: 'http://localhost:11434',
-                model: 'test-model',
+            const config: CopilotConfig = {
+                apiKey: 'test-key',
+                model: 'gpt-4',
                 temperature: 0.5,
+                max_tokens: 8000,
+                top_p: 0.9,
             };
 
             const service = new LLMService(config);
@@ -39,8 +30,8 @@ describe('LLM Service', () => {
         });
 
         it('should create service from environment variables', () => {
-            process.env.LLM_ENDPOINT = 'http://test:11434';
-            process.env.LLM_MODEL = 'test-model';
+            process.env.GITHUB_TOKEN = 'test-token';
+            process.env.LLM_MODEL = 'gpt-4o';
 
             const service = LLMService.fromEnv();
 
@@ -48,79 +39,66 @@ describe('LLM Service', () => {
         });
     });
 
-    describe('SSH Tunnel Support', () => {
-        it('should check if using SSH tunnel', () => {
-            const config: RemoteLLMConfig = {
-                endpoint: 'http://localhost:11434',
-                model: 'test-model',
-            };
-
-            const service = new LLMService(config);
-
-            expect(service.isUsingSSHTunnel()).toBe(false);
-        });
-    });
-
     describe('Configuration', () => {
-        it('should handle config with SSH settings', () => {
-            const config: RemoteLLMConfig = {
-                endpoint: 'http://localhost:11434',
-                model: 'test-model',
-                ssh: {
-                    host: 'testhost',
-                    port: 22,
-                    username: 'testuser',
-                    password: 'testpass',
-                    remotePort: 11434,
-                    localPort: 11434,
-                },
+        it('should return the configured model', () => {
+            const config: CopilotConfig = {
+                apiKey: 'test-key',
+                model: 'gpt-4',
             };
 
             const service = new LLMService(config);
 
-            expect(service).toBeDefined();
+            expect(service.getModel()).toBe('gpt-4');
         });
 
-        it('should handle config with all parameters', () => {
-            const config: RemoteLLMConfig = {
-                endpoint: 'http://localhost:11434',
-                model: 'test-model',
-                temperature: 0.7,
-                num_predict: 2000,
-                top_p: 0.9,
-                top_k: 40,
-            };
+        it('should check if service is configured', () => {
+            const configuredService = new LLMService({
+                apiKey: 'test-key',
+                model: 'gpt-4o',
+            });
 
-            const service = new LLMService(config);
+            const unconfiguredService = new LLMService({
+                apiKey: '',
+                model: 'gpt-4o',
+            });
 
-            expect(service).toBeDefined();
+            expect(configuredService.isConfigured()).toBe(true);
+            expect(unconfiguredService.isConfigured()).toBe(false);
         });
     });
 
     describe('Initialization and Cleanup', () => {
-        it('should initialize without SSH', async () => {
-            const config: RemoteLLMConfig = {
-                endpoint: 'http://localhost:11434',
-                model: 'test-model',
+        it('should initialize without errors when properly configured', async () => {
+            const config: CopilotConfig = {
+                apiKey: 'test-key',
+                model: 'gpt-4o',
             };
 
             const service = new LLMService(config);
 
-            // Should not throw during initialization
-            // Note: This will try to check for Ollama, which may not be available
-            // In a real test environment, you would mock the runCommand method
-            expect(service).toBeDefined();
+            await expect(service.initialize()).resolves.toBeUndefined();
         });
 
-        it('should cleanup resources', async () => {
-            const config: RemoteLLMConfig = {
-                endpoint: 'http://localhost:11434',
-                model: 'test-model',
+        it('should throw error when API key is missing during initialization', async () => {
+            const config: CopilotConfig = {
+                apiKey: '',
+                model: 'gpt-4o',
             };
 
             const service = new LLMService(config);
 
-            await expect(service.cleanup()).resolves.not.toThrow();
+            await expect(service.initialize()).rejects.toThrow('GitHub API token not configured');
+        });
+
+        it('should cleanup without errors', async () => {
+            const config: CopilotConfig = {
+                apiKey: 'test-key',
+                model: 'gpt-4o',
+            };
+
+            const service = new LLMService(config);
+
+            await expect(service.cleanup()).resolves.toBeUndefined();
         });
     });
 });

@@ -1,24 +1,24 @@
 export interface LLMConfig {
-    endpoint: string;
     model: string;
     temperature?: number;
-    num_predict?: number;
+    max_tokens?: number;
     top_p?: number;
-    top_k?: number;
 }
 
-export interface SSHConfig {
-    host: string;
-    port: number;
-    username: string;
-    password?: string;
-    privateKeyPath?: string;
-    remotePort: number;
-    localPort: number;
+export interface CopilotConfig extends LLMConfig {
+    apiKey: string;
+    endpoint?: string; // Optional, defaults to GitHub Copilot API endpoint
 }
 
-export interface RemoteLLMConfig extends LLMConfig {
-    ssh?: SSHConfig;
+export type RemoteLLMConfig = CopilotConfig;
+
+/**
+ * OpenCode configuration
+ */
+export interface OpencodeConfig extends LLMConfig {
+    port?: number;
+    hostname?: string;
+    useExternalServer?: boolean; // If true, connect to existing OpenCode instance
 }
 
 export interface CommandResult {
