@@ -2,6 +2,40 @@
 
 This directory contains example scripts demonstrating various features of ExtPorter.
 
+## LLM Integration Examples
+
+### OpenCode SDK Demo
+
+**File**: `opencode_sdk_demo.ts`
+
+Demonstrates how to use the OpenCode SDK for LLM interactions:
+
+- Simple text completion
+- Chat completion with context
+- Multiple interactions using the same session
+- Proper resource cleanup
+
+**Running the Example:**
+
+```bash
+npx ts-node examples/opencode_sdk_demo.ts
+```
+
+**Prerequisites:**
+
+- OpenCode installed and configured
+- `LLM_MODEL` set to a valid OpenCode model (e.g., `anthropic/claude-3-5-sonnet-20241022`)
+
+**What it demonstrates:**
+
+1. Initializing the OpenCode service
+2. Simple completion requests
+3. Chat completion with system context
+4. Reusing sessions for multiple requests
+5. Proper cleanup
+
+See [LLM Integration Guide](../docs/LLM_INTEGRATION.md) for more details.
+
 ## Reports Collection Usage
 
 **File:** `reports_usage.ts`

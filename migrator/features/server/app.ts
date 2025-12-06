@@ -5,6 +5,10 @@ import { Database } from '../database/db_manager';
 import { llmManager, buildChatMessagesFromFile } from '../llm/index.js';
 import * as path from 'path';
 import * as fs from 'fs';
+import * as crypto from 'crypto';
+import * as zlib from 'zlib';
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const tar = require('tar-stream');
 
 interface MigratorProcess {
     process: ChildProcess | null;
@@ -265,6 +269,8 @@ export class MigrationServer {
                     this.handleGenerateDescription(ws, command);
                 } else if (command.startsWith('FIX_EXTENSION:')) {
                     this.handleFixExtension(ws, command);
+                } else if (command.startsWith('DOWNLOAD_EXTENSION:')) {
+                    this.handleDownloadExtension(ws, command);
                 } else {
                     ws.send(`Server received: ${command}`);
                 }
@@ -1011,6 +1017,223 @@ export class MigrationServer {
 
             ws.send(`FIX_EXTENSION_ERROR:${extensionId}:${errorMessage}`);
             ws.send(`ERROR fixing extension: ${errorMessage}`);
+        }
+    }
+
+    // Handle extension download for client-side testing
+    private async handleDownloadExtension(ws: WebSocket, command: string): Promise<void> {
+        // Parse command: DOWNLOAD_EXTENSION:{extension_id} or DOWNLOAD_EXTENSION:{extension_id}:{client_hash}
+        const parts = command.replace('DOWNLOAD_EXTENSION:', '').split(':');
+        const extensionId = parts[0].trim();
+        const clientHash = parts[1]?.trim();
+
+        try {
+            console.log(`[Download] Processing request for extension: ${extensionId}`);
+            if (clientHash) {
+                console.log(`[Download] Client provided hash: ${clientHash}`);
+            }
+
+            if (!extensionId) {
+                ws.send('DOWNLOAD_EXTENSION_ERROR:INVALID:Extension ID is required');
+                return;
+            }
+
+            // Get extension from database
+            const extensionDoc = await Database.shared.findExtension({ id: extensionId });
+
+            if (!extensionDoc) {
+                ws.send(`DOWNLOAD_EXTENSION_ERROR:${extensionId}:Extension not found in database`);
+                return;
+            }
+
+            const ext = extensionDoc as any;
+
+            // Validate paths
+            if (!ext.manifest_v2_path) {
+                ws.send(
+                    `DOWNLOAD_EXTENSION_ERROR:${extensionId}:Extension is missing manifest_v2_path`
+                );
+                return;
+            }
+            if (!ext.manifest_v3_path) {
+                ws.send(
+                    `DOWNLOAD_EXTENSION_ERROR:${extensionId}:Extension is missing manifest_v3_path`
+                );
+                return;
+            }
+
+            // Get directory paths
+            const mv2Dir = ext.manifest_v2_path.endsWith('manifest.json')
+                ? ext.manifest_v2_path.replace(/\/manifest\.json$/, '')
+                : ext.manifest_v2_path;
+            const mv3Dir = ext.manifest_v3_path.endsWith('manifest.json')
+                ? ext.manifest_v3_path.replace(/\/manifest\.json$/, '')
+                : ext.manifest_v3_path;
+
+            // Check if directories exist
+            if (!fs.existsSync(mv2Dir)) {
+                ws.send(
+                    `DOWNLOAD_EXTENSION_ERROR:${extensionId}:MV2 directory not found: ${mv2Dir}`
+                );
+                return;
+            }
+            if (!fs.existsSync(mv3Dir)) {
+                ws.send(
+                    `DOWNLOAD_EXTENSION_ERROR:${extensionId}:MV3 directory not found: ${mv3Dir}`
+                );
+                return;
+            }
+
+            // Calculate hash
+            const serverHash = await this.calculateExtensionHash(mv2Dir, mv3Dir);
+            console.log(`[Download] Server hash: ${serverHash}`);
+
+            // If client has same hash, skip download
+            if (clientHash && clientHash === serverHash) {
+                console.log(`[Download] Hash match, sending CACHED response`);
+                ws.send(`DOWNLOAD_EXTENSION_CACHED:${extensionId}`);
+                return;
+            }
+
+            console.log(`[Download] Creating tar.gz archives...`);
+
+            // Create tar.gz archives for both directories
+            const mv2Archive = await this.createTarGz(mv2Dir);
+            const mv3Archive = await this.createTarGz(mv3Dir);
+
+            console.log(
+                `[Download] Archive sizes - MV2: ${mv2Archive.length}, MV3: ${mv3Archive.length}`
+            );
+
+            // Build binary message:
+            // [4 bytes: mv2_size][mv2_tar.gz][4 bytes: mv3_size][mv3_tar.gz]
+            const sizeHeader = Buffer.alloc(8);
+            sizeHeader.writeUInt32BE(mv2Archive.length, 0);
+            sizeHeader.writeUInt32BE(mv3Archive.length, 4);
+
+            const payload = Buffer.concat([sizeHeader, mv2Archive, mv3Archive]);
+
+            // Send as single binary message with text header prepended
+            // Format: "DOWNLOAD_EXTENSION_START:{ext_id}:{size}:{hash}\n" + binary payload
+            const textHeader = Buffer.from(
+                `DOWNLOAD_EXTENSION_START:${extensionId}:${payload.length}:${serverHash}\n`
+            );
+            const fullMessage = Buffer.concat([textHeader, payload]);
+            ws.send(fullMessage);
+
+            console.log(
+                `[Download] Sent ${fullMessage.length} bytes for extension ${ext.name} (header: ${textHeader.length}, payload: ${payload.length})`
+            );
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            console.error(`[Download] Error downloading extension ${extensionId}:`, errorMessage);
+            ws.send(`DOWNLOAD_EXTENSION_ERROR:${extensionId}:${errorMessage}`);
+        }
+    }
+
+    // Calculate MD5 hash of extension directories for caching
+    private async calculateExtensionHash(mv2Dir: string, mv3Dir: string): Promise<string> {
+        const hash = crypto.createHash('md5');
+
+        const addDirToHash = async (dir: string, prefix: string) => {
+            const files = await this.listFilesRecursive(dir);
+            for (const file of files.sort()) {
+                try {
+                    const stat = await fs.promises.stat(path.join(dir, file));
+                    hash.update(`${prefix}:${file}:${stat.size}:${Math.floor(stat.mtimeMs)}\n`);
+                } catch {
+                    // Skip files that can't be stat'd
+                }
+            }
+        };
+
+        await addDirToHash(mv2Dir, 'mv2');
+        await addDirToHash(mv3Dir, 'mv3');
+
+        return hash.digest('hex');
+    }
+
+    // List files recursively in a directory
+    private async listFilesRecursive(dir: string, base: string = ''): Promise<string[]> {
+        const files: string[] = [];
+        const entries = await fs.promises.readdir(dir, { withFileTypes: true });
+
+        for (const entry of entries) {
+            const relativePath = base ? path.join(base, entry.name) : entry.name;
+            if (entry.isDirectory()) {
+                const subFiles = await this.listFilesRecursive(
+                    path.join(dir, entry.name),
+                    relativePath
+                );
+                files.push(...subFiles);
+            } else if (entry.isFile()) {
+                files.push(relativePath);
+            }
+        }
+
+        return files;
+    }
+
+    // Create a tar.gz archive from a directory
+    private async createTarGz(dirPath: string): Promise<Buffer> {
+        return new Promise(async (resolve, reject) => {
+            try {
+                const pack = tar.pack();
+                const chunks: Buffer[] = [];
+
+                // Pipe through gzip
+                const gzip = zlib.createGzip();
+
+                gzip.on('data', (chunk: Buffer) => chunks.push(chunk));
+                gzip.on('end', () => resolve(Buffer.concat(chunks)));
+                gzip.on('error', reject);
+
+                pack.pipe(gzip);
+
+                // Add all files to tar
+                await this.addDirectoryToTar(pack, dirPath, '');
+
+                pack.finalize();
+            } catch (error) {
+                reject(error);
+            }
+        });
+    }
+
+    // Recursively add directory contents to tar pack
+    private async addDirectoryToTar(
+        pack: any,
+        basePath: string,
+        relativePath: string
+    ): Promise<void> {
+        const fullPath = relativePath ? path.join(basePath, relativePath) : basePath;
+        const entries = await fs.promises.readdir(fullPath, { withFileTypes: true });
+
+        for (const entry of entries) {
+            const entryRelative = relativePath ? path.join(relativePath, entry.name) : entry.name;
+            const entryFull = path.join(basePath, entryRelative);
+
+            if (entry.isDirectory()) {
+                await this.addDirectoryToTar(pack, basePath, entryRelative);
+            } else if (entry.isFile()) {
+                try {
+                    const content = await fs.promises.readFile(entryFull);
+                    const stat = await fs.promises.stat(entryFull);
+
+                    // Add entry with proper headers
+                    pack.entry(
+                        {
+                            name: entryRelative,
+                            size: content.length,
+                            mode: stat.mode,
+                            mtime: stat.mtime,
+                        },
+                        content
+                    );
+                } catch (error) {
+                    console.warn(`[Download] Skipping file ${entryFull}: ${error}`);
+                }
+            }
         }
     }
 

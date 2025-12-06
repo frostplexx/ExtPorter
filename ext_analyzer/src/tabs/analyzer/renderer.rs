@@ -960,6 +960,9 @@ fn render_help_text(
             Span::styled("Q: ", Style::default().add_modifier(Modifier::DIM)),
             Span::styled("Close Both", Style::default()),
             Span::styled(" • ", Style::default().add_modifier(Modifier::DIM)),
+            Span::styled("K: ", Style::default().add_modifier(Modifier::DIM)),
+            Span::styled("Kitty Tab", Style::default()),
+            Span::styled(" • ", Style::default().add_modifier(Modifier::DIM)),
             Span::styled("N: ", Style::default().add_modifier(Modifier::DIM)),
             Span::styled("Next", Style::default()),
             Span::styled(" • ", Style::default().add_modifier(Modifier::DIM)),
@@ -967,10 +970,10 @@ fn render_help_text(
             Span::styled("Back", Style::default()),
             Span::styled(" • ", Style::default().add_modifier(Modifier::DIM)),
             Span::styled("D: ", Style::default().add_modifier(Modifier::DIM)),
-            Span::styled("Toggle Description", Style::default()),
+            Span::styled("Desc", Style::default()),
             Span::styled(" • ", Style::default().add_modifier(Modifier::DIM)),
             Span::styled("F: ", Style::default().add_modifier(Modifier::DIM)),
-            Span::styled("Fix with LLM", Style::default()),
+            Span::styled("LLM Fix", Style::default()),
         ])
     } else {
         Line::from(vec![

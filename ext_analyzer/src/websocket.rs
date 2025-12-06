@@ -70,6 +70,10 @@ async fn connect_and_run(
                     Some(Ok(Message::Text(text))) => {
                         let _ = tx.send(AppEvent::WebSocketMessage(text.to_string()));
                     }
+                    Some(Ok(Message::Binary(data))) => {
+                        // Handle binary messages (extension downloads)
+                        let _ = tx.send(AppEvent::WebSocketBinaryMessage(data.to_vec()));
+                    }
                     Some(Ok(Message::Close(_))) => {
                         break;
                     }

@@ -1,26 +1,26 @@
-import { LLMService } from './llm-service';
+import { OpencodeService } from './opencode-service';
 
 /**
- * Global LLM service instance that persists across multiple calls
- * Maintains a single connection to the GitHub Copilot API
+ * Global OpenCode service instance that persists across multiple calls
+ * Maintains a single connection to OpenCode
  */
-class LLMManager {
-    private static instance: LLMManager | null = null;
-    private service: LLMService | null = null;
+class OpencodeManager {
+    private static instance: OpencodeManager | null = null;
+    private service: OpencodeService | null = null;
     private initialized: boolean = false;
 
     private constructor() {}
 
-    static getInstance(): LLMManager {
-        if (!LLMManager.instance) {
-            LLMManager.instance = new LLMManager();
+    static getInstance(): OpencodeManager {
+        if (!OpencodeManager.instance) {
+            OpencodeManager.instance = new OpencodeManager();
         }
-        return LLMManager.instance;
+        return OpencodeManager.instance;
     }
 
-    async getService(): Promise<LLMService> {
+    async getService(): Promise<OpencodeService> {
         if (!this.service) {
-            this.service = LLMService.fromEnv();
+            this.service = OpencodeService.fromEnv();
             await this.service.initialize();
             this.initialized = true;
         } else if (!this.initialized) {
@@ -44,4 +44,4 @@ class LLMManager {
     }
 }
 
-export const llmManager = LLMManager.getInstance();
+export const opencodeManager = OpencodeManager.getInstance();
