@@ -611,6 +611,19 @@ impl ReportForm {
         self.verification_start_time = None;
     }
 
+    /// Handle browser error - append error to notes and set overall_working to No
+    pub fn handle_browser_error(&mut self, error: &str) {
+        // Append error to notes
+        if !self.notes.is_empty() {
+            self.notes.push_str("\n\n");
+        }
+        self.notes.push_str(&format!("[Browser Error] {}", error));
+        self.notes_cursor_pos = self.notes.len();
+
+        // Set overall_working to No since we couldn't properly test
+        self.overall_working = WorkingStatus::No;
+    }
+
     /// Render the form
     pub fn render(&self, f: &mut Frame, area: Rect, state: &AppState) {
         let chunks = Layout::default()
