@@ -326,7 +326,31 @@ async fn run_app(
 
                     // Kitty events
                     AppEvent::OpenKittyTab(mv2_path, mv3_path) => {
-                        handle_kitty_tab_open(app, mv2_path, mv3_path);
+                        // Spawn on blocking thread to avoid blocking the async runtime
+                        let tx_clone = app.tx.clone();
+                        tracing::info!("Opening kitty tab for {:?} and {:?}", mv2_path, mv3_path);
+                        tokio::task::spawn_blocking(move || {
+                            tracing::info!("Inside spawn_blocking for kitty");
+                            match kitty::check_kitty_availability() {
+                                Ok(kitty_remote) => {
+                                    tracing::info!("Kitty remote available, opening folders");
+                                    match kitty_remote.open_extension_folders(&mv2_path, &mv3_path) {
+                                        Ok(()) => {
+                                            tracing::info!("Kitty tab opened successfully");
+                                            let _ = tx_clone.send(AppEvent::KittyTabOpened);
+                                        }
+                                        Err(e) => {
+                                            tracing::error!("Kitty tab error: {}", e);
+                                            let _ = tx_clone.send(AppEvent::KittyTabError(e.to_string()));
+                                        }
+                                    }
+                                }
+                                Err(e) => {
+                                    tracing::error!("Kitty not available: {}", e);
+                                    let _ = tx_clone.send(AppEvent::KittyTabError(e));
+                                }
+                            }
+                        });
                     }
                     AppEvent::KittyTabOpened => {
                         app.handle_kitty_tab_opened();
@@ -561,21 +585,3 @@ async fn handle_binary_extension_data(
     }
 }
 
-/// Handle opening kitty tab with extension folders
-fn handle_kitty_tab_open(app: &mut App, mv2_path: std::path::PathBuf, mv3_path: std::path::PathBuf) {
-    match kitty::check_kitty_availability() {
-        Ok(kitty_remote) => {
-            match kitty_remote.open_extension_folders(&mv2_path, &mv3_path) {
-                Ok(()) => {
-                    app.handle_kitty_tab_opened();
-                }
-                Err(e) => {
-                    app.handle_kitty_tab_error(e.to_string());
-                }
-            }
-        }
-        Err(e) => {
-            app.handle_kitty_tab_error(e);
-        }
-    }
-}

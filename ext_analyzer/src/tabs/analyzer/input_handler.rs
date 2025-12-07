@@ -87,6 +87,14 @@ fn handle_normal_input(
             // Open extension folders in kitty tab (side-by-side)
             if let Some((mv2_path, mv3_path)) = state.current_extension_paths.clone() {
                 let _ = tx.send(AppEvent::OpenKittyTab(mv2_path, mv3_path));
+            } else {
+                // No extension downloaded yet - show message
+                state.messages.push(crate::types::Message {
+                    msg_type: crate::types::MessageType::System,
+                    content: "No extension downloaded yet. Press Enter to download first."
+                        .to_string(),
+                    timestamp: chrono::Utc::now(),
+                });
             }
         }
         KeyCode::Char('n') | KeyCode::Char('N') => {

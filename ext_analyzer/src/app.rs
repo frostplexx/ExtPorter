@@ -58,7 +58,7 @@ pub struct App {
     active_tab: usize,
     tabs: Vec<Box<dyn Tab>>,
     state: AppState,
-    tx: mpsc::UnboundedSender<AppEvent>,
+    pub tx: mpsc::UnboundedSender<AppEvent>,
 }
 
 impl App {
