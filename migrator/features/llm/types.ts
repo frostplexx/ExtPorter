@@ -6,8 +6,8 @@ export interface LLMConfig {
 }
 
 export interface CopilotConfig extends LLMConfig {
-    apiKey: string;
-    endpoint?: string; // Optional, defaults to GitHub Copilot API endpoint
+    apiKey: string; // Deprecated: Authentication is now handled automatically by copilot-auth.ts
+    endpoint?: string; // Deprecated: Always uses https://api.githubcopilot.com
 }
 
 export type RemoteLLMConfig = CopilotConfig;

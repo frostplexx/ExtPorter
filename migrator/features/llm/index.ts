@@ -1,6 +1,12 @@
-// Legacy GitHub Copilot API exports
+// GitHub Copilot API exports
 export { LLMService, callLLMAPI } from './llm-service';
 export { loadLLMConfig, getConfigSummary } from './config';
+export {
+    getCopilotHeaders,
+    getCopilotSessionToken,
+    getGitHubOAuthToken,
+    clearTokenCache,
+} from './copilot-auth';
 export { llmManager } from './llm-manager';
 
 // OpenCode SDK exports
