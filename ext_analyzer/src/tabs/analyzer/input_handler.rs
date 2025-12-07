@@ -2,7 +2,10 @@ use anyhow::Result;
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use tokio::sync::mpsc;
 
-use crate::{app::AppState, types::AppEvent};
+use crate::{
+    app::AppState,
+    types::{AppEvent, Extension},
+};
 
 use super::report_form::{FormField, ReportForm};
 
@@ -14,6 +17,7 @@ pub fn handle_comparison_input(
     mv3_browser_running: &mut bool,
     report_form: &mut Option<ReportForm>,
     listeners_scroll_offset: &mut usize,
+    pending_form_extension: &mut Option<Extension>,
 ) -> Result<()> {
     // Check if form is visible
     let form_visible = report_form.as_ref().map_or(false, |f| f.visible);
@@ -31,6 +35,7 @@ pub fn handle_comparison_input(
             mv3_browser_running,
             report_form,
             listeners_scroll_offset,
+            pending_form_extension,
         )
     }
 }
@@ -41,12 +46,14 @@ fn handle_normal_input(
     tx: mpsc::UnboundedSender<AppEvent>,
     mv2_browser_running: &mut bool,
     mv3_browser_running: &mut bool,
-    report_form: &mut Option<ReportForm>,
+    _report_form: &mut Option<ReportForm>,
     listeners_scroll_offset: &mut usize,
+    pending_form_extension: &mut Option<Extension>,
 ) -> Result<()> {
     match key.code {
         KeyCode::Enter => {
-            // Start testing: Download extension locally, then launch browsers and show form
+            // Start testing: Download extension locally, then launch browsers
+            // Form will be shown when BrowserLaunched event fires
             if let Some(ref ext_id) = state.selected_extension_id {
                 if let Some(ext) = state.extensions.iter().find(|e| e.get_id() == *ext_id) {
                     // Request extension download (will trigger browser launch after download)
@@ -54,10 +61,9 @@ fn handle_normal_input(
                     *mv2_browser_running = true;
                     *mv3_browser_running = true;
 
-                    // Initialize and show form
-                    let mut form = ReportForm::new(ext);
-                    form.start_verification();
-                    *report_form = Some(form);
+                    // Store the extension for form display AFTER browser launches
+                    // Do NOT show form immediately - wait for BrowserLaunched event
+                    *pending_form_extension = Some(ext.clone());
                 }
             }
         }

@@ -1,5 +1,6 @@
 use flate2::read::GzDecoder;
-use std::collections::VecDeque;
+use md5::{Digest, Md5};
+use std::collections::{HashMap, VecDeque};
 use std::path::{Path, PathBuf};
 use tar::Archive;
 use tempfile::TempDir;
@@ -13,6 +14,105 @@ pub enum ExtractError {
     InvalidFormat(String),
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
+    #[error("Hash mismatch: expected {expected}, got {actual}")]
+    HashMismatch { expected: String, actual: String },
+    #[error("Incomplete download: received {received}/{total} chunks")]
+    IncompleteDownload { received: usize, total: usize },
+}
+
+/// Manages a chunked download in progress
+pub struct ChunkedDownload {
+    pub ext_id: String,
+    pub total_size: usize,
+    pub total_chunks: usize,
+    pub expected_hash: String,
+    pub dir_hash: String,
+    received_chunks: HashMap<usize, Vec<u8>>,
+    bytes_received: usize,
+}
+
+impl ChunkedDownload {
+    /// Create a new chunked download
+    pub fn new(
+        ext_id: String,
+        total_size: usize,
+        total_chunks: usize,
+        expected_hash: String,
+        dir_hash: String,
+    ) -> Self {
+        Self {
+            ext_id,
+            total_size,
+            total_chunks,
+            expected_hash,
+            dir_hash,
+            received_chunks: HashMap::with_capacity(total_chunks),
+            bytes_received: 0,
+        }
+    }
+
+    /// Add a chunk to the download. Returns true if this was a new chunk.
+    pub fn add_chunk(&mut self, chunk_index: usize, data: Vec<u8>) -> bool {
+        if self.received_chunks.contains_key(&chunk_index) {
+            return false; // Duplicate chunk
+        }
+
+        self.bytes_received += data.len();
+        self.received_chunks.insert(chunk_index, data);
+        true
+    }
+
+    /// Check if download is complete
+    pub fn is_complete(&self) -> bool {
+        self.received_chunks.len() == self.total_chunks
+    }
+
+    /// Get download progress (chunks_received, total_chunks, bytes_received, total_bytes)
+    pub fn progress(&self) -> (usize, usize, usize, usize) {
+        (
+            self.received_chunks.len(),
+            self.total_chunks,
+            self.bytes_received,
+            self.total_size,
+        )
+    }
+
+    /// Finalize download: assemble chunks, verify hash, return full payload
+    pub fn finalize(mut self) -> Result<(Vec<u8>, String), ExtractError> {
+        if !self.is_complete() {
+            return Err(ExtractError::IncompleteDownload {
+                received: self.received_chunks.len(),
+                total: self.total_chunks,
+            });
+        }
+
+        // Assemble chunks in order
+        let mut payload = Vec::with_capacity(self.total_size);
+        for i in 0..self.total_chunks {
+            if let Some(chunk) = self.received_chunks.remove(&i) {
+                payload.extend(chunk);
+            } else {
+                return Err(ExtractError::IncompleteDownload {
+                    received: self.received_chunks.len(),
+                    total: self.total_chunks,
+                });
+            }
+        }
+
+        // Verify MD5 hash
+        let mut hasher = Md5::new();
+        hasher.update(&payload);
+        let actual_hash = format!("{:x}", hasher.finalize());
+
+        if actual_hash != self.expected_hash {
+            return Err(ExtractError::HashMismatch {
+                expected: self.expected_hash,
+                actual: actual_hash,
+            });
+        }
+
+        Ok((payload, self.dir_hash))
+    }
 }
 
 /// Manages downloading and caching of extensions in a temporary directory.

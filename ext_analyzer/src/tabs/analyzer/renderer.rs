@@ -847,6 +847,53 @@ fn render_status_bar(
     selected_ext: Option<&crate::types::Extension>,
     event_count: u32,
 ) {
+    // Check if we're downloading - show progress bar instead of normal status
+    if let Some(ref progress) = state.download_progress {
+        let percent = if progress.total_bytes > 0 {
+            (progress.bytes_received as f64 / progress.total_bytes as f64 * 100.0) as u16
+        } else if progress.total_chunks > 0 {
+            (progress.chunks_received as f64 / progress.total_chunks as f64 * 100.0) as u16
+        } else {
+            0
+        };
+
+        // Format sizes for display
+        let received_mb = progress.bytes_received as f64 / (1024.0 * 1024.0);
+        let total_mb = progress.total_bytes as f64 / (1024.0 * 1024.0);
+
+        // Create progress bar with custom styling
+        let progress_text = format!(
+            "Downloading: {:.1}MB / {:.1}MB ({}/{} chunks) ",
+            received_mb, total_mb, progress.chunks_received, progress.total_chunks
+        );
+
+        // Build visual progress bar
+        let bar_width = area.width.saturating_sub(progress_text.len() as u16 + 8) as usize;
+        let filled = (bar_width as f64 * percent as f64 / 100.0) as usize;
+        let empty = bar_width.saturating_sub(filled);
+
+        let bar = format!("[{}{}] {}%", "█".repeat(filled), "░".repeat(empty), percent);
+
+        let spans = vec![
+            Span::styled(
+                progress_text,
+                Style::default()
+                    .fg(state.theme.status_running)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(bar, Style::default().fg(state.theme.analyzer_event_count)),
+        ];
+
+        let status = Paragraph::new(Line::from(spans)).block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(state.theme.status_running)),
+        );
+
+        f.render_widget(status, *area);
+        return;
+    }
+
     let status_text = if let Some(ext) = selected_ext {
         let mut spans = vec![
             Span::styled(

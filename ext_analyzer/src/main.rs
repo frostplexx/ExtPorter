@@ -8,7 +8,7 @@ use ratatui::{
     },
     Terminal,
 };
-use std::{io, sync::Arc};
+use std::{collections::HashMap, io, sync::Arc};
 use tokio::sync::{mpsc, Mutex};
 use tracing_subscriber::{fmt, prelude::*, EnvFilter};
 
@@ -24,7 +24,7 @@ mod websocket;
 
 use app::App;
 use browser::{create_shared_browser_manager, run_browser_manager, BrowserCommand};
-use extension_downloader::ExtensionDownloader;
+use extension_downloader::{ChunkedDownload, ExtensionDownloader};
 use types::AppEvent;
 
 #[tokio::main]
@@ -61,6 +61,10 @@ async fn main() -> Result<()> {
     let extension_downloader = Arc::new(Mutex::new(
         ExtensionDownloader::new().expect("Failed to create extension downloader"),
     ));
+
+    // Create chunked downloads state (for large extensions)
+    let chunked_downloads: Arc<Mutex<HashMap<String, ChunkedDownload>>> =
+        Arc::new(Mutex::new(HashMap::new()));
 
     // Create browser manager
     let browser_manager = create_shared_browser_manager();
@@ -105,6 +109,7 @@ async fn main() -> Result<()> {
         rx,
         ws_sender.clone(),
         extension_downloader,
+        chunked_downloads,
         browser_cmd_tx,
     )
     .await;
@@ -133,6 +138,7 @@ async fn run_app(
     mut rx: mpsc::UnboundedReceiver<AppEvent>,
     ws_sender: websocket::WebSocketSender,
     extension_downloader: Arc<Mutex<ExtensionDownloader>>,
+    chunked_downloads: Arc<Mutex<HashMap<String, ChunkedDownload>>>,
     browser_cmd_tx: mpsc::UnboundedSender<BrowserCommand>,
 ) -> Result<()> {
     // Create a ticker for regular redraws (60 FPS for smooth animations)
@@ -177,7 +183,7 @@ async fn run_app(
                     }
                     AppEvent::WebSocketBinaryMessage(data) => {
                         // Handle binary extension download data
-                        handle_binary_extension_data(app, &extension_downloader, data).await;
+                        handle_binary_extension_data(app, &extension_downloader, &chunked_downloads, data).await;
                     }
                     AppEvent::WebSocketError(err) => {
                         app.handle_websocket_error(err);
@@ -267,6 +273,21 @@ async fn run_app(
                     AppEvent::ExtensionDownloadError(ext_id, error) => {
                         app.handle_extension_download_error(ext_id, error);
                     }
+                    AppEvent::ExtensionDownloadProgress {
+                        ext_id,
+                        chunks_received,
+                        total_chunks,
+                        bytes_received,
+                        total_bytes,
+                    } => {
+                        app.handle_extension_download_progress(
+                            ext_id,
+                            chunks_received,
+                            total_chunks,
+                            bytes_received,
+                            total_bytes,
+                        );
+                    }
 
                     // Browser events
                     AppEvent::LaunchBrowsers(mv2_path, mv3_path) => {
@@ -327,83 +348,215 @@ async fn run_app(
 async fn handle_binary_extension_data(
     app: &mut App,
     extension_downloader: &Arc<Mutex<ExtensionDownloader>>,
+    chunked_downloads: &Arc<Mutex<HashMap<String, ChunkedDownload>>>,
     data: Vec<u8>,
 ) {
-    // Binary format from server:
-    // Text header: "DOWNLOAD_EXTENSION_START:{ext_id}:{size}:{hash}\n"
-    // Then binary: [4B mv2_size][mv2.tar.gz][4B mv3_size][mv3.tar.gz]
+    // Binary formats from server:
     //
-    // Or for cached: Text "DOWNLOAD_EXTENSION_CACHED:{ext_id}\n"
+    // Small extensions (single message):
+    //   "DOWNLOAD_EXTENSION_START:{ext_id}:{size}:{hash}\n" + binary payload
+    //
+    // Cached:
+    //   "DOWNLOAD_EXTENSION_CACHED:{ext_id}\n"
+    //
+    // Chunked (large extensions):
+    //   "DOWNLOAD_EXTENSION_CHUNK_START:{ext_id}:{total_size}:{total_chunks}:{payload_hash}:{dir_hash}"
+    //   "DOWNLOAD_EXTENSION_CHUNK:{ext_id}:{chunk_index}:{chunk_size}\n" + binary chunk
+    //   "DOWNLOAD_EXTENSION_CHUNK_END:{ext_id}"
+    //
+    // Error:
+    //   "DOWNLOAD_EXTENSION_ERROR:{ext_id}:{error}"
 
     // Try to find newline separator for header
-    if let Some(newline_pos) = data.iter().position(|&b| b == b'\n') {
-        let header = String::from_utf8_lossy(&data[..newline_pos]);
-        
-        if header.starts_with("DOWNLOAD_EXTENSION_CACHED:") {
-            // Hash matched, use cached version
-            if let Some(ext_id) = header.strip_prefix("DOWNLOAD_EXTENSION_CACHED:") {
-                let mut downloader = extension_downloader.lock().await;
-                downloader.touch_cached(ext_id);
-                if let Some((mv2_path, mv3_path)) = downloader.get_cached(ext_id) {
-                    app.handle_extension_download_cached(
+    let newline_pos = data.iter().position(|&b| b == b'\n');
+    let header = if let Some(pos) = newline_pos {
+        String::from_utf8_lossy(&data[..pos]).to_string()
+    } else {
+        // No newline - must be a text-only message
+        String::from_utf8_lossy(&data).to_string()
+    };
+
+    if header.starts_with("DOWNLOAD_EXTENSION_CACHED:") {
+        // Hash matched, use cached version
+        if let Some(ext_id) = header.strip_prefix("DOWNLOAD_EXTENSION_CACHED:") {
+            let mut downloader = extension_downloader.lock().await;
+            downloader.touch_cached(ext_id);
+            if let Some((mv2_path, mv3_path)) = downloader.get_cached(ext_id) {
+                app.handle_extension_download_cached(ext_id.to_string(), mv2_path, mv3_path);
+            } else {
+                app.handle_extension_download_error(
+                    ext_id.to_string(),
+                    "Cache inconsistency".to_string(),
+                );
+            }
+        }
+    } else if header.starts_with("DOWNLOAD_EXTENSION_CHUNK_START:") {
+        // Start of chunked download: DOWNLOAD_EXTENSION_CHUNK_START:{ext_id}:{total_size}:{total_chunks}:{payload_hash}:{dir_hash}
+        let parts: Vec<&str> = header
+            .strip_prefix("DOWNLOAD_EXTENSION_CHUNK_START:")
+            .unwrap_or("")
+            .split(':')
+            .collect();
+
+        if parts.len() >= 5 {
+            let ext_id = parts[0].to_string();
+            let total_size: usize = parts[1].parse().unwrap_or(0);
+            let total_chunks: usize = parts[2].parse().unwrap_or(0);
+            let payload_hash = parts[3].to_string();
+            let dir_hash = parts[4].to_string();
+
+            tracing::info!(
+                "Starting chunked download for {}: {} bytes, {} chunks",
+                ext_id,
+                total_size,
+                total_chunks
+            );
+
+            // Create new chunked download
+            let download = ChunkedDownload::new(
+                ext_id.clone(),
+                total_size,
+                total_chunks,
+                payload_hash,
+                dir_hash,
+            );
+
+            // Store in map
+            let mut downloads = chunked_downloads.lock().await;
+            downloads.insert(ext_id.clone(), download);
+
+            // Send initial progress
+            app.handle_extension_download_progress(ext_id, 0, total_chunks, 0, total_size);
+        } else {
+            tracing::error!("Invalid DOWNLOAD_EXTENSION_CHUNK_START header: {}", header);
+        }
+    } else if header.starts_with("DOWNLOAD_EXTENSION_CHUNK:") {
+        // Chunk data: DOWNLOAD_EXTENSION_CHUNK:{ext_id}:{chunk_index}:{chunk_size}\n + binary
+        let parts: Vec<&str> = header
+            .strip_prefix("DOWNLOAD_EXTENSION_CHUNK:")
+            .unwrap_or("")
+            .split(':')
+            .collect();
+
+        if parts.len() >= 3 {
+            let ext_id = parts[0];
+            let chunk_index: usize = parts[1].parse().unwrap_or(0);
+            // parts[2] is chunk_size (for validation, not strictly needed)
+
+            if let Some(newline_pos) = newline_pos {
+                let chunk_data = data[newline_pos + 1..].to_vec();
+
+                let mut downloads = chunked_downloads.lock().await;
+                if let Some(download) = downloads.get_mut(ext_id) {
+                    download.add_chunk(chunk_index, chunk_data);
+
+                    let (chunks_received, total_chunks, bytes_received, total_bytes) =
+                        download.progress();
+
+                    // Emit progress event
+                    app.handle_extension_download_progress(
                         ext_id.to_string(),
-                        mv2_path,
-                        mv3_path,
+                        chunks_received,
+                        total_chunks,
+                        bytes_received,
+                        total_bytes,
+                    );
+
+                    tracing::debug!(
+                        "Received chunk {}/{} for {} ({} bytes)",
+                        chunks_received,
+                        total_chunks,
+                        ext_id,
+                        bytes_received
                     );
                 } else {
-                    app.handle_extension_download_error(
-                        ext_id.to_string(),
-                        "Cache inconsistency".to_string(),
+                    tracing::warn!(
+                        "Received chunk for unknown download: {} (chunk {})",
+                        ext_id,
+                        chunk_index
                     );
                 }
             }
-        } else if header.starts_with("DOWNLOAD_EXTENSION_START:") {
-            // New download: DOWNLOAD_EXTENSION_START:{ext_id}:{size}:{hash}
-            let parts: Vec<&str> = header
-                .strip_prefix("DOWNLOAD_EXTENSION_START:")
-                .unwrap_or("")
-                .split(':')
-                .collect();
-            
-            if parts.len() >= 3 {
-                let ext_id = parts[0];
-                // parts[1] is size (not needed, we have the data)
-                let hash = parts[2];
-                let binary_data = &data[newline_pos + 1..];
-                
-                let mut downloader = extension_downloader.lock().await;
-                match downloader.extract_extension(ext_id, binary_data, hash) {
-                    Ok((mv2_path, mv3_path)) => {
-                        app.handle_extension_downloaded(
-                            ext_id.to_string(),
-                            mv2_path,
-                            mv3_path,
-                        );
+        }
+    } else if header.starts_with("DOWNLOAD_EXTENSION_CHUNK_END:") {
+        // End of chunked download: DOWNLOAD_EXTENSION_CHUNK_END:{ext_id}
+        if let Some(ext_id) = header.strip_prefix("DOWNLOAD_EXTENSION_CHUNK_END:") {
+            tracing::info!("Chunked download complete for {}, finalizing...", ext_id);
+
+            // Remove from active downloads and finalize
+            let download = {
+                let mut downloads = chunked_downloads.lock().await;
+                downloads.remove(ext_id)
+            };
+
+            if let Some(download) = download {
+                match download.finalize() {
+                    Ok((payload, dir_hash)) => {
+                        // Extract the extension
+                        let mut downloader = extension_downloader.lock().await;
+                        match downloader.extract_extension(ext_id, &payload, &dir_hash) {
+                            Ok((mv2_path, mv3_path)) => {
+                                app.handle_extension_downloaded(
+                                    ext_id.to_string(),
+                                    mv2_path,
+                                    mv3_path,
+                                );
+                            }
+                            Err(e) => {
+                                app.handle_extension_download_error(ext_id.to_string(), e.to_string());
+                            }
+                        }
                     }
                     Err(e) => {
-                        app.handle_extension_download_error(
-                            ext_id.to_string(),
-                            e.to_string(),
-                        );
+                        app.handle_extension_download_error(ext_id.to_string(), e.to_string());
                     }
                 }
             } else {
-                tracing::error!("Invalid DOWNLOAD_EXTENSION_START header: {}", header);
-            }
-        } else if header.starts_with("DOWNLOAD_EXTENSION_ERROR:") {
-            // Error from server: DOWNLOAD_EXTENSION_ERROR:{ext_id}:{error}
-            let parts: Vec<&str> = header
-                .strip_prefix("DOWNLOAD_EXTENSION_ERROR:")
-                .unwrap_or("")
-                .splitn(2, ':')
-                .collect();
-            
-            if parts.len() >= 2 {
                 app.handle_extension_download_error(
-                    parts[0].to_string(),
-                    parts[1].to_string(),
+                    ext_id.to_string(),
+                    "Download state not found".to_string(),
                 );
             }
+        }
+    } else if header.starts_with("DOWNLOAD_EXTENSION_START:") {
+        // Small extension (single message): DOWNLOAD_EXTENSION_START:{ext_id}:{size}:{hash}
+        let parts: Vec<&str> = header
+            .strip_prefix("DOWNLOAD_EXTENSION_START:")
+            .unwrap_or("")
+            .split(':')
+            .collect();
+
+        if parts.len() >= 3 {
+            let ext_id = parts[0];
+            // parts[1] is size (not needed, we have the data)
+            let hash = parts[2];
+
+            if let Some(newline_pos) = newline_pos {
+                let binary_data = &data[newline_pos + 1..];
+
+                let mut downloader = extension_downloader.lock().await;
+                match downloader.extract_extension(ext_id, binary_data, hash) {
+                    Ok((mv2_path, mv3_path)) => {
+                        app.handle_extension_downloaded(ext_id.to_string(), mv2_path, mv3_path);
+                    }
+                    Err(e) => {
+                        app.handle_extension_download_error(ext_id.to_string(), e.to_string());
+                    }
+                }
+            }
+        } else {
+            tracing::error!("Invalid DOWNLOAD_EXTENSION_START header: {}", header);
+        }
+    } else if header.starts_with("DOWNLOAD_EXTENSION_ERROR:") {
+        // Error from server: DOWNLOAD_EXTENSION_ERROR:{ext_id}:{error}
+        let parts: Vec<&str> = header
+            .strip_prefix("DOWNLOAD_EXTENSION_ERROR:")
+            .unwrap_or("")
+            .splitn(2, ':')
+            .collect();
+
+        if parts.len() >= 2 {
+            app.handle_extension_download_error(parts[0].to_string(), parts[1].to_string());
         }
     }
 }

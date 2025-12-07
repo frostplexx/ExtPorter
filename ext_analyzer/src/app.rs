@@ -40,6 +40,18 @@ pub struct AppState {
     pub browser_state: BrowserState,     // State of local browser manager
     pub current_extension_paths: Option<(PathBuf, PathBuf)>, // (mv2_path, mv3_path) for current extension
     pub pending_download_extension_id: Option<String>,       // Extension ID being downloaded
+    // Download progress tracking (for chunked downloads)
+    pub download_progress: Option<DownloadProgress>,
+}
+
+/// Progress of a chunked download
+#[derive(Clone)]
+pub struct DownloadProgress {
+    pub ext_id: String,
+    pub chunks_received: usize,
+    pub total_chunks: usize,
+    pub bytes_received: usize,
+    pub total_bytes: usize,
 }
 
 pub struct App {
@@ -70,6 +82,7 @@ impl App {
             browser_state: BrowserState::default(),
             current_extension_paths: None,
             pending_download_extension_id: None,
+            download_progress: None,
         };
 
         let tabs: Vec<Box<dyn Tab>> = vec![
@@ -1087,6 +1100,7 @@ impl App {
     ) {
         self.state.current_extension_paths = Some((mv2_path.clone(), mv3_path.clone()));
         self.state.pending_download_extension_id = None;
+        self.state.download_progress = None;
         self.state.browser_state = BrowserState::Launching;
 
         if self.state.message_scroll_offset > 0 {
@@ -1111,6 +1125,7 @@ impl App {
     ) {
         self.state.current_extension_paths = Some((mv2_path.clone(), mv3_path.clone()));
         self.state.pending_download_extension_id = None;
+        self.state.download_progress = None;
         self.state.browser_state = BrowserState::Launching;
 
         if self.state.message_scroll_offset > 0 {
@@ -1130,6 +1145,7 @@ impl App {
     pub fn handle_extension_download_error(&mut self, ext_id: String, error: String) {
         self.state.browser_state = BrowserState::Error(error.clone());
         self.state.pending_download_extension_id = None;
+        self.state.download_progress = None;
 
         if self.state.message_scroll_offset > 0 {
             self.state.message_scroll_offset += 1;
@@ -1138,6 +1154,24 @@ impl App {
             msg_type: MessageType::System,
             content: format!("✗ Failed to download extension {}: {}", ext_id, error),
             timestamp: chrono::Utc::now(),
+        });
+    }
+
+    /// Handle extension download progress (for chunked downloads)
+    pub fn handle_extension_download_progress(
+        &mut self,
+        ext_id: String,
+        chunks_received: usize,
+        total_chunks: usize,
+        bytes_received: usize,
+        total_bytes: usize,
+    ) {
+        self.state.download_progress = Some(DownloadProgress {
+            ext_id,
+            chunks_received,
+            total_chunks,
+            bytes_received,
+            total_bytes,
         });
     }
 
@@ -1153,6 +1187,14 @@ impl App {
             content: "✓ Browsers launched successfully".to_string(),
             timestamp: chrono::Utc::now(),
         });
+
+        // Notify the AnalyzerTab (index 2) that browsers have launched
+        // so it can show the form if one was pending
+        if let Some(tab) = self.tabs.get_mut(2) {
+            if let Some(analyzer_tab) = tab.as_any_mut().downcast_mut::<AnalyzerTab>() {
+                analyzer_tab.on_browser_launched();
+            }
+        }
     }
 
     /// Handle browser launch error
