@@ -10,6 +10,10 @@ import * as zlib from 'zlib';
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const tar = require('tar-stream');
 
+// Chunked download constants
+const CHUNK_SIZE = 1 * 1024 * 1024; // 1MB chunks
+const CHUNK_THRESHOLD = 10 * 1024 * 1024; // 10MB - chunk if larger
+
 interface MigratorProcess {
     process: ChildProcess | null;
     clientId: string;
@@ -43,7 +47,10 @@ export class MigrationServer {
 
     constructor(globals: Globals) {
         this.globals = globals;
-        this.server = new WebSocketServer({ port: 8080 });
+        this.server = new WebSocketServer({
+            port: 8080,
+            maxPayload: 100 * 1024 * 1024, // 100MB max payload size
+        });
 
         // Save original console methods
         this.originalConsoleLog = console.log;
@@ -1105,7 +1112,7 @@ export class MigrationServer {
                 `[Download] Archive sizes - MV2: ${mv2Archive.length}, MV3: ${mv3Archive.length}`
             );
 
-            // Build binary message:
+            // Build binary payload:
             // [4 bytes: mv2_size][mv2_tar.gz][4 bytes: mv3_size][mv3_tar.gz]
             const sizeHeader = Buffer.alloc(8);
             sizeHeader.writeUInt32BE(mv2Archive.length, 0);
@@ -1113,22 +1120,84 @@ export class MigrationServer {
 
             const payload = Buffer.concat([sizeHeader, mv2Archive, mv3Archive]);
 
-            // Send as single binary message with text header prepended
-            // Format: "DOWNLOAD_EXTENSION_START:{ext_id}:{size}:{hash}\n" + binary payload
-            const textHeader = Buffer.from(
-                `DOWNLOAD_EXTENSION_START:${extensionId}:${payload.length}:${serverHash}\n`
-            );
-            const fullMessage = Buffer.concat([textHeader, payload]);
-            ws.send(fullMessage);
+            // Check if we need chunked transfer
+            if (payload.length > CHUNK_THRESHOLD) {
+                console.log(
+                    `[Download] Large extension (${payload.length} bytes), using chunked transfer`
+                );
+                await this.sendChunkedExtension(ws, extensionId, payload, serverHash);
+            } else {
+                // Small extension - send as single message
+                // Format: "DOWNLOAD_EXTENSION_START:{ext_id}:{size}:{hash}\n" + binary payload
+                const textHeader = Buffer.from(
+                    `DOWNLOAD_EXTENSION_START:${extensionId}:${payload.length}:${serverHash}\n`
+                );
+                const fullMessage = Buffer.concat([textHeader, payload]);
+                ws.send(fullMessage);
 
-            console.log(
-                `[Download] Sent ${fullMessage.length} bytes for extension ${ext.name} (header: ${textHeader.length}, payload: ${payload.length})`
-            );
+                console.log(
+                    `[Download] Sent ${fullMessage.length} bytes for extension ${ext.name} (header: ${textHeader.length}, payload: ${payload.length})`
+                );
+            }
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : String(error);
             console.error(`[Download] Error downloading extension ${extensionId}:`, errorMessage);
             ws.send(`DOWNLOAD_EXTENSION_ERROR:${extensionId}:${errorMessage}`);
         }
+    }
+
+    // Send extension using chunked transfer for large files
+    private async sendChunkedExtension(
+        ws: WebSocket,
+        extensionId: string,
+        payload: Buffer,
+        hash: string
+    ): Promise<void> {
+        const totalChunks = Math.ceil(payload.length / CHUNK_SIZE);
+
+        // Calculate MD5 hash of payload for verification
+        const payloadHash = crypto.createHash('md5').update(payload).digest('hex');
+
+        console.log(
+            `[Download] Starting chunked transfer: ${totalChunks} chunks, ${payload.length} bytes, hash: ${payloadHash}`
+        );
+
+        // Send start message as binary (so it goes to binary handler on client)
+        // Format: DOWNLOAD_EXTENSION_CHUNK_START:{ext_id}:{total_size}:{total_chunks}:{payload_hash}:{dir_hash}\n
+        const startMessage = Buffer.from(
+            `DOWNLOAD_EXTENSION_CHUNK_START:${extensionId}:${payload.length}:${totalChunks}:${payloadHash}:${hash}\n`
+        );
+        ws.send(startMessage, { binary: true });
+
+        // Send chunks
+        for (let i = 0; i < totalChunks; i++) {
+            const start = i * CHUNK_SIZE;
+            const end = Math.min(start + CHUNK_SIZE, payload.length);
+            const chunkData = payload.subarray(start, end);
+
+            // Format: "DOWNLOAD_EXTENSION_CHUNK:{ext_id}:{chunk_index}:{chunk_size}\n" + binary chunk
+            const chunkHeader = Buffer.from(
+                `DOWNLOAD_EXTENSION_CHUNK:${extensionId}:${i}:${chunkData.length}\n`
+            );
+            const chunkMessage = Buffer.concat([chunkHeader, chunkData]);
+            ws.send(chunkMessage, { binary: true });
+
+            // Log progress every 5 chunks
+            if (i % 5 === 0 || i === totalChunks - 1) {
+                console.log(`[Download] Sent chunk ${i + 1}/${totalChunks}`);
+            }
+
+            // Small delay to avoid overwhelming the connection
+            if (i < totalChunks - 1) {
+                await new Promise((resolve) => setTimeout(resolve, 10));
+            }
+        }
+
+        // Send end message as binary (so it goes to binary handler on client)
+        const endMessage = Buffer.from(`DOWNLOAD_EXTENSION_CHUNK_END:${extensionId}\n`);
+        ws.send(endMessage, { binary: true });
+
+        console.log(`[Download] Chunked transfer complete for ${extensionId}`);
     }
 
     // Calculate MD5 hash of extension directories for caching

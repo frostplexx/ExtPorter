@@ -32,6 +32,13 @@ pub enum AppEvent {
     ExtensionDownloadCached(String, PathBuf, PathBuf), // (extension_id, mv2_path, mv3_path) - from cache
     ExtensionDownloadCacheHit(String), // Server confirmed cache is valid - need to get paths from downloader
     ExtensionDownloadError(String, String), // (extension_id, error)
+    ExtensionDownloadProgress {
+        ext_id: String,
+        chunks_received: usize,
+        total_chunks: usize,
+        bytes_received: usize,
+        total_bytes: usize,
+    },
 
     // Browser events
     LaunchBrowsers(PathBuf, PathBuf), // (mv2_path, mv3_path)
