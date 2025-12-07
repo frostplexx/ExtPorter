@@ -8,14 +8,15 @@ use ratatui::{
     Frame,
 };
 use std::collections::{HashMap, HashSet};
+use std::path::PathBuf;
 use tokio::sync::mpsc;
 
 use crate::{
     tabs::{analyzer::AnalyzerTab, explorer::ExplorerTab, migrator::MigratorTab, ReportsTab, Tab},
     theme::ColorScheme,
     types::{
-        AppEvent, ConnectionState, Extension, ExtensionStats, ExtensionsWithStats, Message,
-        MessageType, Report,
+        AppEvent, BrowserState, ConnectionState, Extension, ExtensionStats, ExtensionsWithStats,
+        Message, MessageType, Report,
     },
     websocket::WebSocketSender,
 };
@@ -35,13 +36,29 @@ pub struct AppState {
     pub reports: Vec<Report>,
     pub llm_description_cache: HashMap<String, String>,
     pub llm_generating: HashSet<String>, // Track which extensions are currently generating
+    pub llm_fixing: HashSet<String>,     // Track which extensions are currently being fixed
+    pub browser_state: BrowserState,     // State of local browser manager
+    pub current_extension_paths: Option<(PathBuf, PathBuf)>, // (mv2_path, mv3_path) for current extension
+    pub pending_download_extension_id: Option<String>,       // Extension ID being downloaded
+    // Download progress tracking (for chunked downloads)
+    pub download_progress: Option<DownloadProgress>,
+}
+
+/// Progress of a chunked download
+#[derive(Clone)]
+pub struct DownloadProgress {
+    pub ext_id: String,
+    pub chunks_received: usize,
+    pub total_chunks: usize,
+    pub bytes_received: usize,
+    pub total_bytes: usize,
 }
 
 pub struct App {
     active_tab: usize,
     tabs: Vec<Box<dyn Tab>>,
     state: AppState,
-    tx: mpsc::UnboundedSender<AppEvent>,
+    pub tx: mpsc::UnboundedSender<AppEvent>,
 }
 
 impl App {
@@ -61,6 +78,11 @@ impl App {
             reports: Vec::new(),
             llm_description_cache: HashMap::new(),
             llm_generating: HashSet::new(),
+            llm_fixing: HashSet::new(),
+            browser_state: BrowserState::default(),
+            current_extension_paths: None,
+            pending_download_extension_id: None,
+            download_progress: None,
         };
 
         let tabs: Vec<Box<dyn Tab>> = vec![
@@ -567,6 +589,62 @@ impl App {
             return;
         }
 
+        // Parse LLM fix messages
+        if msg.starts_with("FIX_EXTENSION_SUCCESS:") {
+            if let Some(rest) = msg.strip_prefix("FIX_EXTENSION_SUCCESS:") {
+                let parts: Vec<&str> = rest.splitn(2, ':').collect();
+                if parts.len() == 2 {
+                    let extension_id = parts[0].to_string();
+                    let modified_files_json = parts[1].to_string();
+                    let _ = self
+                        .tx
+                        .send(AppEvent::LLMFixSuccess(extension_id, modified_files_json));
+                }
+            }
+            return;
+        }
+
+        if msg.starts_with("FIX_EXTENSION_ERROR:") {
+            if let Some(rest) = msg.strip_prefix("FIX_EXTENSION_ERROR:") {
+                let parts: Vec<&str> = rest.splitn(2, ':').collect();
+                if parts.len() == 2 {
+                    let extension_id = parts[0].to_string();
+                    let error = parts[1].to_string();
+                    let _ = self.tx.send(AppEvent::LLMFixError(extension_id, error));
+                }
+            }
+            return;
+        }
+
+        // Parse extension download text messages (cached/error responses are text, data is binary)
+        if msg.starts_with("DOWNLOAD_EXTENSION_CACHED:") {
+            if let Some(ext_id) = msg.strip_prefix("DOWNLOAD_EXTENSION_CACHED:") {
+                // Server says hash matched - need to use local cache
+                let _ = self.tx.send(AppEvent::ExtensionDownloadCacheHit(
+                    ext_id.trim().to_string(),
+                ));
+            }
+            return;
+        }
+
+        if msg.starts_with("DOWNLOAD_EXTENSION_ERROR:") {
+            if let Some(rest) = msg.strip_prefix("DOWNLOAD_EXTENSION_ERROR:") {
+                let parts: Vec<&str> = rest.splitn(2, ':').collect();
+                if parts.len() >= 1 {
+                    let ext_id = parts[0].trim().to_string();
+                    let error = if parts.len() >= 2 {
+                        parts[1].to_string()
+                    } else {
+                        "Unknown error".to_string()
+                    };
+                    let _ = self
+                        .tx
+                        .send(AppEvent::ExtensionDownloadError(ext_id, error));
+                }
+            }
+            return;
+        }
+
         // Parse message type
         let (msg_type, content) = if msg.starts_with("STDOUT: ") {
             (
@@ -935,5 +1013,280 @@ impl App {
                 });
             }
         }
+    }
+
+    /// Handle LLM fix started
+    pub fn handle_llm_fix_started(&mut self, ext_id: String) {
+        // Add to fixing set
+        self.state.llm_fixing.insert(ext_id.clone());
+
+        if self.state.message_scroll_offset > 0 {
+            self.state.message_scroll_offset += 1;
+        }
+        self.state.messages.push(Message {
+            msg_type: MessageType::System,
+            content: format!("🔧 Starting LLM fix for extension..."),
+            timestamp: chrono::Utc::now(),
+        });
+    }
+
+    /// Handle LLM fix success
+    pub fn handle_llm_fix_success(&mut self, ext_id: String, modified_files_json: String) {
+        // Remove from fixing set
+        self.state.llm_fixing.remove(&ext_id);
+
+        // Parse modified files list
+        let files_msg = if let Ok(files) = serde_json::from_str::<Vec<String>>(&modified_files_json)
+        {
+            if files.is_empty() {
+                "No files were modified".to_string()
+            } else {
+                format!("Modified {} file(s): {}", files.len(), files.join(", "))
+            }
+        } else {
+            modified_files_json
+        };
+
+        if self.state.message_scroll_offset > 0 {
+            self.state.message_scroll_offset += 1;
+        }
+        self.state.messages.push(Message {
+            msg_type: MessageType::System,
+            content: format!("✓ LLM fix completed successfully. {}", files_msg),
+            timestamp: chrono::Utc::now(),
+        });
+    }
+
+    /// Handle LLM fix error
+    pub fn handle_llm_fix_error(&mut self, ext_id: String, error: String) {
+        // Remove from fixing set
+        self.state.llm_fixing.remove(&ext_id);
+
+        if self.state.message_scroll_offset > 0 {
+            self.state.message_scroll_offset += 1;
+        }
+        self.state.messages.push(Message {
+            msg_type: MessageType::System,
+            content: format!("✗ LLM fix failed: {}", error),
+            timestamp: chrono::Utc::now(),
+        });
+    }
+
+    // =========================================================================
+    // Browser and Extension Download Handlers
+    // =========================================================================
+
+    /// Handle extension download started
+    pub fn handle_extension_download_started(&mut self, ext_id: String) {
+        self.state.browser_state = BrowserState::Downloading;
+        self.state.pending_download_extension_id = Some(ext_id.clone());
+
+        if self.state.message_scroll_offset > 0 {
+            self.state.message_scroll_offset += 1;
+        }
+        self.state.messages.push(Message {
+            msg_type: MessageType::System,
+            content: format!("Downloading extension {}...", ext_id),
+            timestamp: chrono::Utc::now(),
+        });
+    }
+
+    /// Handle extension downloaded successfully
+    pub fn handle_extension_downloaded(
+        &mut self,
+        ext_id: String,
+        mv2_path: PathBuf,
+        mv3_path: PathBuf,
+    ) {
+        self.state.current_extension_paths = Some((mv2_path.clone(), mv3_path.clone()));
+        self.state.pending_download_extension_id = None;
+        self.state.download_progress = None;
+        self.state.browser_state = BrowserState::Launching;
+
+        if self.state.message_scroll_offset > 0 {
+            self.state.message_scroll_offset += 1;
+        }
+        self.state.messages.push(Message {
+            msg_type: MessageType::System,
+            content: format!("✓ Extension {} downloaded, launching browsers...", ext_id),
+            timestamp: chrono::Utc::now(),
+        });
+
+        // Automatically launch browsers after download
+        let _ = self.tx.send(AppEvent::LaunchBrowsers(mv2_path, mv3_path));
+    }
+
+    /// Handle extension download from cache
+    pub fn handle_extension_download_cached(
+        &mut self,
+        ext_id: String,
+        mv2_path: PathBuf,
+        mv3_path: PathBuf,
+    ) {
+        self.state.current_extension_paths = Some((mv2_path.clone(), mv3_path.clone()));
+        self.state.pending_download_extension_id = None;
+        self.state.download_progress = None;
+        self.state.browser_state = BrowserState::Launching;
+
+        if self.state.message_scroll_offset > 0 {
+            self.state.message_scroll_offset += 1;
+        }
+        self.state.messages.push(Message {
+            msg_type: MessageType::System,
+            content: format!("✓ Extension {} (cached), launching browsers...", ext_id),
+            timestamp: chrono::Utc::now(),
+        });
+
+        // Automatically launch browsers after cache hit
+        let _ = self.tx.send(AppEvent::LaunchBrowsers(mv2_path, mv3_path));
+    }
+
+    /// Handle extension download error
+    pub fn handle_extension_download_error(&mut self, ext_id: String, error: String) {
+        self.state.browser_state = BrowserState::Error(error.clone());
+        self.state.pending_download_extension_id = None;
+        self.state.download_progress = None;
+
+        if self.state.message_scroll_offset > 0 {
+            self.state.message_scroll_offset += 1;
+        }
+        self.state.messages.push(Message {
+            msg_type: MessageType::System,
+            content: format!("✗ Failed to download extension {}: {}", ext_id, error),
+            timestamp: chrono::Utc::now(),
+        });
+    }
+
+    /// Handle extension download progress (for chunked downloads)
+    pub fn handle_extension_download_progress(
+        &mut self,
+        ext_id: String,
+        chunks_received: usize,
+        total_chunks: usize,
+        bytes_received: usize,
+        total_bytes: usize,
+    ) {
+        self.state.download_progress = Some(DownloadProgress {
+            ext_id,
+            chunks_received,
+            total_chunks,
+            bytes_received,
+            total_bytes,
+        });
+    }
+
+    /// Handle browsers launched successfully
+    pub fn handle_browser_launched(&mut self) {
+        self.state.browser_state = BrowserState::Running;
+
+        if self.state.message_scroll_offset > 0 {
+            self.state.message_scroll_offset += 1;
+        }
+        self.state.messages.push(Message {
+            msg_type: MessageType::System,
+            content: "✓ Browsers launched successfully".to_string(),
+            timestamp: chrono::Utc::now(),
+        });
+
+        // Notify the AnalyzerTab (index 2) that browsers have launched
+        // so it can show the form if one was pending
+        if let Some(tab) = self.tabs.get_mut(2) {
+            if let Some(analyzer_tab) = tab.as_any_mut().downcast_mut::<AnalyzerTab>() {
+                analyzer_tab.on_browser_launched();
+            }
+        }
+    }
+
+    /// Handle browser launch error
+    pub fn handle_browser_launch_error(&mut self, error: String) {
+        self.state.browser_state = BrowserState::Error(error.clone());
+
+        if self.state.message_scroll_offset > 0 {
+            self.state.message_scroll_offset += 1;
+        }
+        self.state.messages.push(Message {
+            msg_type: MessageType::System,
+            content: format!("✗ Failed to launch browsers: {}", error),
+            timestamp: chrono::Utc::now(),
+        });
+    }
+
+    /// Handle browsers closed
+    pub fn handle_browser_closed(&mut self) {
+        self.state.browser_state = BrowserState::Idle;
+        // Keep current_extension_paths for potential kitty tab opening
+
+        if self.state.message_scroll_offset > 0 {
+            self.state.message_scroll_offset += 1;
+        }
+        self.state.messages.push(Message {
+            msg_type: MessageType::System,
+            content: "✓ Browsers closed".to_string(),
+            timestamp: chrono::Utc::now(),
+        });
+    }
+
+    /// Handle extension load status event (diagnostic info after browser launch)
+    pub fn handle_extension_load_status(
+        &mut self,
+        browser_type: String,
+        loaded: bool,
+        id: Option<String>,
+        name: Option<String>,
+        error_message: Option<String>,
+    ) {
+        if self.state.message_scroll_offset > 0 {
+            self.state.message_scroll_offset += 1;
+        }
+
+        let msg = if loaded {
+            format!(
+                "  {} extension loaded: {} ({})",
+                browser_type,
+                name.unwrap_or_else(|| "Unknown".to_string()),
+                id.unwrap_or_else(|| "no-id".to_string())
+            )
+        } else {
+            format!(
+                "  ⚠ {} extension issue: {}",
+                browser_type,
+                error_message.unwrap_or_else(|| "Unknown error".to_string())
+            )
+        };
+
+        self.state.messages.push(Message {
+            msg_type: MessageType::System,
+            content: msg,
+            timestamp: chrono::Utc::now(),
+        });
+    }
+
+    /// Handle kitty tab opened
+    pub fn handle_kitty_tab_opened(&mut self) {
+        if self.state.message_scroll_offset > 0 {
+            self.state.message_scroll_offset += 1;
+        }
+        self.state.messages.push(Message {
+            msg_type: MessageType::System,
+            content: "✓ Opened extension folders in kitty".to_string(),
+            timestamp: chrono::Utc::now(),
+        });
+    }
+
+    /// Handle kitty tab error
+    pub fn handle_kitty_tab_error(&mut self, error: String) {
+        if self.state.message_scroll_offset > 0 {
+            self.state.message_scroll_offset += 1;
+        }
+        self.state.messages.push(Message {
+            msg_type: MessageType::System,
+            content: format!("✗ Failed to open kitty tab: {}", error),
+            timestamp: chrono::Utc::now(),
+        });
+    }
+
+    /// Get current extension paths (for kitty tab opening)
+    pub fn get_current_extension_paths(&self) -> Option<(PathBuf, PathBuf)> {
+        self.state.current_extension_paths.clone()
     }
 }

@@ -3,7 +3,7 @@ use ratatui::{crossterm::event::KeyEvent, Frame};
 use ratatui_image::protocol::StatefulProtocol;
 use tokio::sync::mpsc;
 
-use crate::{app::AppState, types::AppEvent};
+use crate::{app::AppState, types::{AppEvent, Extension}};
 
 mod image_handler;
 mod input_handler;
@@ -25,6 +25,8 @@ pub struct AnalyzerTab {
     report_form: Option<ReportForm>,
     // Scroll offset for listeners panel
     listeners_scroll_offset: usize,
+    // Pending extension for form display (set when Enter pressed, cleared when browser launches)
+    pending_form_extension: Option<Extension>,
 }
 
 impl AnalyzerTab {
@@ -38,7 +40,28 @@ impl AnalyzerTab {
             image_protocols: Vec::new(),
             report_form: None,
             listeners_scroll_offset: 0,
+            pending_form_extension: None,
         }
+    }
+
+    /// Called when browsers have launched - shows the form if we were waiting for it
+    pub fn on_browser_launched(&mut self) {
+        if let Some(ext) = self.pending_form_extension.take() {
+            // Initialize and show form now that browsers are ready
+            let mut form = ReportForm::new(&ext);
+            form.start_verification();
+            self.report_form = Some(form);
+        }
+    }
+
+    /// Set the pending extension for form display (called from input handler)
+    pub fn set_pending_form_extension(&mut self, ext: Extension) {
+        self.pending_form_extension = Some(ext);
+    }
+
+    /// Check if we have a pending form extension
+    pub fn has_pending_form(&self) -> bool {
+        self.pending_form_extension.is_some()
     }
 }
 
@@ -80,6 +103,7 @@ impl super::Tab for AnalyzerTab {
             &mut self.mv3_browser_running,
             &mut self.report_form,
             &mut self.listeners_scroll_offset,
+            &mut self.pending_form_extension,
         )
     }
 

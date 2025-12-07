@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
 
 #[derive(Debug, Clone)]
 pub enum AppEvent {
@@ -7,6 +8,7 @@ pub enum AppEvent {
     WebSocketConnected,
     WebSocketDisconnected,
     WebSocketMessage(String),
+    WebSocketBinaryMessage(Vec<u8>),
     WebSocketError(String),
     SendWebSocketMessage(String),
     #[allow(dead_code)]
@@ -19,6 +21,56 @@ pub enum AppEvent {
     LoadFirstUntestedExtension,
     LLMDescriptionReceived(String, String), // (extension_id, description)
     LLMDescriptionError(String, String),    // (extension_id, error)
+    LLMFixStarted(String),                  // extension_id
+    LLMFixSuccess(String, String),          // (extension_id, modified_files_json)
+    LLMFixError(String, String),            // (extension_id, error)
+
+    // Extension download events
+    DownloadExtension(String),        // extension_id - request download
+    ExtensionDownloadStarted(String), // extension_id
+    ExtensionDownloaded(String, PathBuf, PathBuf), // (extension_id, mv2_path, mv3_path)
+    ExtensionDownloadCached(String, PathBuf, PathBuf), // (extension_id, mv2_path, mv3_path) - from cache
+    ExtensionDownloadCacheHit(String), // Server confirmed cache is valid - need to get paths from downloader
+    ExtensionDownloadError(String, String), // (extension_id, error)
+    ExtensionDownloadProgress {
+        ext_id: String,
+        chunks_received: usize,
+        total_chunks: usize,
+        bytes_received: usize,
+        total_bytes: usize,
+    },
+
+    // Browser events
+    LaunchBrowsers(PathBuf, PathBuf), // (mv2_path, mv3_path)
+    BrowserLaunched,
+    BrowserLaunchError(String),
+    BrowserClosed,
+    CloseBrowsersCmd,
+
+    // Extension load status (diagnostic info after browser launch)
+    ExtensionLoadStatus {
+        browser_type: String,          // "MV2" or "MV3"
+        loaded: bool,                  // Whether extension loaded successfully
+        id: Option<String>,            // Extension ID if found
+        name: Option<String>,          // Extension name if found
+        error_message: Option<String>, // Error/warning message if not loaded
+    },
+
+    // Kitty terminal events
+    OpenKittyTab(PathBuf, PathBuf), // (mv2_path, mv3_path)
+    KittyTabOpened,
+    KittyTabError(String),
+}
+
+/// State of the browser manager
+#[derive(Debug, Clone, PartialEq, Default)]
+pub enum BrowserState {
+    #[default]
+    Idle,
+    Downloading,
+    Launching,
+    Running,
+    Error(String),
 }
 
 #[derive(Debug, Clone, PartialEq)]

@@ -43,6 +43,7 @@
         "format": "nix run nixpkgs#prettier -- --write \"**/*.{ts,tsx,js,jsx,json,css,md}\""
     },
     "dependencies": {
+        "@opencode-ai/sdk": "^1.0.129",
         "@types/escodegen": "^0.0.10",
         "@types/espree": "^10.1.0",
         "@types/estree": "^1.0.8",
@@ -69,7 +70,8 @@
         "terminal-kit": "^3.1.2",
         "ts-node-dev": "^2.0.0",
         "types": "^0.1.1",
-        "ws": "^8.18.3"
+        "ws": "^8.18.3",
+        "tar-stream": "^3.1.7"
     },
     "devDependencies": {
         "@eslint/js": "^9.36.0",
