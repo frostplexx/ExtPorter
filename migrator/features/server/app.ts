@@ -997,6 +997,19 @@ export class MigrationServer {
 
             console.log(`[LLM Fixer] Fix process completed:`, result);
 
+            // Save fix attempt to database (regardless of success/failure)
+            if (result.fixAttempt) {
+                try {
+                    await Database.shared.insertLLMFixAttempt(result.fixAttempt);
+                    console.log(
+                        `[LLM Fixer] Fix attempt saved to database with ID: ${result.fixAttempt.id}`
+                    );
+                } catch (dbError) {
+                    console.error(`[LLM Fixer] Failed to save fix attempt to database:`, dbError);
+                    // Don't fail the whole operation if DB save fails
+                }
+            }
+
             if (result.success) {
                 ws.send(
                     `FIX_EXTENSION_SUCCESS:${extensionId}:${JSON.stringify({
