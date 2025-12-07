@@ -14,46 +14,21 @@ describe('LLM Config', () => {
 
     describe('loadLLMConfig', () => {
         it('should load default configuration', () => {
-            delete process.env.GITHUB_TOKEN;
-            delete process.env.COPILOT_API_KEY;
             delete process.env.LLM_MODEL;
-            delete process.env.COPILOT_ENDPOINT;
 
             const config = loadLLMConfig();
 
-            expect(config.endpoint).toBe('https://api.githubcopilot.com');
             expect(config.model).toBe('gpt-4o');
+            // apiKey is now always empty (auth handled by copilot-auth)
             expect(config.apiKey).toBe('');
         });
 
-        it('should load configuration from GITHUB_TOKEN', () => {
-            process.env.GITHUB_TOKEN = 'ghp_test_token';
+        it('should load model from environment', () => {
             process.env.LLM_MODEL = 'gpt-4';
-            process.env.COPILOT_ENDPOINT = 'https://api.example.com';
 
             const config = loadLLMConfig();
 
-            expect(config.apiKey).toBe('ghp_test_token');
             expect(config.model).toBe('gpt-4');
-            expect(config.endpoint).toBe('https://api.example.com');
-        });
-
-        it('should load configuration from COPILOT_API_KEY', () => {
-            process.env.COPILOT_API_KEY = 'copilot_test_key';
-            delete process.env.GITHUB_TOKEN;
-
-            const config = loadLLMConfig();
-
-            expect(config.apiKey).toBe('copilot_test_key');
-        });
-
-        it('should prefer GITHUB_TOKEN over COPILOT_API_KEY', () => {
-            process.env.GITHUB_TOKEN = 'github_token';
-            process.env.COPILOT_API_KEY = 'copilot_key';
-
-            const config = loadLLMConfig();
-
-            expect(config.apiKey).toBe('github_token');
         });
 
         it('should load temperature from environment', () => {
@@ -95,9 +70,7 @@ describe('LLM Config', () => {
 
     describe('getConfigSummary', () => {
         it('should return summary with GitHub Copilot provider', () => {
-            process.env.GITHUB_TOKEN = 'ghp_1234567890abcdef';
             process.env.LLM_MODEL = 'gpt-4o';
-            process.env.COPILOT_ENDPOINT = 'https://api.githubcopilot.com';
 
             const summary = getConfigSummary();
 
@@ -105,25 +78,12 @@ describe('LLM Config', () => {
             expect(summary).toContain('Provider: GitHub Copilot');
             expect(summary).toContain('Endpoint: https://api.githubcopilot.com');
             expect(summary).toContain('Model: gpt-4o');
-            expect(summary).toContain('API Key: ***cdef');
         });
 
-        it('should mask API key in summary', () => {
-            process.env.GITHUB_TOKEN = 'ghp_secret_token';
-
+        it('should show automatic auth in summary', () => {
             const summary = getConfigSummary();
 
-            expect(summary).toContain('***oken');
-            expect(summary).not.toContain('ghp_secret_token');
-        });
-
-        it('should show NOT SET when API key is missing', () => {
-            delete process.env.GITHUB_TOKEN;
-            delete process.env.COPILOT_API_KEY;
-
-            const summary = getConfigSummary();
-
-            expect(summary).toContain('API Key: NOT SET');
+            expect(summary).toContain('Auth: Automatic');
         });
 
         it('should show temperature, max_tokens, and top_p in summary', () => {

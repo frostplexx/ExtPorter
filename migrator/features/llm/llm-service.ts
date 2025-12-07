@@ -1,11 +1,14 @@
 import * as https from 'https';
-import * as http from 'http';
 import { CopilotConfig, ChatMessage, GenerationOptions } from './types';
 import { loadLLMConfig } from './config';
 import { logger } from '../../utils/logger';
+import { getCopilotHeaders, clearTokenCache } from './copilot-auth';
+
+const COPILOT_API_ENDPOINT = 'https://api.githubcopilot.com';
 
 export class LLMService {
     private config: CopilotConfig;
+    private cachedHeaders: Record<string, string> | null = null;
 
     constructor(config: CopilotConfig) {
         this.config = {
@@ -25,24 +28,33 @@ export class LLMService {
     }
 
     /**
-     * Initialize the service (no-op for Copilot API, kept for compatibility)
+     * Initialize the service - authenticates with GitHub Copilot
      */
     async initialize(): Promise<void> {
-        // Validate API key
-        if (!this.config.apiKey) {
-            throw new Error(
-                'GitHub API token not configured. Set GITHUB_TOKEN or COPILOT_API_KEY environment variable.'
-            );
+        try {
+            // Get and cache the Copilot headers (this will trigger auth if needed)
+            this.cachedHeaders = await getCopilotHeaders();
+            logger.info(null, `Using GitHub Copilot API with model: ${this.config.model}`);
+        } catch (error) {
+            throw new Error(`Failed to initialize GitHub Copilot: ${error}`);
         }
-
-        logger.info(null, `Using GitHub Copilot API with model: ${this.config.model}`);
     }
 
     /**
-     * Cleanup resources (no-op for Copilot API, kept for compatibility)
+     * Cleanup resources
      */
     async cleanup(): Promise<void> {
-        // No cleanup needed for HTTP-based API
+        this.cachedHeaders = null;
+    }
+
+    /**
+     * Get headers for API requests, refreshing if needed
+     */
+    private async getHeaders(): Promise<Record<string, string>> {
+        if (!this.cachedHeaders) {
+            this.cachedHeaders = await getCopilotHeaders();
+        }
+        return this.cachedHeaders;
     }
 
     /**
@@ -55,12 +67,16 @@ export class LLMService {
     ): Promise<string> {
         const { streamToConsole = true } = options;
 
+        // Get fresh headers (handles token refresh)
+        let headers: Record<string, string>;
+        try {
+            headers = await this.getHeaders();
+        } catch (error) {
+            throw new Error(`Authentication failed: ${error}`);
+        }
+
         return new Promise((resolve, reject) => {
-            // Parse endpoint URL
-            const endpoint = this.config.endpoint || 'https://api.githubcopilot.com';
-            const url = new URL(`${endpoint}/chat/completions`);
-            const isHttps = url.protocol === 'https:';
-            const httpModule = isHttps ? https : http;
+            const url = new URL(`${COPILOT_API_ENDPOINT}/chat/completions`);
 
             // Set a timeout (5 minutes for longer responses)
             const timeout = setTimeout(() => {
@@ -79,25 +95,24 @@ export class LLMService {
                 temperature: this.config.temperature,
                 max_tokens: this.config.max_tokens,
                 top_p: this.config.top_p,
+                n: 1,
                 stream: true, // Enable streaming for live output
             };
 
             const data = JSON.stringify(requestBody);
 
-            const requestOptions = {
+            const requestOptions: https.RequestOptions = {
                 hostname: url.hostname,
-                port: url.port || (isHttps ? 443 : 80),
+                port: 443,
                 path: url.pathname,
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json',
-                    'Content-Length': Buffer.byteLength(data),
-                    Authorization: `Bearer ${this.config.apiKey}`,
-                    'User-Agent': 'ExtPorter-LLM-Client/1.0',
+                    ...headers,
+                    'Content-Length': Buffer.byteLength(data).toString(),
                 },
             };
 
-            const req = httpModule.request(requestOptions, (res: any) => {
+            const req = https.request(requestOptions, (res) => {
                 let fullResponse = '';
                 let buffer = '';
                 let resolved = false;
@@ -105,11 +120,18 @@ export class LLMService {
                 // Check for error status codes
                 if (res.statusCode && res.statusCode >= 400) {
                     let errorBody = '';
-                    res.on('data', (chunk: any) => {
+                    res.on('data', (chunk) => {
                         errorBody += chunk.toString();
                     });
                     res.on('end', () => {
                         clearTimeout(timeout);
+
+                        // If we get auth errors, clear the cache and suggest retry
+                        if (res.statusCode === 401 || res.statusCode === 403) {
+                            this.cachedHeaders = null;
+                            clearTokenCache();
+                        }
+
                         try {
                             const errorJson = JSON.parse(errorBody);
                             reject(
@@ -124,7 +146,7 @@ export class LLMService {
                     return;
                 }
 
-                res.on('data', (chunk: any) => {
+                res.on('data', (chunk) => {
                     buffer += chunk.toString();
 
                     // Process each line (SSE format: "data: {...}\n\n")
@@ -197,18 +219,18 @@ export class LLMService {
                     }
                 });
 
-                res.on('error', (error: any) => {
+                res.on('error', (error) => {
                     clearTimeout(timeout);
                     reject(error);
                 });
             });
 
-            req.on('error', (error: any) => {
+            req.on('error', (error: NodeJS.ErrnoException) => {
                 clearTimeout(timeout);
                 if (error.code === 'ENOTFOUND') {
                     reject(
                         new Error(
-                            `Could not connect to GitHub Copilot API at ${url.hostname}. Check your network connection and endpoint configuration.`
+                            `Could not connect to GitHub Copilot API at ${url.hostname}. Check your network connection.`
                         )
                     );
                 } else {
@@ -244,10 +266,10 @@ export class LLMService {
     }
 
     /**
-     * Check if the service is properly configured
+     * Check if the service is properly configured (always true for Copilot, auth is handled separately)
      */
     isConfigured(): boolean {
-        return !!this.config.apiKey;
+        return true;
     }
 }
 
