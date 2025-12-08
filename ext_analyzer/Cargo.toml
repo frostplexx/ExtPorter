@@ -9,7 +9,7 @@ description = "Terminal UI client for ExtPorter migration framework"
 # TUI framework
 ratatui = "0.29"
 crossterm = "0.29"
-tachyonfx = "0.20"
+tachyonfx = "0.21"
 
 # Async runtime and utilities
 tokio = { version = "1.42", features = ["full"] }
