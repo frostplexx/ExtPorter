@@ -1,5 +1,7 @@
 import { Db, MongoClient } from 'mongodb';
 import { Extension } from '../../types/extension';
+import { Report } from '../../types/report';
+import { LLMFixAttempt } from '../../types/llm_fix_attempt';
 import { logger, LogLevel } from '../../utils/logger';
 
 export enum Collections {
@@ -8,6 +10,8 @@ export enum Collections {
     LOGS = 'logs',
     TESTS_MV2 = 'tests_mv2',
     TESTS_MV3 = 'tests_mv3',
+    REPORTS = 'reports',
+    LLM_FIX_ATTEMPTS = 'llm_fix_attempts',
 }
 
 type QueuedOperation = {
@@ -622,6 +626,177 @@ export class Database {
                 .sort({ time: -1 })
                 .limit(limit)
                 .toArray();
+        });
+    }
+
+    /**
+     * Insert or update a report
+     */
+    async insertReport(report: Report) {
+        logger.debug(null, `Upserting report for extension: ${report.extension_id}`);
+        return await this.upsertOne(Collections.REPORTS, report);
+    }
+
+    /**
+     * Get all reports from the database
+     */
+    async getAllReports() {
+        return this.find(Collections.REPORTS);
+    }
+
+    /**
+     * Get a report for a specific extension
+     */
+    async getReportByExtensionId(extensionId: string) {
+        return this.findOne(Collections.REPORTS, { extension_id: extensionId });
+    }
+
+    /**
+     * Update the tested status of a report
+     */
+    async updateReportTested(extensionId: string, tested: boolean) {
+        return this.enqueueOperation(async () => {
+            if (!this.database) throw new Error('Database not initialized');
+
+            const update = {
+                tested,
+                updated_at: Date.now(),
+            };
+
+            return await this.database
+                .collection(Collections.REPORTS)
+                .updateOne({ extension_id: extensionId }, { $set: update });
+        });
+    }
+
+    /**
+     * Update an entire report
+     */
+    async updateReport(reportId: string, reportData: any) {
+        return this.enqueueOperation(async () => {
+            if (!this.database) throw new Error('Database not initialized');
+
+            const update = {
+                ...reportData,
+                updated_at: Date.now(),
+            };
+
+            return await this.database
+                .collection(Collections.REPORTS)
+                .updateOne({ id: reportId }, { $set: update });
+        });
+    }
+
+    /**
+     * Delete a report
+     */
+    async deleteReport(reportId: string) {
+        return this.deleteOne(Collections.REPORTS, { id: reportId });
+    }
+
+    /**
+     * Get a report by its ID
+     */
+    async getReportById(reportId: string) {
+        return this.findOne(Collections.REPORTS, { id: reportId });
+    }
+
+    // ==================== LLM Fix Attempts ====================
+
+    /**
+     * Insert or update an LLM fix attempt
+     */
+    async insertLLMFixAttempt(attempt: LLMFixAttempt) {
+        logger.debug(
+            null,
+            `Upserting LLM fix attempt for extension: ${attempt.extension_id} (attempt: ${attempt.id})`
+        );
+        const sanitizedAttempt = this.sanitizeDocumentSize(attempt);
+        return await this.upsertOne(Collections.LLM_FIX_ATTEMPTS, sanitizedAttempt);
+    }
+
+    /**
+     * Get all LLM fix attempts for an extension
+     */
+    async getLLMFixAttemptsByExtensionId(extensionId: string): Promise<LLMFixAttempt[]> {
+        return this.enqueueOperation(async () => {
+            if (!this.database) throw new Error('Database not initialized');
+            return (await this.database
+                .collection(Collections.LLM_FIX_ATTEMPTS)
+                .find({ extension_id: extensionId })
+                .sort({ started_at: -1 })
+                .toArray()) as unknown as LLMFixAttempt[];
+        });
+    }
+
+    /**
+     * Get a specific LLM fix attempt by its ID
+     */
+    async getLLMFixAttemptById(attemptId: string): Promise<LLMFixAttempt | null> {
+        return this.findOne(Collections.LLM_FIX_ATTEMPTS, {
+            id: attemptId,
+        }) as unknown as Promise<LLMFixAttempt | null>;
+    }
+
+    /**
+     * Get the most recent LLM fix attempt for an extension
+     */
+    async getLatestLLMFixAttempt(extensionId: string): Promise<LLMFixAttempt | null> {
+        return this.enqueueOperation(async () => {
+            if (!this.database) throw new Error('Database not initialized');
+            const results = await this.database
+                .collection(Collections.LLM_FIX_ATTEMPTS)
+                .find({ extension_id: extensionId })
+                .sort({ started_at: -1 })
+                .limit(1)
+                .toArray();
+            return (results[0] as unknown as LLMFixAttempt) || null;
+        });
+    }
+
+    /**
+     * Get all LLM fix attempts
+     */
+    async getAllLLMFixAttempts(): Promise<LLMFixAttempt[]> {
+        return this.find(Collections.LLM_FIX_ATTEMPTS) as unknown as Promise<LLMFixAttempt[]>;
+    }
+
+    /**
+     * Delete an LLM fix attempt
+     */
+    async deleteLLMFixAttempt(attemptId: string) {
+        return this.deleteOne(Collections.LLM_FIX_ATTEMPTS, { id: attemptId });
+    }
+
+    /**
+     * Get LLM fix attempts statistics
+     */
+    async getLLMFixAttemptsStats() {
+        return this.enqueueOperation(async () => {
+            if (!this.database) throw new Error('Database not initialized');
+
+            const collection = this.database.collection(Collections.LLM_FIX_ATTEMPTS);
+
+            const total = await collection.countDocuments();
+            const successful = await collection.countDocuments({ success: true });
+            const failed = await collection.countDocuments({ success: false });
+
+            // Get average duration for successful attempts
+            const avgDurationResult = await collection
+                .aggregate([
+                    { $match: { success: true } },
+                    { $group: { _id: null, avgDuration: { $avg: '$duration_ms' } } },
+                ])
+                .toArray();
+            const avgDuration = avgDurationResult[0]?.avgDuration || 0;
+
+            return {
+                total,
+                successful,
+                failed,
+                success_rate: total > 0 ? (successful / total) * 100 : 0,
+                avg_duration_ms: avgDuration,
+            };
         });
     }
 }

@@ -4,7 +4,7 @@ use std::sync::Arc;
 use tokio::sync::{mpsc, Mutex};
 use tokio_tungstenite::{connect_async, tungstenite::Message};
 
-use crate::app::AppEvent;
+use crate::types::AppEvent;
 
 fn get_ws_url() -> String {
     std::env::var("WS_URL").unwrap_or_else(|_| "ws://localhost:8080".to_string())
@@ -69,6 +69,10 @@ async fn connect_and_run(
                 match msg {
                     Some(Ok(Message::Text(text))) => {
                         let _ = tx.send(AppEvent::WebSocketMessage(text.to_string()));
+                    }
+                    Some(Ok(Message::Binary(data))) => {
+                        // Handle binary messages (extension downloads)
+                        let _ = tx.send(AppEvent::WebSocketBinaryMessage(data.to_vec()));
                     }
                     Some(Ok(Message::Close(_))) => {
                         break;

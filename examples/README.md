@@ -2,6 +2,71 @@
 
 This directory contains example scripts demonstrating various features of ExtPorter.
 
+## LLM Integration Examples
+
+### OpenCode SDK Demo
+
+**File**: `opencode_sdk_demo.ts`
+
+Demonstrates how to use the OpenCode SDK for LLM interactions:
+
+- Simple text completion
+- Chat completion with context
+- Multiple interactions using the same session
+- Proper resource cleanup
+
+**Running the Example:**
+
+```bash
+npx ts-node examples/opencode_sdk_demo.ts
+```
+
+**Prerequisites:**
+
+- OpenCode installed and configured
+- `LLM_MODEL` set to a valid OpenCode model (e.g., `anthropic/claude-3-5-sonnet-20241022`)
+
+**What it demonstrates:**
+
+1. Initializing the OpenCode service
+2. Simple completion requests
+3. Chat completion with system context
+4. Reusing sessions for multiple requests
+5. Proper cleanup
+
+See [LLM Integration Guide](../docs/LLM_INTEGRATION.md) for more details.
+
+## Reports Collection Usage
+
+**File:** `reports_usage.ts`
+
+This example demonstrates how to use the Reports collection to store manual testing information for extensions.
+
+### Running the Example
+
+```bash
+npx ts-node examples/reports_usage.ts
+```
+
+### What it demonstrates
+
+1. **Creating a new report** - Shows how to create a report for an extension with the `tested` boolean flag
+2. **Updating test status** - Demonstrates updating the `tested` field for an existing report
+3. **Querying reports** - Shows how to retrieve reports by extension ID or get all reports
+4. **Report structure** - Demonstrates the Report interface with extension reference
+
+### Report Structure
+
+```typescript
+interface Report {
+    id: string; // Unique report ID
+    extension_id: string; // Reference to Extension.id
+    tested: boolean; // Manual testing status
+    created_at: number; // Timestamp when created
+    updated_at: number; // Timestamp when last updated
+}
+```
+
 ## Chrome Web Store Metadata Extraction
 
 **File:** `cws_extraction_demo.ts`
@@ -24,12 +89,12 @@ npx ts-node examples/cws_extraction_demo.ts
 
 ```json
 {
-  "description": "A powerful ad blocker for Chrome",
-  "rating": 4.8,
-  "rating_count": 250000,
-  "user_count": "5,000,000+ users",
-  "last_updated": "Updated: November 15, 2024",
-  "developer": "AdBlock Team"
+    "description": "A powerful ad blocker for Chrome",
+    "rating": 4.8,
+    "rating_count": 250000,
+    "user_count": "5,000,000+ users",
+    "last_updated": "Updated: November 15, 2024",
+    "developer": "AdBlock Team"
 }
 ```
 
