@@ -27,17 +27,9 @@ COPY scripts/ ./scripts/
 # Create directories that the application expects
 RUN mkdir -p logs output
 
-# Create a non-root user
-RUN groupadd -r appuser && useradd -r -g appuser appuser
-
-# Fix permissions
-RUN chown -R appuser:appuser /app
-
 # Set Node.js memory options
 ENV NODE_OPTIONS="--max-old-space-size=8192 --max-semi-space-size=512 --expose-gc"
 
-# Switch to non-root user
-USER appuser
 
 # Expose WebSocket server port
 EXPOSE 8080
