@@ -21,7 +21,7 @@ services:
             - mongodb
         networks:
             - migrator-network
-    
+
     mongodb:
         image: mongo
         container_name: migrator-mongodb
