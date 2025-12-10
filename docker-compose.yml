@@ -14,14 +14,11 @@ services:
         environment:
             # Override specific variables for Docker environment
             - MONGODB_URI=mongodb://admin:password@mongodb:27017/migrator?authSource=admin
-            # Set paths to match volume mounts inside container
-            - INPUT_DIR=/app/extensions
-            - OUTPUT_DIR=/app/output
         volumes:
             - ./logs:/app/logs
             # Mount host paths to standardized container paths
-            - ${INPUT_DIR:-./extensions}:/app/extensions:ro
-            - ${OUTPUT_DIR:-./output}:/app/output
+            - ${INPUT_DIR:-./extensions}:/app/extensions:rw
+            - ${OUTPUT_DIR:-./output}:/app/output:rw
         depends_on:
             - mongodb
         networks:
