@@ -25,7 +25,7 @@ COPY migrator/ ./migrator/
 COPY scripts/ ./scripts/
 
 # Create directories that the application expects
-RUN mkdir -p logs output
+RUN mkdir -p logs output cws
 
 # Set Node.js memory options
 ENV NODE_OPTIONS="--max-old-space-size=8192 --max-semi-space-size=512 --expose-gc"

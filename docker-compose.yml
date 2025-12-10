@@ -13,10 +13,12 @@ services:
             - MONGODB_URI=mongodb://admin:password@mongodb:27017/migrator?authSource=admin
             - INPUT_DIR=/app/extensions
             - OUTPUT_DIR=/app/output
+            - CWS_DIR=/app/cws
         volumes:
             - ./logs:/app/logs
             - ${INPUT_DIR:-./extensions}:/app/extensions:ro
             - ${OUTPUT_DIR:-./output}:/app/output
+            - ${CWS_DIR:-./cws}:/app/cws
         depends_on:
             - mongodb
         networks:
