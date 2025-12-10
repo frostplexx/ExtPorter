@@ -1,11 +1,10 @@
-# Use Node.js with Chrome pre-installed for Puppeteer
-FROM ghcr.io/puppeteer/puppeteer:24.32.0
+# Use Node.js LTS
+FROM node:20-slim
 
 # Set working directory
 WORKDIR /app
 
 # Install system dependencies
-USER root
 RUN apt-get update && apt-get install -y \
     git \
     && rm -rf /var/lib/apt/lists/*
@@ -13,7 +12,7 @@ RUN apt-get update && apt-get install -y \
 # Copy package files
 COPY package*.json yarn.lock ./
 
-# Install dependencies (use yarn instead of npm)
+# Install dependencies
 RUN yarn install 
 
 # Copy TypeScript configuration and eslint config
@@ -28,9 +27,17 @@ COPY scripts/ ./scripts/
 # Create directories that the application expects
 RUN mkdir -p logs output
 
+# Create a non-root user
+RUN groupadd -r appuser && useradd -r -g appuser appuser
+
+# Fix permissions
+RUN chown -R appuser:appuser /app
 
 # Set Node.js memory options
 ENV NODE_OPTIONS="--max-old-space-size=8192 --max-semi-space-size=512 --expose-gc"
+
+# Switch to non-root user
+USER appuser
 
 # Expose WebSocket server port
 EXPOSE 8080
