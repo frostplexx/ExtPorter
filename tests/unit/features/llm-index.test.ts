@@ -1,27 +1,15 @@
-import { describe, it, expect, jest } from '@jest/globals';
-
-// Mock chalk before importing
-jest.mock('chalk', () => ({
-    default: {
-        yellow: (str: string) => str,
-        green: (str: string) => str,
-        red: (str: string) => str,
-        dim: (str: string) => str,
-    },
-}));
-
+import { describe, it, expect } from '@jest/globals';
 import {
     LLMService,
     loadLLMConfig,
-    loadSSHConfig,
-    isSSHEnabled,
-    buildPromptFromString,
-    getTemplatePlaceholders,
-} from '../../../migrator/features/llm/index';
+    getConfigSummary,
+    llmManager,
+} from '../../../migrator/features/llm';
 
-describe('LLM Index Exports', () => {
+describe('LLM Module Exports', () => {
     it('should export LLMService', () => {
         expect(LLMService).toBeDefined();
+        expect(typeof LLMService).toBe('function');
     });
 
     it('should export loadLLMConfig', () => {
@@ -29,23 +17,22 @@ describe('LLM Index Exports', () => {
         expect(typeof loadLLMConfig).toBe('function');
     });
 
-    it('should export loadSSHConfig', () => {
-        expect(loadSSHConfig).toBeDefined();
-        expect(typeof loadSSHConfig).toBe('function');
+    it('should export getConfigSummary', () => {
+        expect(getConfigSummary).toBeDefined();
+        expect(typeof getConfigSummary).toBe('function');
     });
 
-    it('should export isSSHEnabled', () => {
-        expect(isSSHEnabled).toBeDefined();
-        expect(typeof isSSHEnabled).toBe('function');
+    it('should export llmManager', () => {
+        expect(llmManager).toBeDefined();
+        expect(typeof llmManager).toBe('object');
     });
 
-    it('should export buildPromptFromString', () => {
-        expect(buildPromptFromString).toBeDefined();
-        expect(typeof buildPromptFromString).toBe('function');
-    });
+    it('should be able to create LLMService instance', () => {
+        const service = new LLMService({
+            apiKey: 'test-key',
+            model: 'gpt-4o',
+        });
 
-    it('should export getTemplatePlaceholders', () => {
-        expect(getTemplatePlaceholders).toBeDefined();
-        expect(typeof getTemplatePlaceholders).toBe('function');
+        expect(service).toBeInstanceOf(LLMService);
     });
 });

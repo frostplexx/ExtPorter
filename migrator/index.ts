@@ -35,19 +35,21 @@ async function main() {
     await initialize();
     const server = new MigrationServer(globals);
 
-    server.start();
+    await server.start();
 
     // Keep the server running and handle graceful shutdown
-    process.on('SIGINT', () => {
+    process.on('SIGINT', async () => {
         console.log('\nShutting down server...');
-        server.close();
-        teardown().then(() => process.exit(0));
+        await server.close();
+        await teardown();
+        process.exit(0);
     });
 
-    process.on('SIGTERM', () => {
+    process.on('SIGTERM', async () => {
         console.log('\nShutting down server...');
-        server.close();
-        teardown().then(() => process.exit(0));
+        await server.close();
+        await teardown();
+        process.exit(0);
     });
 
     // let extensions: Extension[] = [];

@@ -74,6 +74,7 @@ impl ImageHandler {
     }
 
     /// Check if images are ready for a given set of URLs
+    #[allow(dead_code)]
     pub fn images_ready(&self, urls: &[String]) -> bool {
         if let Ok(cache) = self.cache.lock() {
             urls.iter().any(|url| cache.contains_key(url))
@@ -96,6 +97,7 @@ impl ImageHandler {
     }
     
     /// Get the cached DynamicImage for a URL
+    #[allow(dead_code)]
     pub fn get_image(&self, url: &str) -> Option<DynamicImage> {
         let cache = self.cache.lock().ok()?;
         cache.get(url).cloned()
@@ -107,6 +109,7 @@ impl ImageHandler {
     }
 
     /// Clear all cached images
+    #[allow(dead_code)]
     pub fn clear_cache(&mut self) {
         if let Ok(mut cache) = self.cache.lock() {
             cache.clear();
@@ -115,11 +118,13 @@ impl ImageHandler {
     }
 
     /// Get the number of cached images
+    #[allow(dead_code)]
     pub fn cache_size(&self) -> usize {
         self.cache.lock().map(|c| c.len()).unwrap_or(0)
     }
     
     /// Check if the terminal supports image rendering
+    #[allow(dead_code)]
     pub fn supports_images(&self) -> bool {
         self.picker.is_some()
     }
