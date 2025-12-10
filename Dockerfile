@@ -28,12 +28,6 @@ COPY scripts/ ./scripts/
 # Create directories that the application expects
 RUN mkdir -p logs output
 
-# Switch to non-root user for security
-USER pptruser
-
-# Set environment variables for Puppeteer
-ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
-ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome-stable
 
 # Set Node.js memory options
 ENV NODE_OPTIONS="--max-old-space-size=8192 --max-semi-space-size=512 --expose-gc"
