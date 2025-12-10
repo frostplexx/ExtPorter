@@ -46,7 +46,7 @@ tui-textarea = "0.7.0"
 once_cell = "1.19"
 
 # Browser automation
-chromiumoxide = { version = "0.7", features = ["tokio-runtime"], default-features = false }
+chromiumoxide = { version = "0.6", features = ["tokio-runtime"] }
 
 # Archive handling
 tar = "0.4"
