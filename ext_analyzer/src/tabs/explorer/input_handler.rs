@@ -50,6 +50,8 @@ pub fn handle_input(
                     "method": "getExtensionsWithStats",
                     "params": { "page": 0, "pageSize": 100, "search": search_query }
                 });
+                // Show loading indicator
+                state.loading_extensions = true;
                 let _ = tx.send(crate::types::AppEvent::SendWebSocketMessage(
                     query.to_string(),
                 ));
@@ -66,6 +68,8 @@ pub fn handle_input(
                     "method": "getExtensionsWithStats",
                     "params": { "page": 0, "pageSize": 100, "search": search_query }
                 });
+                // Show loading indicator
+                state.loading_extensions = true;
                 let _ = tx.send(crate::types::AppEvent::SendWebSocketMessage(
                     query.to_string(),
                 ));
@@ -100,6 +104,10 @@ pub fn handle_input(
                         "method": "getExtensionsWithStats",
                         "params": { "page": next_page, "pageSize": 100, "search": search_query }
                     });
+                    // Show loading indicator
+                    state.loading_extensions = true;
+                    // Show loading indicator
+                    state.loading_extensions = true;
                     let _ = tx.send(crate::types::AppEvent::SendWebSocketMessage(
                         query.to_string(),
                     ));

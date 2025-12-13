@@ -214,6 +214,8 @@ async fn run_app(
                     }
                     AppEvent::WebSocketDisconnected => {
                         app.handle_websocket_disconnected();
+                        // Clear loading flag on disconnect to avoid spinner stuck on
+                        app.set_loading_extensions(false);
                     }
                     AppEvent::WebSocketMessage(msg) => {
                         app.handle_websocket_message(msg);
@@ -224,8 +226,14 @@ async fn run_app(
                     }
                     AppEvent::WebSocketError(err) => {
                         app.handle_websocket_error(err);
+                        // Clear loading flag on websocket error
+                        app.set_loading_extensions(false);
                     }
                     AppEvent::SendWebSocketMessage(msg) => {
+                        // If this is a getExtensions request, show loading indicator
+                        if msg.contains("getExtensionsWithStats") || msg.contains("\"id\":\"get_extensions\"") {
+                            app.set_loading_extensions(true);
+                        }
                         // Send message through WebSocket
                         if let Some(sender) = ws_sender.lock().await.as_ref() {
                             let _ = sender.send(msg);
