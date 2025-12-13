@@ -33,6 +33,7 @@ pub struct AppState {
     pub page_size: usize,
     pub total_pages: usize,
     pub current_search: String,
+    pub loading_extensions: bool,
     pub message_scroll_offset: usize,
     pub connection_state_changed_at: Option<std::time::Instant>,
     pub selected_extension_id: Option<String>,
@@ -79,6 +80,7 @@ impl App {
             page_size: 100,
             total_pages: 1,
             current_search: String::new(),
+            loading_extensions: false,
             message_scroll_offset: 0,
             connection_state_changed_at: Some(std::time::Instant::now()),
             selected_extension_id: None,
@@ -324,6 +326,11 @@ impl App {
         });
     }
 
+    /// Set the loading state for extensions fetch
+    pub fn set_loading_extensions(&mut self, v: bool) {
+        self.state.loading_extensions = v;
+    }
+
     pub fn handle_websocket_disconnected(&mut self) {
         self.state.ws_connection_state = ConnectionState::Disconnected;
         self.state.ws_connected = false;
@@ -385,6 +392,9 @@ impl App {
                                         timestamp: chrono::Utc::now(),
                                     });
 
+                                    // Clear loading flag after receiving a page
+                                    self.state.loading_extensions = false;
+
                                     // Fetch reports only after first page
                                     if page == 0 {
                                         let get_reports_msg = r#"{"type":"db_query","id":"get_reports","method":"getAllReports","params":{}}"#;
@@ -417,6 +427,8 @@ impl App {
                                         ),
                                         timestamp: chrono::Utc::now(),
                                     });
+                                    // Clear loading flag on parse error
+                                    self.state.loading_extensions = false;
                                     return;
                                 }
                             }
@@ -432,6 +444,8 @@ impl App {
                                 content: format!("Error loading extensions: {}", error),
                                 timestamp: chrono::Utc::now(),
                             });
+                            // Clear loading flag on server error response
+                            self.state.loading_extensions = false;
                             return;
                         }
                     }
@@ -560,6 +574,8 @@ impl App {
                 if was_running && !self.state.migration_running {
                     // Request updated extensions list from database
                     let extensions_request = r#"{"type":"db_query","id":"get_extensions","method":"getExtensionsWithStats","params":{"page":0,"pageSize":100}}"#;
+                    // Show loading indicator
+                    self.set_loading_extensions(true);
                     let _ = self.tx.send(AppEvent::SendWebSocketMessage(
                         extensions_request.to_string(),
                     ));

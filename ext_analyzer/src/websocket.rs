@@ -62,7 +62,7 @@ async fn connect_and_run(
 
     // Request extensions list with stats on connection
     let extensions_request = r#"{"type":"db_query","id":"get_extensions","method":"getExtensionsWithStats","params":{"page":0,"pageSize":100}}"#;
-    let _ = send_tx.send(extensions_request.to_string());
+    let _ = tx.send(AppEvent::SendWebSocketMessage(extensions_request.to_string()));
 
 
     loop {
