@@ -621,8 +621,24 @@ export class MigrationServer {
                     break;
 
                 case 'getExtensionsWithStats':
-                    // Fetch all extensions with pre-calculated statistics and sorting
-                    result = await Database.shared.getExtensionsWithStats();
+                    {
+                        // Support paginated responses to avoid very large payloads.
+                        // Clients can pass `page` and `pageSize` to fetch a specific page.
+                        // For backward compatibility, clients may request the full list by sending `params.full === true`.
+                        const page = Number(params?.page ?? 0);
+                        const pageSize = Number(params?.pageSize ?? 100);
+
+                        if (params?.full === true) {
+                            // Explicit request for full list (use with caution).
+                            result = await Database.shared.getExtensionsWithStats();
+                        } else {
+                            // Default: return a single page with metadata
+                            result = await Database.shared.getExtensionsPageWithStats(
+                                page,
+                                pageSize
+                            );
+                        }
+                    }
                     break;
 
                 case 'findExtension':

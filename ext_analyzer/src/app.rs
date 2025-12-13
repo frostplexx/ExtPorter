@@ -531,7 +531,7 @@ impl App {
                 // If migration just stopped, auto-refresh extensions list
                 if was_running && !self.state.migration_running {
                     // Request updated extensions list from database
-                    let extensions_request = r#"{"type":"db_query","id":"get_extensions","method":"getExtensionsWithStats","params":{}}"#;
+                    let extensions_request = r#"{"type":"db_query","id":"get_extensions","method":"getExtensionsWithStats","params":{"page":0,"pageSize":100}}"#;
                     let _ = self.tx.send(AppEvent::SendWebSocketMessage(
                         extensions_request.to_string(),
                     ));

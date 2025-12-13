@@ -46,6 +46,9 @@ async fn connect_and_run(
     ws_sender: &WebSocketSender,
 ) -> Result<()> {
     let ws_url = get_ws_url();
+
+    // Use default connect_async — server now returns paginated responses,
+    // so large single-message limits are no longer required.
     let (ws_stream, _) = connect_async(&ws_url).await?;
     let _ = tx.send(AppEvent::WebSocketConnected);
 
@@ -58,7 +61,7 @@ async fn connect_and_run(
     *ws_sender.lock().await = Some(send_tx.clone());
 
     // Request extensions list with stats on connection
-    let extensions_request = r#"{"type":"db_query","id":"get_extensions","method":"getExtensionsWithStats","params":{}}"#;
+    let extensions_request = r#"{"type":"db_query","id":"get_extensions","method":"getExtensionsWithStats","params":{"page":0,"pageSize":100}}"#;
     let _ = send_tx.send(extensions_request.to_string());
 
 
