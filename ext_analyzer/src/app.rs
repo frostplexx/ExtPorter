@@ -29,6 +29,10 @@ pub struct AppState {
     pub messages: Vec<Message>,
     pub extensions: Vec<Extension>,
     pub extension_stats: ExtensionStats,
+    pub current_page: usize,
+    pub page_size: usize,
+    pub total_pages: usize,
+    pub current_search: String,
     pub message_scroll_offset: usize,
     pub connection_state_changed_at: Option<std::time::Instant>,
     pub selected_extension_id: Option<String>,
@@ -71,6 +75,10 @@ impl App {
             messages: Vec::new(),
             extensions: Vec::new(),
             extension_stats: ExtensionStats::default(),
+            current_page: 0,
+            page_size: 100,
+            total_pages: 1,
+            current_search: String::new(),
             message_scroll_offset: 0,
             connection_state_changed_at: Some(std::time::Instant::now()),
             selected_extension_id: None,
@@ -340,18 +348,36 @@ impl App {
                             match serde_json::from_value::<ExtensionsWithStats>(result.clone()) {
                                 Ok(data) => {
                                     let count = data.extensions.len();
-                                    self.state.extensions = data.extensions;
-                                    self.state.extension_stats = data.stats;
 
-                                    // Add a message about loaded extensions
+                                    // Determine page info (defaults)
+                                    let page = data.page.unwrap_or(0);
+                                    let page_size = data.page_size.unwrap_or(100);
+                                    let total_pages = data.total_pages.unwrap_or(1);
+
+                                    if page == 0 {
+                                        // First page => replace
+                                        self.state.extensions = data.extensions;
+                                    } else {
+                                        // Append subsequent pages
+                                        self.state.extensions.extend(data.extensions);
+                                    }
+
+                                    self.state.extension_stats = data.stats;
+                                    self.state.current_page = page;
+                                    self.state.page_size = page_size;
+                                    self.state.total_pages = total_pages;
+
+                                    // Add a message about loaded extensions/page
                                     if self.state.message_scroll_offset > 0 {
                                         self.state.message_scroll_offset += 1;
                                     }
 
                                     self.state.messages.push(Message {
                                         msg_type: MessageType::System,
-                                        content: format!("✓ Loaded {} extensions (MV3: {}, Failed: {}, Avg Score: {:.2})", 
+                                        content: format!("✓ Loaded {} extensions (page {}/{}, MV3: {}, Failed: {}, Avg Score: {:.2})", 
                                             count, 
+                                            page + 1,
+                                            total_pages,
                                             self.state.extension_stats.with_mv3,
                                             self.state.extension_stats.failed,
                                             self.state.extension_stats.avg_score
@@ -359,11 +385,13 @@ impl App {
                                         timestamp: chrono::Utc::now(),
                                     });
 
-                                    // Fetch reports
-                                    let get_reports_msg = r#"{"type":"db_query","id":"get_reports","method":"getAllReports","params":{}}"#;
-                                    let _ = self.tx.send(AppEvent::SendWebSocketMessage(
-                                        get_reports_msg.to_string(),
-                                    ));
+                                    // Fetch reports only after first page
+                                    if page == 0 {
+                                        let get_reports_msg = r#"{"type":"db_query","id":"get_reports","method":"getAllReports","params":{}}"#;
+                                        let _ = self.tx.send(AppEvent::SendWebSocketMessage(
+                                            get_reports_msg.to_string(),
+                                        ));
+                                    }
 
                                     return;
                                 }

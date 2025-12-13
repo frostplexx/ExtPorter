@@ -627,15 +627,17 @@ export class MigrationServer {
                         // For backward compatibility, clients may request the full list by sending `params.full === true`.
                         const page = Number(params?.page ?? 0);
                         const pageSize = Number(params?.pageSize ?? 100);
+                        const search = typeof params?.search === 'string' ? params.search : null;
 
                         if (params?.full === true) {
                             // Explicit request for full list (use with caution).
                             result = await Database.shared.getExtensionsWithStats();
                         } else {
-                            // Default: return a single page with metadata
+                            // Default: return a single page with metadata and optional search
                             result = await Database.shared.getExtensionsPageWithStats(
                                 page,
-                                pageSize
+                                pageSize,
+                                search
                             );
                         }
                     }
@@ -749,7 +751,8 @@ export class MigrationServer {
             }
 
             // Import DualChromeTester dynamically
-            const { DualChromeTester } = await import('../../../ext_tester/dual_chrome_tester.js');
+            const DualChromeTesterModulePath = '../../../' + 'ext_tester/dual_chrome_tester.js';
+            const { DualChromeTester } = await import(DualChromeTesterModulePath);
             const fs = await import('fs');
             const path = await import('path');
 
@@ -831,7 +834,8 @@ export class MigrationServer {
     private async handleCloseBrowsers(ws: WebSocket): Promise<void> {
         try {
             // Import DualChromeTester dynamically
-            const { DualChromeTester } = await import('../../../ext_tester/dual_chrome_tester.js');
+            const DualChromeTesterModulePath = '../../../' + 'ext_tester/dual_chrome_tester.js';
+            const { DualChromeTester } = await import(DualChromeTesterModulePath);
 
             await DualChromeTester.shared.closeAll();
 

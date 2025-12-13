@@ -230,6 +230,12 @@ pub struct ExtensionStats {
 pub struct ExtensionsWithStats {
     pub extensions: Vec<Extension>,
     pub stats: ExtensionStats,
+    #[serde(default)]
+    pub page: Option<usize>,
+    #[serde(default, rename = "pageSize")]
+    pub page_size: Option<usize>,
+    #[serde(default, rename = "totalPages")]
+    pub total_pages: Option<usize>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]

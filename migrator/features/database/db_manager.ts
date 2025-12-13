@@ -577,7 +577,11 @@ export class Database {
      * Get a single page of extensions with pre-calculated statistics.
      * This avoids serializing the whole collection at once and enables UI pagination/scrolling.
      */
-    async getExtensionsPageWithStats(page: number = 0, pageSize: number = 100) {
+    async getExtensionsPageWithStats(
+        page: number = 0,
+        pageSize: number = 100,
+        search: string | null = null
+    ) {
         return this.enqueueOperation(async () => {
             if (!this.database) throw new Error('Database not initialized');
 
@@ -585,9 +589,23 @@ export class Database {
 
             const skip = Math.max(0, page) * Math.max(1, pageSize);
 
+            // Build filter for optional search
+            let filter: any = {};
+            if (search && typeof search === 'string' && search.trim().length > 0) {
+                const regex = { $regex: search, $options: 'i' };
+                filter = {
+                    $or: [
+                        { name: regex },
+                        { id: regex },
+                        { mv2_extension_id: regex },
+                        { mv3_extension_id: regex },
+                    ],
+                };
+            }
+
             // Fetch page of extensions sorted by interestingness (descending)
             const extensionsPage = await extensionsCollection
-                .find({})
+                .find(filter)
                 .sort({ interestingness_score: -1 })
                 .skip(skip)
                 .limit(pageSize)
