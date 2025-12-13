@@ -3,6 +3,7 @@ use ratatui::crossterm::event::{KeyCode, KeyEvent};
 use tokio::sync::mpsc;
 
 use crate::{app::AppState, types::AppEvent};
+use chrono::Utc;
 
 use super::search::{filter_extensions, SortBy};
 
@@ -35,6 +36,27 @@ pub fn handle_input(
         _ => {}
     }
 
+    // Helper to build params including optional seed
+    let build_params = |page: usize,
+                        page_size: usize,
+                        search: &str,
+                        sort: &SortBy,
+                        state: &mut AppState| {
+        // Ensure seed exists when using Random
+        if sort.to_param() == "random" && state.current_random_seed.is_none() {
+            state.current_random_seed = Some(format!("{}", Utc::now().timestamp_nanos()));
+        }
+        if sort.to_param() != "random" {
+            state.current_random_seed = None;
+        }
+
+        let mut params = serde_json::json!({ "page": page, "pageSize": page_size, "search": search, "sort": sort.to_param() });
+        if let Some(ref s) = state.current_random_seed {
+            params["seed"] = serde_json::json!(s);
+        }
+        params
+    };
+
     // If search is focused, only handle text input and backspace
     if *search_focused {
         match key.code {
@@ -43,14 +65,18 @@ pub fn handle_input(
                 *selected_index = 0;
                 *scroll_offset = 0;
 
-                // Send server-side search (page 0)
+                // Update global search/sort state
+                state.current_search = search_query.clone();
+                state.current_sort = *sort_by;
+
+                let params = build_params(0, 100, search_query, sort_by, state);
                 let query = serde_json::json!({
                     "type": "db_query",
                     "id": "get_extensions",
                     "method": "getExtensionsWithStats",
-                    "params": { "page": 0, "pageSize": 100, "search": search_query }
+                    "params": params
                 });
-                // Show loading indicator
+
                 state.loading_extensions = true;
                 let _ = tx.send(crate::types::AppEvent::SendWebSocketMessage(
                     query.to_string(),
@@ -61,14 +87,18 @@ pub fn handle_input(
                 *selected_index = 0;
                 *scroll_offset = 0;
 
-                // Send server-side search (page 0)
+                // Update global search/sort state
+                state.current_search = search_query.clone();
+                state.current_sort = *sort_by;
+
+                let params = build_params(0, 100, search_query, sort_by, state);
                 let query = serde_json::json!({
                     "type": "db_query",
                     "id": "get_extensions",
                     "method": "getExtensionsWithStats",
-                    "params": { "page": 0, "pageSize": 100, "search": search_query }
+                    "params": params
                 });
-                // Show loading indicator
+
                 state.loading_extensions = true;
                 let _ = tx.send(crate::types::AppEvent::SendWebSocketMessage(
                     query.to_string(),
@@ -98,14 +128,13 @@ pub fn handle_input(
                 if *selected_index + 5 >= current_loaded {
                     // Request next page only if more pages may exist
                     let next_page = (current_loaded / 100) as usize; // pageSize is 100
+                    let params = build_params(next_page, 100, search_query, sort_by, state);
                     let query = serde_json::json!({
                         "type": "db_query",
                         "id": "get_extensions",
                         "method": "getExtensionsWithStats",
-                        "params": { "page": next_page, "pageSize": 100, "search": search_query }
+                        "params": params
                     });
-                    // Show loading indicator
-                    state.loading_extensions = true;
                     // Show loading indicator
                     state.loading_extensions = true;
                     let _ = tx.send(crate::types::AppEvent::SendWebSocketMessage(
@@ -130,11 +159,36 @@ pub fn handle_input(
         }
         KeyCode::Char('s') | KeyCode::Char('S') => {
             *sort_by = sort_by.next();
+            // Update global state and request fresh page 0 with new sort
+            state.current_search = search_query.clone();
+            state.current_sort = *sort_by;
+
+            // If switched to Random, build_params will create a seed; otherwise it clears it
+            let params = build_params(0, 100, search_query, sort_by, state);
+            let query = serde_json::json!({
+                "type": "db_query",
+                "id": "get_extensions",
+                "method": "getExtensionsWithStats",
+                "params": params
+            });
+            state.loading_extensions = true;
+            let _ = tx.send(crate::types::AppEvent::SendWebSocketMessage(
+                query.to_string(),
+            ));
         }
         KeyCode::Char('r') | KeyCode::Char('R') => {
-            let extensions_request = r#"{"type":"db_query","id":"get_extensions","method":"getExtensionsWithStats","params":{"page":0,"pageSize":100}}"#;
-            let _ = tx.send(AppEvent::SendWebSocketMessage(
-                extensions_request.to_string(),
+            // Refresh (keep seed if random)
+            let params = build_params(0, 100, search_query, sort_by, state);
+            let query = serde_json::json!({
+                "type": "db_query",
+                "id": "get_extensions",
+                "method": "getExtensionsWithStats",
+                "params": params
+            });
+            // Show loading indicator
+            state.loading_extensions = true;
+            let _ = tx.send(crate::types::AppEvent::SendWebSocketMessage(
+                query.to_string(),
             ));
         }
         KeyCode::Char('c') | KeyCode::Char('C') => {

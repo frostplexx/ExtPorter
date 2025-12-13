@@ -5,14 +5,24 @@ import { Database } from '../database/db_manager';
 import { llmManager, buildChatMessagesFromFile } from '../llm/index.js';
 import * as path from 'path';
 import * as fs from 'fs';
+import * as os from 'os';
 import * as crypto from 'crypto';
 import * as zlib from 'zlib';
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const tar = require('tar-stream');
 
+// Prevent noisy MaxListeners warnings and accidental memory leaks in tests/runtime
+// Increase default max listeners to a reasonable value for the server lifetime
+import { EventEmitter } from 'events';
+EventEmitter.defaultMaxListeners = Number(process.env.EVENT_LISTENER_LIMIT || 50);
+
 // Chunked download constants
 const CHUNK_SIZE = 1 * 1024 * 1024; // 1MB chunks
 const CHUNK_THRESHOLD = 10 * 1024 * 1024; // 10MB - chunk if larger
+
+// Server-side limits to protect memory
+const MAX_FULL_EXTENSIONS = Number(process.env.MAX_FULL_EXTENSIONS || 2000); // max items when a full list is explicitly requested
+const MAX_PAGE_SIZE = Number(process.env.MAX_PAGE_SIZE || 1000); // maximum pageSize clients can request
 
 interface MigratorProcess {
     process: ChildProcess | null;
@@ -625,19 +635,35 @@ export class MigrationServer {
                         // Support paginated responses to avoid very large payloads.
                         // Clients can pass `page` and `pageSize` to fetch a specific page.
                         // For backward compatibility, clients may request the full list by sending `params.full === true`.
-                        const page = Number(params?.page ?? 0);
-                        const pageSize = Number(params?.pageSize ?? 100);
+                        let page = Number(params?.page ?? 0);
+                        let pageSize = Number(params?.pageSize ?? 100);
                         const search = typeof params?.search === 'string' ? params.search : null;
+                        const sort = typeof params?.sort === 'string' ? params.sort : null;
+                        const seed = typeof params?.seed === 'string' ? params.seed : null;
+
+                        // Clamp pageSize to protect memory
+                        if (isNaN(pageSize) || pageSize <= 0) pageSize = 100;
+                        pageSize = Math.min(pageSize, MAX_PAGE_SIZE);
+                        if (isNaN(page) || page < 0) page = 0;
 
                         if (params?.full === true) {
-                            // Explicit request for full list (use with caution).
+                            // Explicit request for full list (use with caution). Enforce hard limit.
+                            const totalCount = await Database.shared.countDocuments('extensions');
+                            if (totalCount > MAX_FULL_EXTENSIONS) {
+                                throw new Error(
+                                    `Refusing to return full list (${totalCount} items). Use pagination (page/pageSize) instead.`
+                                );
+                            }
+
                             result = await Database.shared.getExtensionsWithStats();
                         } else {
-                            // Default: return a single page with metadata and optional search
+                            // Default: return a single page with metadata and optional search, sort and seed
                             result = await Database.shared.getExtensionsPageWithStats(
                                 page,
                                 pageSize,
-                                search
+                                search,
+                                sort,
+                                seed
                             );
                         }
                     }
@@ -1135,32 +1161,50 @@ export class MigrationServer {
                 return;
             }
 
-            console.log(`[Download] Creating tar.gz archives...`);
+            console.log(`[Download] Creating tar.gz archives (streaming to temp files)...`);
 
-            // Create tar.gz archives for both directories
-            const mv2Archive = await this.createTarGz(mv2Dir);
-            const mv3Archive = await this.createTarGz(mv3Dir);
+            // Create tar.gz archives for both directories and write to temp files
+            const mv2TempPath = await this.createTarGzToFile(mv2Dir);
+            const mv3TempPath = await this.createTarGzToFile(mv3Dir);
 
-            console.log(
-                `[Download] Archive sizes - MV2: ${mv2Archive.length}, MV3: ${mv3Archive.length}`
-            );
+            const mv2Stat = await fs.promises.stat(mv2TempPath);
+            const mv3Stat = await fs.promises.stat(mv3TempPath);
 
-            // Build binary payload:
-            // [4 bytes: mv2_size][mv2_tar.gz][4 bytes: mv3_size][mv3_tar.gz]
+            const mv2Size = Number(mv2Stat.size);
+            const mv3Size = Number(mv3Stat.size);
+
+            console.log(`[Download] Archive sizes (files) - MV2: ${mv2Size}, MV3: ${mv3Size}`);
+
+            // Build header: 8 bytes size header (mv2_size, mv3_size)
             const sizeHeader = Buffer.alloc(8);
-            sizeHeader.writeUInt32BE(mv2Archive.length, 0);
-            sizeHeader.writeUInt32BE(mv3Archive.length, 4);
+            sizeHeader.writeUInt32BE(mv2Size, 0);
+            sizeHeader.writeUInt32BE(mv3Size, 4);
 
-            const payload = Buffer.concat([sizeHeader, mv2Archive, mv3Archive]);
+            const totalSize = 8 + mv2Size + mv3Size;
 
-            // Check if we need chunked transfer
-            if (payload.length > CHUNK_THRESHOLD) {
+            // If totalSize exceeds chunk threshold, stream using chunked transfer
+            if (totalSize > CHUNK_THRESHOLD) {
                 console.log(
-                    `[Download] Large extension (${payload.length} bytes), using chunked transfer`
+                    `[Download] Large extension (${totalSize} bytes), using chunked transfer (streamed)`
                 );
-                await this.sendChunkedExtension(ws, extensionId, payload, serverHash);
+
+                // Stream temp files into a single payload by reading them in chunks and sending chunk messages
+                await this.sendChunkedFiles(
+                    ws,
+                    extensionId,
+                    mv2TempPath,
+                    mv3TempPath,
+                    mv2Size,
+                    mv3Size,
+                    serverHash
+                );
             } else {
-                // Small extension - send as single message
+                // Small extension - read files into memory safely and send as single message
+                const mv2Buffer = await fs.promises.readFile(mv2TempPath);
+                const mv3Buffer = await fs.promises.readFile(mv3TempPath);
+
+                const payload = Buffer.concat([sizeHeader, mv2Buffer, mv3Buffer]);
+
                 // Format: "DOWNLOAD_EXTENSION_START:{ext_id}:{size}:{hash}\n" + binary payload
                 const textHeader = Buffer.from(
                     `DOWNLOAD_EXTENSION_START:${extensionId}:${payload.length}:${serverHash}\n`
@@ -1169,9 +1213,17 @@ export class MigrationServer {
                 ws.send(fullMessage);
 
                 console.log(
-                    `[Download] Sent ${fullMessage.length} bytes for extension ${ext.name} (header: ${textHeader.length}, payload: ${payload.length})`
+                    `[Download] Sent ${fullMessage.length} bytes for extension ${ext.name}`
                 );
             }
+
+            // Cleanup temp files
+            try {
+                await fs.promises.unlink(mv2TempPath);
+            } catch {}
+            try {
+                await fs.promises.unlink(mv3TempPath);
+            } catch {}
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : String(error);
             console.error(`[Download] Error downloading extension ${extensionId}:`, errorMessage);
@@ -1179,7 +1231,7 @@ export class MigrationServer {
         }
     }
 
-    // Send extension using chunked transfer for large files
+    // Send extension using chunked transfer for large in-memory payloads (legacy)
     private async sendChunkedExtension(
         ws: WebSocket,
         extensionId: string,
@@ -1233,6 +1285,78 @@ export class MigrationServer {
         console.log(`[Download] Chunked transfer complete for ${extensionId}`);
     }
 
+    // Stream two tar.gz files from disk using chunked messages to avoid large memory usage
+    private async sendChunkedFiles(
+        ws: WebSocket,
+        extensionId: string,
+        mv2Path: string,
+        mv3Path: string,
+        mv2Size: number,
+        mv3Size: number,
+        dirHash: string
+    ): Promise<void> {
+        const totalSize = 8 + mv2Size + mv3Size; // header + two files
+        const totalChunks = Math.ceil(totalSize / CHUNK_SIZE);
+
+        // Prepare MD5 of concatenated files by streaming them (do not load into memory)
+        const md5 = crypto.createHash('md5');
+        await new Promise<void>((resolve, reject) => {
+            const stream1 = fs.createReadStream(mv2Path);
+            stream1.on('data', (chunk: any) => md5.update(chunk));
+            stream1.on('end', () => {
+                const stream2 = fs.createReadStream(mv3Path);
+                stream2.on('data', (chunk: any) => md5.update(chunk));
+                stream2.on('end', () => resolve());
+                stream2.on('error', reject);
+            });
+            stream1.on('error', reject);
+        });
+
+        const payloadHash = md5.digest('hex');
+
+        console.log(
+            `[Download] Starting streamed chunked transfer: ${totalChunks} chunks, ${totalSize} bytes, hash: ${payloadHash}`
+        );
+
+        // Send start message
+        const startMessage = Buffer.from(
+            `DOWNLOAD_EXTENSION_CHUNK_START:${extensionId}:${totalSize}:${totalChunks}:${payloadHash}:${dirHash}\n`
+        );
+        ws.send(startMessage, { binary: true });
+
+        // Send header chunk first
+        const headerChunk = Buffer.concat([Buffer.from('HEADER'), Buffer.alloc(0)]);
+        // We'll send files in sequence as chunk messages
+
+        let chunkIndex = 0;
+
+        // Helper to stream a file in chunks
+        const streamFileAsChunks = (filePath: string) =>
+            new Promise<void>((resolve, reject) => {
+                const stream = fs.createReadStream(filePath, { highWaterMark: CHUNK_SIZE });
+                stream.on('data', (chunk: any) => {
+                    const chunkHeader = Buffer.from(
+                        `DOWNLOAD_EXTENSION_CHUNK:${extensionId}:${chunkIndex}:${chunk.length}\n`
+                    );
+                    ws.send(Buffer.concat([chunkHeader, chunk]), { binary: true });
+                    chunkIndex++;
+                });
+                stream.on('end', resolve);
+                stream.on('error', reject);
+            });
+
+        // Stream mv2 file
+        await streamFileAsChunks(mv2Path);
+        // Stream mv3 file
+        await streamFileAsChunks(mv3Path);
+
+        // Send end message
+        const endMessage = Buffer.from(`DOWNLOAD_EXTENSION_CHUNK_END:${extensionId}\n`);
+        ws.send(endMessage, { binary: true });
+
+        console.log(`[Download] Streamed chunked transfer complete for ${extensionId}`);
+    }
+
     // Calculate MD5 hash of extension directories for caching
     private async calculateExtensionHash(mv2Dir: string, mv3Dir: string): Promise<string> {
         const hash = crypto.createHash('md5');
@@ -1276,8 +1400,9 @@ export class MigrationServer {
         return files;
     }
 
-    // Create a tar.gz archive from a directory
+    // Create a tar.gz archive from a directory (returns Buffer) - kept for small directories
     private async createTarGz(dirPath: string): Promise<Buffer> {
+        // For small dirs only; otherwise prefer createTarGzToFile
         return new Promise(async (resolve, reject) => {
             try {
                 const pack = tar.pack();
@@ -1293,6 +1418,35 @@ export class MigrationServer {
                 pack.pipe(gzip);
 
                 // Add all files to tar
+                await this.addDirectoryToTar(pack, dirPath, '');
+
+                pack.finalize();
+            } catch (error) {
+                reject(error);
+            }
+        });
+    }
+
+    // Create a tar.gz file on disk for large directories to avoid building large buffers in memory
+    private async createTarGzToFile(dirPath: string): Promise<string> {
+        const tmpPath = path.join(
+            os.tmpdir(),
+            `extporter_${Date.now()}_${Math.random().toString(36).slice(2)}.tar.gz`
+        );
+
+        return new Promise(async (resolve, reject) => {
+            try {
+                const pack = tar.pack();
+                const gzip = zlib.createGzip();
+                const outStream = fs.createWriteStream(tmpPath);
+
+                outStream.on('finish', () => resolve(tmpPath));
+                outStream.on('error', (err) => reject(err));
+                gzip.on('error', (err) => reject(err));
+
+                pack.pipe(gzip).pipe(outStream);
+
+                // Add files to tar (reads files into memory per-file)
                 await this.addDirectoryToTar(pack, dirPath, '');
 
                 pack.finalize();

@@ -74,7 +74,7 @@ fn render_stats_bar(f: &mut Frame, area: &ratatui::layout::Rect, state: &AppStat
     if state.loading_extensions {
         spans.push(Span::raw("  "));
         spans.push(Span::styled(
-            "⟳ Loading...",
+            "Loading...",
             Style::default().fg(state.theme.search_label),
         ));
     }

@@ -230,14 +230,23 @@ async fn run_app(
                         app.set_loading_extensions(false);
                     }
                     AppEvent::SendWebSocketMessage(msg) => {
-                        // If this is a getExtensions request, show loading indicator
+                        // If this is a getExtensions request, show loading indicator and start timeout
                         if msg.contains("getExtensionsWithStats") || msg.contains("\"id\":\"get_extensions\"") {
                             app.set_loading_extensions(true);
+                            // Spawn a timeout to clear loading flag after 10s as a fallback
+                            let tx_clone = app.tx.clone();
+                            tokio::spawn(async move {
+                                tokio::time::sleep(std::time::Duration::from_secs(10)).await;
+                                let _ = tx_clone.send(AppEvent::ClearExtensionsLoading);
+                            });
                         }
                         // Send message through WebSocket
                         if let Some(sender) = ws_sender.lock().await.as_ref() {
                             let _ = sender.send(msg);
                         }
+                    }
+                    AppEvent::ClearExtensionsLoading => {
+                        app.set_loading_extensions(false);
                     }
                     AppEvent::ExtensionsLoaded(_) => {
                         // This is handled in handle_websocket_message, no action needed here

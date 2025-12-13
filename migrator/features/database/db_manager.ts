@@ -3,6 +3,7 @@ import { Extension } from '../../types/extension';
 import { Report } from '../../types/report';
 import { LLMFixAttempt } from '../../types/llm_fix_attempt';
 import { logger, LogLevel } from '../../utils/logger';
+import * as crypto from 'crypto';
 
 export enum Collections {
     EXTENSIONS = 'extensions',
@@ -580,7 +581,9 @@ export class Database {
     async getExtensionsPageWithStats(
         page: number = 0,
         pageSize: number = 100,
-        search: string | null = null
+        search: string | null = null,
+        sort: string | null = null,
+        seed: string | null = null
     ) {
         return this.enqueueOperation(async () => {
             if (!this.database) throw new Error('Database not initialized');
@@ -603,13 +606,59 @@ export class Database {
                 };
             }
 
-            // Fetch page of extensions sorted by interestingness (descending)
-            const extensionsPage = await extensionsCollection
-                .find(filter)
-                .sort({ interestingness_score: -1 })
-                .skip(skip)
-                .limit(pageSize)
-                .toArray();
+            // Fetch page of extensions with requested sort
+            let extensionsPage: any[] = [];
+            if (sort === 'random') {
+                if (seed && typeof seed === 'string' && seed.length > 0) {
+                    // Deterministic seeded-random ordering:
+                    // 1) Fetch only IDs matching filter
+                    // 2) Compute hash(seed + id) for each id
+                    // 3) Sort ids by hash and then slice the requested page
+                    // 4) Fetch the documents for that slice and return them in the same order
+                    const idDocs = await extensionsCollection
+                        .find(filter, { projection: { id: 1 } })
+                        .toArray();
+                    const ids: string[] = idDocs.map((d: any) => d.id || String(d._id));
+
+                    // Compute hash -> use hex string for deterministic ordering
+                    const hashes = ids.map((id) => {
+                        const h = crypto
+                            .createHash('sha256')
+                            .update(seed + '::' + id)
+                            .digest('hex');
+                        return { id, h };
+                    });
+
+                    hashes.sort((a: any, b: any) => (a.h < b.h ? -1 : a.h > b.h ? 1 : 0));
+
+                    const pageIds = hashes.slice(skip, skip + pageSize).map((x: any) => x.id);
+
+                    if (pageIds.length === 0) {
+                        extensionsPage = [];
+                    } else {
+                        const docs = await extensionsCollection
+                            .find({ id: { $in: pageIds } })
+                            .toArray();
+                        // Preserve deterministic order
+                        const docsById: any = {};
+                        for (const d of docs) docsById[d.id || String(d._id)] = d;
+                        extensionsPage = pageIds.map((id) => docsById[id]).filter(Boolean);
+                    }
+                } else {
+                    // For random without seed, fallback to non-deterministic sample (legacy behavior)
+                    const pipeline: any[] = [{ $match: filter }, { $sample: { size: pageSize } }];
+                    extensionsPage = await extensionsCollection.aggregate(pipeline).toArray();
+                }
+            } else {
+                // Determine sort direction for interestingness (default: desc)
+                const direction = sort === 'interestingness_asc' ? 1 : -1;
+                extensionsPage = await extensionsCollection
+                    .find(filter)
+                    .sort({ interestingness_score: direction })
+                    .skip(skip)
+                    .limit(pageSize)
+                    .toArray();
+            }
 
             // Sanitize extensions for transmission: remove heavy fields like `files` and `manifest`,
             // truncate long CWS descriptions, and strip large code snippets from event listeners.

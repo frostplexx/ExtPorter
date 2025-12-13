@@ -11,6 +11,8 @@ pub enum AppEvent {
     WebSocketBinaryMessage(Vec<u8>),
     WebSocketError(String),
     SendWebSocketMessage(String),
+    /// Internal event to clear the extensions loading flag (timeout/fallback)
+    ClearExtensionsLoading,
     #[allow(dead_code)]
     ExtensionsLoaded(Vec<Extension>),
     SwitchToTab(usize),
