@@ -61,8 +61,15 @@ async fn connect_and_run(
     *ws_sender.lock().await = Some(send_tx.clone());
 
     // Request extensions list with stats on connection
-    let extensions_request = r#"{"type":"db_query","id":"get_extensions","method":"getExtensionsWithStats","params":{"page":0,"pageSize":100}}"#;
-    let _ = tx.send(AppEvent::SendWebSocketMessage(extensions_request.to_string()));
+    let mut params = serde_json::json!({ "page": 0, "pageSize": 100, "search": "", "sort": crate::tabs::explorer::SortBy::InterestingnessDesc.to_param() });
+    // No seed for default sort
+    let query = serde_json::json!({
+        "type": "db_query",
+        "id": "get_extensions",
+        "method": "getExtensionsWithStats",
+        "params": params
+    });
+    let _ = tx.send(AppEvent::SendWebSocketMessage(query.to_string()));
 
 
     loop {

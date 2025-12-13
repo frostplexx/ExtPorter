@@ -24,7 +24,7 @@ impl ExplorerTab {
             selected_index: 0,
             scroll_offset: 0,
             search_query: String::new(),
-            sort_by: SortBy::Interestingness,
+            sort_by: SortBy::InterestingnessDesc,
             search_focused: false,
         }
     }

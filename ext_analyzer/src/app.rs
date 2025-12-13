@@ -33,6 +33,8 @@ pub struct AppState {
     pub page_size: usize,
     pub total_pages: usize,
     pub current_search: String,
+    pub current_sort: crate::tabs::explorer::SortBy,
+    pub current_random_seed: Option<String>,
     pub loading_extensions: bool,
     pub message_scroll_offset: usize,
     pub connection_state_changed_at: Option<std::time::Instant>,
@@ -80,6 +82,8 @@ impl App {
             page_size: 100,
             total_pages: 1,
             current_search: String::new(),
+            current_sort: crate::tabs::explorer::SortBy::InterestingnessDesc,
+            current_random_seed: None,
             loading_extensions: false,
             message_scroll_offset: 0,
             connection_state_changed_at: Some(std::time::Instant::now()),
@@ -573,12 +577,21 @@ impl App {
                 // If migration just stopped, auto-refresh extensions list
                 if was_running && !self.state.migration_running {
                     // Request updated extensions list from database
-                    let extensions_request = r#"{"type":"db_query","id":"get_extensions","method":"getExtensionsWithStats","params":{"page":0,"pageSize":100}}"#;
+                    let mut params = serde_json::json!({ "page": 0, "pageSize": 100, "search": self.state.current_search, "sort": self.state.current_sort.to_param() });
+                    if let Some(ref s) = self.state.current_random_seed {
+                        params["seed"] = serde_json::json!(s);
+                    }
+                    let query = serde_json::json!({
+                        "type": "db_query",
+                        "id": "get_extensions",
+                        "method": "getExtensionsWithStats",
+                        "params": params
+                    });
                     // Show loading indicator
                     self.set_loading_extensions(true);
-                    let _ = self.tx.send(AppEvent::SendWebSocketMessage(
-                        extensions_request.to_string(),
-                    ));
+                    let _ = self
+                        .tx
+                        .send(AppEvent::SendWebSocketMessage(query.to_string()));
 
                     // Add notification message
                     if self.state.message_scroll_offset > 0 {

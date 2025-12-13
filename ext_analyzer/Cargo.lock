@@ -990,6 +990,7 @@ dependencies = [
  "libc",
  "md-5",
  "once_cell",
+ "rand 0.8.5",
  "ratatui",
  "ratatui-image",
  "reqwest",

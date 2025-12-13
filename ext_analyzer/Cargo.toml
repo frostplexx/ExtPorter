@@ -13,6 +13,7 @@ tachyonfx = "0.20"
 
 # Async runtime and utilities
 tokio = { version = "1.42", features = ["full"] }
+rand = "0.8"
 tokio-tungstenite = "0.28"
 futures-util = "0.3"
 futures = "0.3"

@@ -24,54 +24,63 @@ pub fn filter_extensions<'a>(
         .collect()
 }
 
+use rand::seq::SliceRandom;
+use rand::thread_rng;
+
 #[derive(Clone, Copy)]
 pub enum SortBy {
-    Interestingness,
-    Name,
-    Version,
+    InterestingnessAsc,
+    InterestingnessDesc,
+    Random,
 }
 
 impl SortBy {
     pub fn next(&self) -> Self {
         match self {
-            SortBy::Interestingness => SortBy::Name,
-            SortBy::Name => SortBy::Version,
-            SortBy::Version => SortBy::Interestingness,
+            SortBy::InterestingnessAsc => SortBy::InterestingnessDesc,
+            SortBy::InterestingnessDesc => SortBy::Random,
+            SortBy::Random => SortBy::InterestingnessAsc,
         }
     }
 
     pub fn as_str(&self) -> &'static str {
         match self {
-            SortBy::Interestingness => "interestingness",
-            SortBy::Name => "name",
-            SortBy::Version => "version",
+            SortBy::InterestingnessAsc => "interestingness ↑",
+            SortBy::InterestingnessDesc => "interestingness ↓",
+            SortBy::Random => "random",
+        }
+    }
+
+    pub fn to_param(&self) -> &'static str {
+        match self {
+            SortBy::InterestingnessAsc => "interestingness_asc",
+            SortBy::InterestingnessDesc => "interestingness_desc",
+            SortBy::Random => "random",
         }
     }
 }
 
 pub fn sort_extensions(extensions: &mut Vec<&Extension>, sort_by: SortBy, search_query: &str) {
     match sort_by {
-        SortBy::Interestingness => {
-            // Already sorted by server, but re-sort if search filtered the list
-            if !search_query.is_empty() {
-                extensions.sort_by(|a, b| {
-                    b.interestingness
-                        .unwrap_or(0.0)
-                        .partial_cmp(&a.interestingness.unwrap_or(0.0))
-                        .unwrap()
-                });
-            }
-        }
-        SortBy::Name => {
-            extensions.sort_by(|a, b| a.name.cmp(&b.name));
-        }
-        SortBy::Version => {
+        SortBy::InterestingnessAsc => {
             extensions.sort_by(|a, b| {
-                a.version
-                    .as_deref()
-                    .unwrap_or("")
-                    .cmp(b.version.as_deref().unwrap_or(""))
+                a.interestingness
+                    .unwrap_or(0.0)
+                    .partial_cmp(&b.interestingness.unwrap_or(0.0))
+                    .unwrap()
             });
+        }
+        SortBy::InterestingnessDesc => {
+            extensions.sort_by(|a, b| {
+                b.interestingness
+                    .unwrap_or(0.0)
+                    .partial_cmp(&a.interestingness.unwrap_or(0.0))
+                    .unwrap()
+            });
+        }
+        SortBy::Random => {
+            let mut rng = thread_rng();
+            extensions.shuffle(&mut rng);
         }
     }
 }
