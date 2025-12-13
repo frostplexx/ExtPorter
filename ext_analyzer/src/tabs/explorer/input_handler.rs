@@ -42,11 +42,33 @@ pub fn handle_input(
                 search_query.push(c);
                 *selected_index = 0;
                 *scroll_offset = 0;
+
+                // Send server-side search (page 0)
+                let query = serde_json::json!({
+                    "type": "db_query",
+                    "id": "get_extensions",
+                    "method": "getExtensionsWithStats",
+                    "params": { "page": 0, "pageSize": 100, "search": search_query }
+                });
+                let _ = tx.send(crate::types::AppEvent::SendWebSocketMessage(
+                    query.to_string(),
+                ));
             }
             KeyCode::Backspace => {
                 search_query.pop();
                 *selected_index = 0;
                 *scroll_offset = 0;
+
+                // Send server-side search (page 0)
+                let query = serde_json::json!({
+                    "type": "db_query",
+                    "id": "get_extensions",
+                    "method": "getExtensionsWithStats",
+                    "params": { "page": 0, "pageSize": 100, "search": search_query }
+                });
+                let _ = tx.send(crate::types::AppEvent::SendWebSocketMessage(
+                    query.to_string(),
+                ));
             }
             _ => {}
         }
@@ -66,6 +88,22 @@ pub fn handle_input(
         KeyCode::Down => {
             if *selected_index < filtered_count.saturating_sub(1) {
                 *selected_index += 1;
+
+                // If we're near the end of loaded extensions, request the next page from server
+                let current_loaded = state.extensions.len();
+                if *selected_index + 5 >= current_loaded {
+                    // Request next page only if more pages may exist
+                    let next_page = (current_loaded / 100) as usize; // pageSize is 100
+                    let query = serde_json::json!({
+                        "type": "db_query",
+                        "id": "get_extensions",
+                        "method": "getExtensionsWithStats",
+                        "params": { "page": next_page, "pageSize": 100, "search": search_query }
+                    });
+                    let _ = tx.send(crate::types::AppEvent::SendWebSocketMessage(
+                        query.to_string(),
+                    ));
+                }
             }
         }
         KeyCode::PageUp => {
