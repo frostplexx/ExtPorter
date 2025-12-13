@@ -86,7 +86,7 @@ pub fn handle_input(
             *sort_by = sort_by.next();
         }
         KeyCode::Char('r') | KeyCode::Char('R') => {
-            let extensions_request = r#"{"type":"db_query","id":"get_extensions","method":"getExtensionsWithStats","params":{}}"#;
+            let extensions_request = r#"{"type":"db_query","id":"get_extensions","method":"getExtensionsWithStats","params":{"page":0,"pageSize":100}}"#;
             let _ = tx.send(AppEvent::SendWebSocketMessage(
                 extensions_request.to_string(),
             ));

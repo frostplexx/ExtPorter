@@ -533,6 +533,7 @@ export class Database {
      * Get all extensions with statistics, pre-sorted by interestingness
      */
     async getExtensionsWithStats() {
+        // Backwards-compatible full response (kept for callers that expect entire list)
         return this.enqueueOperation(async () => {
             if (!this.database) throw new Error('Database not initialized');
 
@@ -568,6 +569,62 @@ export class Database {
                     failed,
                     avg_score,
                 },
+            };
+        });
+    }
+
+    /**
+     * Get a single page of extensions with pre-calculated statistics.
+     * This avoids serializing the whole collection at once and enables UI pagination/scrolling.
+     */
+    async getExtensionsPageWithStats(page: number = 0, pageSize: number = 100) {
+        return this.enqueueOperation(async () => {
+            if (!this.database) throw new Error('Database not initialized');
+
+            const extensionsCollection = this.database.collection(Collections.EXTENSIONS);
+
+            const skip = Math.max(0, page) * Math.max(1, pageSize);
+
+            // Fetch page of extensions sorted by interestingness (descending)
+            const extensionsPage = await extensionsCollection
+                .find({})
+                .sort({ interestingness_score: -1 })
+                .skip(skip)
+                .limit(pageSize)
+                .toArray();
+
+            // Compute global statistics efficiently using aggregation/counts
+            const total = await extensionsCollection.countDocuments();
+            const with_mv3 = await extensionsCollection.countDocuments({
+                mv3_extension_id: { $ne: null },
+            });
+            const failed = await extensionsCollection.countDocuments({ tags: 'migration-failed' });
+
+            // Average interestingness score (aggregation)
+            const avgResult = await extensionsCollection
+                .aggregate([
+                    { $match: { interestingness_score: { $type: 'number' } } },
+                    { $group: { _id: null, avg_score: { $avg: '$interestingness_score' } } },
+                ])
+                .toArray();
+
+            const avg_score = avgResult[0]?.avg_score || 0;
+
+            const with_mv2_only = total - with_mv3;
+            const totalPages = Math.max(1, Math.ceil(total / pageSize));
+
+            return {
+                extensions: extensionsPage,
+                stats: {
+                    total,
+                    with_mv3,
+                    with_mv2_only,
+                    failed,
+                    avg_score,
+                },
+                page,
+                pageSize,
+                totalPages,
             };
         });
     }
