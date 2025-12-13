@@ -24,9 +24,6 @@ pub fn filter_extensions<'a>(
         .collect()
 }
 
-use rand::seq::SliceRandom;
-use rand::thread_rng;
-
 #[derive(Clone, Copy)]
 pub enum SortBy {
     InterestingnessAsc,
@@ -79,8 +76,8 @@ pub fn sort_extensions(extensions: &mut Vec<&Extension>, sort_by: SortBy, search
             });
         }
         SortBy::Random => {
-            let mut rng = thread_rng();
-            extensions.shuffle(&mut rng);
+            // Do not shuffle on the client - server provides deterministic random ordering via seed
+            // Keep original order received from server
         }
     }
 }
