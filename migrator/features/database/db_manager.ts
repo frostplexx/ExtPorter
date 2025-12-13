@@ -593,6 +593,55 @@ export class Database {
                 .limit(pageSize)
                 .toArray();
 
+            // Sanitize extensions for transmission: remove heavy fields like `files` and `manifest`,
+            // truncate long CWS descriptions, and strip large code snippets from event listeners.
+            const sanitizedExtensions = extensionsPage.map((ext: any) => {
+                const copy: any = { ...ext };
+
+                // Remove full file contents to avoid huge payloads
+                if (copy.files) {
+                    copy.files = copy.files.map((f: any, i: number) => ({
+                        path: f.path || `file_${i}`,
+                        filetype: f.filetype,
+                        _contentRemoved: true,
+                        _originalSize: f.content
+                            ? typeof f.content === 'string'
+                                ? f.content.length
+                                : 0
+                            : 0,
+                    }));
+                }
+
+                // Remove manifest object (too large)
+                if (copy.manifest) {
+                    delete copy.manifest;
+                }
+
+                // Truncate long CWS descriptions
+                if (
+                    copy.cws_info &&
+                    typeof copy.cws_info.description === 'string' &&
+                    copy.cws_info.description.length > 2000
+                ) {
+                    copy.cws_info = {
+                        ...copy.cws_info,
+                        description:
+                            copy.cws_info.description.substring(0, 2000) + '... [TRUNCATED]',
+                    };
+                }
+
+                // Strip large code snippets from event listeners
+                if (Array.isArray(copy.event_listeners)) {
+                    copy.event_listeners = copy.event_listeners.map((l: any) => ({
+                        api: l.api,
+                        file: l.file,
+                        line: l.line,
+                    }));
+                }
+
+                return copy;
+            });
+
             // Compute global statistics efficiently using aggregation/counts
             const total = await extensionsCollection.countDocuments();
             const with_mv3 = await extensionsCollection.countDocuments({
@@ -614,7 +663,7 @@ export class Database {
             const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
             return {
-                extensions: extensionsPage,
+                extensions: sanitizedExtensions,
                 stats: {
                     total,
                     with_mv3,
