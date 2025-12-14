@@ -3,6 +3,7 @@ migrator/output/*
 migrator/extensions
 migrator/node_modules
 ext_analyzer/target
+chrome/
 target/
 coverage
 tmp
