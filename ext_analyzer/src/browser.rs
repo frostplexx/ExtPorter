@@ -46,14 +46,6 @@ impl DualBrowserManager {
         };
         let base = std::env::var(env_var).map_err(|_| anyhow!("{} not set", env_var))?;
 
-        #[cfg(target_os = "macos")]
-        let path = PathBuf::from(&base)
-            .join("Applications/Google Chrome.app/Contents/MacOS/Google Chrome");
-
-        #[cfg(target_os = "linux")]
-        let path = PathBuf::from(&base).join("bin/google-chrome-stable");
-
-        #[cfg(not(any(target_os = "macos", target_os = "linux")))]
         let path = PathBuf::from(&base);
 
         if !path.exists() {
@@ -70,21 +62,48 @@ impl DualBrowserManager {
         let config = BrowserConfig::builder()
             .chrome_executable(chrome_path)
             .with_head()
-            .extension(extension_path.to_string_lossy())
             .user_data_dir(user_data_dir)
             .no_sandbox()
             .disable_default_args()
+            .arg(&format!(
+                "--load-extension={}",
+                extension_path.to_string_lossy()
+            ))
+            // From: https://github.com/puppeteer/puppeteer/blob/4846b8723cf20d3551c0d755df394cc5e0c82a94/src/node/Launcher.ts#L157
+            // Removed --disable-extensions
+            .arg("--disable-background-networking")
+            .arg("--enable-features=NetworkService,NetworkServiceInProcess")
+            .arg("--disable-background-timer-throttling")
+            .arg("--disable-backgrounding-occluded-windows")
+            .arg("--disable-breakpad")
+            .arg("--disable-client-side-phishing-detection")
+            .arg("--disable-component-extensions-with-background-pages")
+            .arg("--disable-default-apps")
+            .arg("--disable-dev-shm-usage")
+            .arg("--disable-features=TranslateUI")
+            .arg("--disable-hang-monitor")
+            .arg("--disable-ipc-flooding-protection")
+            .arg("--disable-popup-blocking")
+            .arg("--disable-prompt-on-repost")
+            .arg("--disable-renderer-backgrounding")
+            .arg("--disable-sync")
+            .arg("--force-color-profile=srgb")
+            .arg("--metrics-recording-only")
             .arg("--no-first-run")
-            .arg("--no-default-browser-check")
+            .arg("--enable-automation")
+            .arg("--password-store=basic")
+            .arg("--use-mock-keychain")
+            .arg("--enable-blink-features=IdleDetection")
             .build()
             .map_err(|e| anyhow!("Config error: {}", e))?;
 
-        let (browser, mut handler) = Browser::launch(config).await
+        tracing::debug!("Browser Config: {:?}", config);
+
+        let (browser, mut handler) = Browser::launch(config)
+            .await
             .map_err(|e| anyhow!("Failed to launch: {}", e))?;
 
-        let handler_task = tokio::spawn(async move {
-            while let Some(_) = handler.next().await {}
-        });
+        let handler_task = tokio::spawn(async move { while let Some(_) = handler.next().await {} });
 
         Ok((browser, handler_task))
     }
@@ -105,22 +124,16 @@ impl DualBrowserManager {
         tracing::info!("Launching MV2 browser: {:?}", mv2_path);
         tracing::info!("Launching MV3 browser: {:?}", mv3_path);
 
-        let mv2_user_data = tempfile::tempdir().map_err(|e| anyhow!("Failed to create temp dir: {}", e))?;
-        let mv3_user_data = tempfile::tempdir().map_err(|e| anyhow!("Failed to create temp dir: {}", e))?;
+        let mv2_user_data =
+            tempfile::tempdir().map_err(|e| anyhow!("Failed to create temp dir: {}", e))?;
+        let mv3_user_data =
+            tempfile::tempdir().map_err(|e| anyhow!("Failed to create temp dir: {}", e))?;
 
-        let (mv2_browser, mv2_handler) = Self::launch_browser(
-            mv2_chrome,
-            mv2_path,
-            &mv2_user_data.path().to_path_buf(),
-        )
-        .await?;
+        let (mv2_browser, mv2_handler) =
+            Self::launch_browser(mv2_chrome, mv2_path, &mv2_user_data.path().to_path_buf()).await?;
 
-        let (mv3_browser, mv3_handler) = Self::launch_browser(
-            mv3_chrome,
-            mv3_path,
-            &mv3_user_data.path().to_path_buf(),
-        )
-        .await?;
+        let (mv3_browser, mv3_handler) =
+            Self::launch_browser(mv3_chrome, mv3_path, &mv3_user_data.path().to_path_buf()).await?;
 
         self.mv2_browser = Some(mv2_browser);
         self.mv3_browser = Some(mv3_browser);
