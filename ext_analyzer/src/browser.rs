@@ -42,7 +42,7 @@ impl DualBrowserManager {
         let env_var = if is_mv3 {
             "CHROME_LATESTS"
         } else {
-            "CHROME_138"
+            "CHROME_OLD"
         };
         let base = std::env::var(env_var).map_err(|_| anyhow!("{} not set", env_var))?;
 

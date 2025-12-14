@@ -27,12 +27,12 @@ describe('Mock Extensions Puppeteer Tests', () => {
     const getChromePath = () => {
         if (process.env.IN_NIX_SHELL) {
             // Use Chrome 138 for MV2 extension support
-            if (!process.env.CHROME_138) {
+            if (!process.env.CHROME_OLD) {
                 throw new Error(
-                    'CHROME_138 environment variable is not set. Please ensure your flake.nix exports CHROME_138.'
+                    'CHROME_OLD environment variable is not set. Please ensure your flake.nix exports CHROME_138.'
                 );
             }
-            return `${process.env.CHROME_138}/Applications/Google Chrome.app/Contents/MacOS/Google Chrome`;
+            return `${process.env.CHROME_OLD}/Applications/Google Chrome.app/Contents/MacOS/Google Chrome`;
         } else {
             // TODO
             return '';
