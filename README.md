@@ -155,7 +155,7 @@ For active development, you may want to run the server locally instead of in Doc
 
     ```bash
     export NODE_OPTIONS="--max-old-space-size=8192 --max-semi-space-size=512 --expose-gc"
-    export CHROME_138="/path/to/chrome/138/" # the code will build the path as follows: `${process.env.CHROME_138}/Applications/Google Chrome.app/Contents/MacOS/Google Chrome`
+    export CHROME_OLD="/path/to/chrome/138/" # the code will build the path as follows: `${process.env.CHROME_138}/Applications/Google Chrome.app/Contents/MacOS/Google Chrome`
     export CHROME_LATESTS="/path/to/chrome/latest/" # the code will build the path as follows: `${process.env.CHROME_LATESTS}/Applications/Google Chrome.app/Contents/MacOS/Google Chrome`
     ```
 

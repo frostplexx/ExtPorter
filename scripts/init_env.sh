@@ -153,8 +153,8 @@ configure_puppeteer_chromes() {
 	fi
 
 	# Desired versions and corresponding env var names
-	versions=("chrome@138.0.7204.183" "chrome@141.0.7390.123")
-	vars=("CHROME_138" "CHROME_LATESTS")
+	versions=("chrome@130.0.6723.116" "chrome@141.0.7390.123")
+	vars=("CHROME_OLD" "CHROME_LATESTS")
 
 	# Get current list once
 	output=$(npx @puppeteer/browsers list 2>/dev/null || true)
@@ -217,11 +217,11 @@ print_exports() {
 	# Now print the env vars if set (only the lines themselves)
 	if [[ "${EXPORT_SHELL}" == "fish" ]]; then
 		# fish uses 'set -x VAR value'
-		[[ -n "${CHROME_138:-}" ]] && printf 'set -x CHROME_138 %s\n' "${CHROME_138}"
+		[[ -n "${CHROME_OLD:-}" ]] && printf 'set -x CHROME_138 %s\n' "${CHROME_138}"
 		[[ -n "${CHROME_LATESTS:-}" ]] && printf 'set -x CHROME_LATESTS %s\n' "${CHROME_LATESTS}"
 	else
 		# bash/zsh: print export lines
-		[[ -n "${CHROME_138:-}" ]] && printf 'export CHROME_138="%s"\n' "${CHROME_138}"
+		[[ -n "${CHROME_OLD:-}" ]] && printf 'export CHROME_138="%s"\n' "${CHROME_138}"
 		[[ -n "${CHROME_LATESTS:-}" ]] && printf 'export CHROME_LATESTS="%s"\n' "${CHROME_LATESTS}"
 	fi
 }
