@@ -19,17 +19,29 @@ export class FileTransformer {
         // Copy absolute path for reference (but won't write to it)
         transformedFile._absolutePath = (originalFile as any)._absolutePath;
 
+        // Cache buffer for efficient access
+        const contentBuffer = Buffer.from(newContent, 'utf8');
+
         // Override methods to work with transformed content
         transformedFile.getContent = () => newContent;
-        transformedFile.getSize = () => Buffer.byteLength(newContent, 'utf8');
+        transformedFile.getBuffer = () => contentBuffer;
+        transformedFile.getSize = () => contentBuffer.length;
         transformedFile.close = () => {
             /* No-op for in-memory content */
         };
+        transformedFile.releaseMemory = () => {
+            /* No-op for in-memory content */
+        };
+        transformedFile.cleanContent = () => transformedFile;
         transformedFile.getAST = () => {
             // Bridge injections don't need AST parsing
             return undefined;
         };
-        transformedFile.getBuffer = () => Buffer.from(newContent, 'utf8');
+
+        // Release memory from original file since we now have transformed content
+        if (originalFile.releaseMemory) {
+            originalFile.releaseMemory();
+        }
 
         return transformedFile;
     }

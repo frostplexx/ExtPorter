@@ -55,6 +55,12 @@ export class MigrationServer {
     private connectedClients: Set<WebSocket> = new Set();
     private llmInitialized: boolean = false;
 
+    // Memory management: connection timeouts and periodic cleanup
+    private readonly connectionTimeout = 5 * 60 * 1000; // 5 minutes inactivity timeout
+    private connectionTimers: Map<WebSocket, NodeJS.Timeout> = new Map();
+    private cleanupInterval: NodeJS.Timeout | null = null;
+    private readonly cleanupIntervalMs = 60 * 1000; // Run cleanup every minute
+
     constructor(globals: Globals) {
         this.globals = globals;
         this.server = new WebSocketServer({
@@ -179,12 +185,18 @@ export class MigrationServer {
             this.llmInitialized = false;
         }
 
+        // Start periodic cleanup for memory management
+        this.cleanupInterval = setInterval(() => this.periodicCleanup(), this.cleanupIntervalMs);
+
         // Handle new client connections
         this.server.on('connection', (ws: WebSocket) => {
             console.log('New client connected');
 
             // Add to connected clients
             this.connectedClients.add(ws);
+
+            // Set initial connection timeout
+            this.resetConnectionTimeout(ws);
 
             // Send initial database status to new client only
             const initialDbStatus = this.getDatabaseStatus();
@@ -200,6 +212,9 @@ export class MigrationServer {
 
             // Handle incoming messages from client
             ws.on('message', (message: Buffer) => {
+                // Reset connection timeout on any activity
+                this.resetConnectionTimeout(ws);
+
                 const command = message.toString().trim();
                 console.log(`Received command from client: "${command}"`);
 
@@ -296,6 +311,7 @@ export class MigrationServer {
             // Handle client disconnect
             ws.on('close', () => {
                 console.log('Client disconnected');
+                this.clearConnectionTimeout(ws);
                 this.connectedClients.delete(ws);
             });
 
@@ -367,7 +383,6 @@ export class MigrationServer {
             );
             const { WriteMigrated } = await import('../../modules/write_extension/index.js');
             const { WriteQueue } = await import('../../modules/write_extension/write-queue.js');
-            const { extensionUtils } = await import('../../utils/extension_utils.js');
             const { MigrationError } = await import('../../types/migration_module.js');
             const path = await import('path');
 
@@ -492,9 +507,16 @@ export class MigrationServer {
                         }
                     }
 
-                    // Clear extension from memory
-                    extensionUtils.closeExtensionFiles(extension);
+                    // Clear extension from memory thoroughly
+                    const { clearExtensionMemory, forceGarbageCollection, shouldTriggerGC } =
+                        await import('../../utils/garbage.js');
+                    clearExtensionMemory(extension);
                     extensions[i] = null as any;
+
+                    // Trigger GC periodically during migration
+                    if (writeIndex % 10 === 0 && shouldTriggerGC(16)) {
+                        forceGarbageCollection();
+                    }
                 }
 
                 await WriteQueue.shared.flush();
@@ -701,7 +723,7 @@ export class MigrationServer {
                     result = await Database.shared.getLogs(params.limit || 50);
                     break;
 
-                case 'createReport':
+                case 'createReport': {
                     // Create a new report with all fields from params
                     const report = {
                         id: params.id || `report_${Date.now()}_${params.extension_id}`,
@@ -714,6 +736,7 @@ export class MigrationServer {
                     };
                     result = await Database.shared.insertReport(report);
                     break;
+                }
 
                 case 'getAllReports':
                     result = await Database.shared.getAllReports();
@@ -1220,10 +1243,14 @@ export class MigrationServer {
             // Cleanup temp files
             try {
                 await fs.promises.unlink(mv2TempPath);
-            } catch {}
+            } catch {
+                // Ignore unlink errors
+            }
             try {
                 await fs.promises.unlink(mv3TempPath);
-            } catch {}
+            } catch {
+                // Ignore unlink errors
+            }
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : String(error);
             console.error(`[Download] Error downloading extension ${extensionId}:`, errorMessage);
@@ -1324,9 +1351,7 @@ export class MigrationServer {
         );
         ws.send(startMessage, { binary: true });
 
-        // Send header chunk first
-        const headerChunk = Buffer.concat([Buffer.from('HEADER'), Buffer.alloc(0)]);
-        // We'll send files in sequence as chunk messages
+        // We'll send files in sequence as chunk messages (no separate header chunk needed)
 
         let chunkIndex = 0;
 
@@ -1403,27 +1428,33 @@ export class MigrationServer {
     // Create a tar.gz archive from a directory (returns Buffer) - kept for small directories
     private async createTarGz(dirPath: string): Promise<Buffer> {
         // For small dirs only; otherwise prefer createTarGzToFile
-        return new Promise(async (resolve, reject) => {
-            try {
-                const pack = tar.pack();
-                const chunks: Buffer[] = [];
+        return new Promise((resolve, reject) => {
+            const pack = tar.pack();
+            const chunks: Buffer[] = [];
 
-                // Pipe through gzip
-                const gzip = zlib.createGzip();
+            // Pipe through gzip
+            const gzip = zlib.createGzip();
 
-                gzip.on('data', (chunk: Buffer) => chunks.push(chunk));
-                gzip.on('end', () => resolve(Buffer.concat(chunks)));
-                gzip.on('error', reject);
+            gzip.on('data', (chunk: Buffer) => chunks.push(chunk));
+            gzip.on('end', () => resolve(Buffer.concat(chunks)));
+            gzip.on('error', reject);
 
-                pack.pipe(gzip);
+            pack.pipe(gzip);
 
-                // Add all files to tar
-                await this.addDirectoryToTar(pack, dirPath, '');
-
-                pack.finalize();
-            } catch (error) {
-                reject(error);
-            }
+            // Add all files to tar asynchronously and finalize
+            (async () => {
+                try {
+                    await this.addDirectoryToTar(pack, dirPath, '');
+                    pack.finalize();
+                } catch (error) {
+                    // Ensure we reject only once
+                    try {
+                        reject(error);
+                    } catch {
+                        // no-op
+                    }
+                }
+            })();
         });
     }
 
@@ -1434,25 +1465,32 @@ export class MigrationServer {
             `extporter_${Date.now()}_${Math.random().toString(36).slice(2)}.tar.gz`
         );
 
-        return new Promise(async (resolve, reject) => {
-            try {
-                const pack = tar.pack();
-                const gzip = zlib.createGzip();
-                const outStream = fs.createWriteStream(tmpPath);
+        return new Promise((resolve, reject) => {
+            const pack = tar.pack();
+            const gzip = zlib.createGzip();
+            const outStream = fs.createWriteStream(tmpPath);
 
-                outStream.on('finish', () => resolve(tmpPath));
-                outStream.on('error', (err) => reject(err));
-                gzip.on('error', (err) => reject(err));
+            outStream.on('finish', () => resolve(tmpPath));
+            outStream.on('error', (err) => reject(err));
+            gzip.on('error', (err) => reject(err));
 
-                pack.pipe(gzip).pipe(outStream);
+            pack.pipe(gzip).pipe(outStream);
 
-                // Add files to tar (reads files into memory per-file)
-                await this.addDirectoryToTar(pack, dirPath, '');
+            (async () => {
+                try {
+                    // Add files to tar (reads files into memory per-file)
+                    await this.addDirectoryToTar(pack, dirPath, '');
 
-                pack.finalize();
-            } catch (error) {
-                reject(error);
-            }
+                    pack.finalize();
+                } catch (error) {
+                    // Ensure we reject only once
+                    try {
+                        reject(error);
+                    } catch {
+                        // no-op
+                    }
+                }
+            })();
         });
     }
 
@@ -1709,8 +1747,95 @@ export class MigrationServer {
         return url;
     }
 
+    // ==================== Memory Management Methods ====================
+
+    /**
+     * Reset the inactivity timeout for a WebSocket connection
+     */
+    private resetConnectionTimeout(ws: WebSocket): void {
+        this.clearConnectionTimeout(ws);
+        const timer = setTimeout(() => {
+            console.log('Closing inactive WebSocket connection due to timeout');
+            try {
+                ws.close(1000, 'Inactivity timeout');
+            } catch {
+                // Connection might already be closed
+            }
+            this.connectedClients.delete(ws);
+            this.connectionTimers.delete(ws);
+        }, this.connectionTimeout);
+        this.connectionTimers.set(ws, timer);
+    }
+
+    /**
+     * Clear the inactivity timeout for a WebSocket connection
+     */
+    private clearConnectionTimeout(ws: WebSocket): void {
+        const timer = this.connectionTimers.get(ws);
+        if (timer) {
+            clearTimeout(timer);
+            this.connectionTimers.delete(ws);
+        }
+    }
+
+    /**
+     * Periodic cleanup of stale resources to prevent memory leaks
+     */
+    private async periodicCleanup(): Promise<void> {
+        // Import garbage collection utilities dynamically to avoid circular deps
+        const { logMemoryUsage, shouldTriggerGC, forceGarbageCollection } = await import(
+            '../../utils/garbage.js'
+        );
+
+        // Clean up dead connections from connectedClients
+        let deadConnections = 0;
+        for (const client of this.connectedClients) {
+            if (client.readyState !== WebSocket.OPEN) {
+                this.connectedClients.delete(client);
+                this.clearConnectionTimeout(client);
+                deadConnections++;
+            }
+        }
+
+        // Clean up stale migrators (processes that have exited)
+        let staleMigrators = 0;
+        for (const [clientId, migrator] of this.activeMigrators) {
+            if (migrator.process && migrator.process.killed) {
+                this.activeMigrators.delete(clientId);
+                staleMigrators++;
+            }
+        }
+
+        // Log cleanup stats if anything was cleaned
+        if (deadConnections > 0 || staleMigrators > 0) {
+            console.log(
+                `[Cleanup] Removed ${deadConnections} dead connections, ${staleMigrators} stale migrators`
+            );
+        }
+
+        // Check memory and trigger GC if needed
+        if (shouldTriggerGC(16)) {
+            // Trigger at 16GB
+            logMemoryUsage('periodic-cleanup-before-gc');
+            forceGarbageCollection();
+            logMemoryUsage('periodic-cleanup-after-gc');
+        }
+    }
+
     // Close the server gracefully
     async close(): Promise<void> {
+        // Stop periodic cleanup
+        if (this.cleanupInterval) {
+            clearInterval(this.cleanupInterval);
+            this.cleanupInterval = null;
+        }
+
+        // Clear all connection timeouts
+        for (const timer of this.connectionTimers.values()) {
+            clearTimeout(timer);
+        }
+        this.connectionTimers.clear();
+
         // Stop all active migrators
         for (const migrator of this.activeMigrators.values()) {
             if (migrator.process) {
@@ -1718,6 +1843,9 @@ export class MigrationServer {
             }
         }
         this.activeMigrators.clear();
+
+        // Clear connected clients
+        this.connectedClients.clear();
 
         // Cleanup LLM manager and SSH tunnel
         if (this.llmInitialized) {

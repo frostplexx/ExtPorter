@@ -30,6 +30,7 @@ export class Database {
     private pendingOperations: number = 0;
     private isProcessingQueue: boolean = false;
     private readonly maxConcurrentOperations: number = 10;
+    private readonly maxQueueSize: number = 1000; // Prevent unbounded queue growth
 
     private constructor() {
         // Queue processor will be started after database initialization
@@ -39,6 +40,12 @@ export class Database {
         if (!process.env.MONGODB_URI) {
             throw Error('Could not find MONGODB_URI in environment');
         }
+
+        // Validate DB_NAME early so tests that expect failure do not hang on network connect
+        if (!process.env.DB_NAME) {
+            throw Error('Could not find DB_NAME in environment');
+        }
+
         this.client = new MongoClient(process.env.MONGODB_URI, {
             maxPoolSize: 10,
             minPoolSize: 2,
@@ -47,9 +54,6 @@ export class Database {
 
         try {
             await this.client.connect();
-            if (!process.env.DB_NAME) {
-                throw Error('Could not find DB_NAME in environment');
-            }
             this.database = this.client.db(process.env.DB_NAME);
 
             // Create collections upfront to avoid race conditions
@@ -146,9 +150,22 @@ export class Database {
     }
 
     /**
-     * Enqueues a database operation to be executed
+     * Enqueues a database operation to be executed.
+     * Implements backpressure by waiting when queue is full.
      */
-    private enqueueOperation<T>(operation: () => Promise<T>): Promise<T> {
+    private async enqueueOperation<T>(operation: () => Promise<T>): Promise<T> {
+        // Backpressure: wait if queue is full
+        while (this.operationQueue.length >= this.maxQueueSize) {
+            if (this.isShuttingDown) {
+                throw new Error('Database is shutting down');
+            }
+            logger.warn(
+                null,
+                `Database queue full (${this.operationQueue.length}/${this.maxQueueSize}), waiting for drain...`
+            );
+            await new Promise((resolve) => setTimeout(resolve, 100));
+        }
+
         return new Promise<T>((resolve, reject) => {
             if (this.isShuttingDown) {
                 reject(new Error('Database is shutting down'));
@@ -156,6 +173,17 @@ export class Database {
             }
             this.operationQueue.push({ operation, resolve, reject });
         });
+    }
+
+    /**
+     * Get current queue status for monitoring
+     */
+    getQueueStatus(): { queued: number; pending: number; maxSize: number } {
+        return {
+            queued: this.operationQueue.length,
+            pending: this.pendingOperations,
+            maxSize: this.maxQueueSize,
+        };
     }
 
     /**

@@ -180,7 +180,7 @@ export class LLMService {
                                 }
                                 resolve(fullResponse);
                             }
-                        } catch (e) {
+                        } catch {
                             // Skip invalid JSON lines (comments, etc.)
                             logger.debug(null, `Skipping non-JSON line: ${jsonLine}`);
                         }
@@ -204,7 +204,7 @@ export class LLMService {
                                 }
                                 fullResponse += content;
                             }
-                        } catch (e) {
+                        } catch {
                             logger.debug(null, `Skipping final buffer: ${jsonLine}`);
                         }
                     }

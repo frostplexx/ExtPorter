@@ -38,6 +38,10 @@ export class ExtensionFixer {
     private readonly maxContextTokens: number = 90000;
     private readonly tokensPerChar: number = 0.3; // Rough estimate: ~3-4 chars per token
 
+    // Memory management limits
+    private readonly maxFileCacheSize: number = 50; // Maximum number of files to cache for diffs
+    private readonly maxConversationMessages: number = 100; // Maximum conversation history length
+
     // Tracking data for database storage
     private conversationHistory: LLMMessage[] = [];
     private toolCallHistory: LLMToolCall[] = [];
@@ -60,7 +64,7 @@ export class ExtensionFixer {
         this.conversationHistory = [];
         this.toolCallHistory = [];
         this.fileDiffs = [];
-        this.fileContentCache = new Map();
+        this.fileContentCache.clear();
         this.startedAt = Date.now();
         this.iterations = 0;
 
@@ -163,6 +167,9 @@ export class ExtensionFixer {
                 error: errorMessage,
                 fixAttempt,
             };
+        } finally {
+            // Always cleanup to prevent memory leaks
+            this.cleanup();
         }
     }
 
@@ -408,6 +415,9 @@ Please analyze the issues and fix them. Start by listing the files you need to e
                 content: toolResultsMessage,
                 timestamp: Date.now(),
             });
+
+            // Trim conversation history to prevent memory growth
+            this.trimConversationHistory();
         }
 
         // Max iterations reached
@@ -420,11 +430,21 @@ Please analyze the issues and fix them. Start by listing the files you need to e
     }
 
     /**
-     * Capture file content before modification for diff tracking
+     * Capture file content before modification for diff tracking.
+     * Implements cache eviction to prevent unbounded memory growth.
      */
     private async captureFileContentForDiff(filePath: string): Promise<void> {
         if (this.fileContentCache.has(filePath)) {
             return; // Already cached
+        }
+
+        // Evict oldest entries if cache is full (FIFO eviction)
+        if (this.fileContentCache.size >= this.maxFileCacheSize) {
+            const firstKey = this.fileContentCache.keys().next().value;
+            if (firstKey) {
+                this.fileContentCache.delete(firstKey);
+                logger.debug(null, `Evicted ${firstKey} from file content cache (size limit)`);
+            }
         }
 
         try {
@@ -437,6 +457,36 @@ Please analyze the issues and fix them. Start by listing the files you need to e
         } catch (error) {
             logger.warn(null, `Could not capture file content for diff: ${filePath}`, error);
         }
+    }
+
+    /**
+     * Trim conversation history to prevent unbounded memory growth.
+     * Keeps system message and most recent messages.
+     */
+    private trimConversationHistory(): void {
+        if (this.conversationHistory.length <= this.maxConversationMessages) {
+            return;
+        }
+
+        // Keep first message (usually system) and recent messages
+        const toRemove = this.conversationHistory.length - this.maxConversationMessages;
+        this.conversationHistory.splice(1, toRemove);
+        logger.debug(
+            null,
+            `Trimmed ${toRemove} messages from conversation history (limit: ${this.maxConversationMessages})`
+        );
+    }
+
+    /**
+     * Clean up all caches and resources after fix completes.
+     * Should be called in finally block.
+     */
+    cleanup(): void {
+        this.conversationHistory = [];
+        this.toolCallHistory = [];
+        this.fileDiffs = [];
+        this.fileContentCache.clear();
+        logger.debug(null, 'ExtensionFixer cleanup completed');
     }
 
     /**

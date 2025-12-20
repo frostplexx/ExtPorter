@@ -158,14 +158,27 @@ export class ServiceWorkerCompat implements MigrationModule {
                 return null;
             }
 
-            // Create transformed file
+            // Create transformed file with proper memory management
+            const contentBuffer = Buffer.from(content, 'utf8');
             const transformedFile = Object.create(LazyFile.prototype);
             transformedFile.path = swFile.path;
             transformedFile.filetype = swFile.filetype;
             transformedFile.getContent = () => content;
-            transformedFile.getSize = () => Buffer.byteLength(content, 'utf8');
-            transformedFile.close = swFile.close;
+            transformedFile.getBuffer = () => contentBuffer;
+            transformedFile.getSize = () => contentBuffer.length;
+            transformedFile.close = () => {
+                /* No-op for in-memory content */
+            };
+            transformedFile.releaseMemory = () => {
+                /* No-op for in-memory content */
+            };
+            transformedFile.cleanContent = () => transformedFile;
             transformedFile.getAST = () => undefined;
+
+            // Release memory from original file
+            if (swFile.releaseMemory) {
+                swFile.releaseMemory();
+            }
 
             return transformedFile;
         } catch (error) {

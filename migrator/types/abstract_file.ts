@@ -13,8 +13,14 @@ export interface AbstractFile {
     getBuffer(): Buffer;
     getSize(): number;
     close(): void;
+    releaseMemory(): void;
+    cleanContent(): AbstractFile;
 }
 
+/**
+ * Lazy-loading file implementation that defers reading until content is accessed.
+ * Supports memory release for long-running processes to prevent OOM.
+ */
 export class LazyFile implements AbstractFile {
     path: string;
     filetype: ExtFileType;
@@ -95,10 +101,25 @@ export class LazyFile implements AbstractFile {
         return this._getMMapFile().getBuffer();
     }
 
-    cleanContent(): AbstractFile {
-        this.close(); // Reuse existing close logic
+    /**
+     * Release memory used by this file while keeping it re-readable.
+     * The file content can be read again after calling this method.
+     * Use this for long-running processes to prevent memory exhaustion.
+     */
+    releaseMemory(): void {
+        if (this._mmapFile) {
+            this._mmapFile.releaseMemory();
+        }
         this._ast = undefined;
         this._astParsed = false;
+    }
+
+    /**
+     * Clean cached content and AST.
+     * @deprecated Use releaseMemory() for better semantics
+     */
+    cleanContent(): AbstractFile {
+        this.releaseMemory();
         return this;
     }
 
@@ -106,10 +127,127 @@ export class LazyFile implements AbstractFile {
         return this._getMMapFile().size;
     }
 
+    /**
+     * Check if file content is currently loaded in memory.
+     */
+    isLoaded(): boolean {
+        return this._mmapFile?.isLoaded() ?? false;
+    }
+
+    /**
+     * Get approximate memory usage of this file in bytes.
+     */
+    getMemoryUsage(): number {
+        let usage = this._mmapFile?.getMemoryUsage() ?? 0;
+        // Add estimate for AST if cached (rough estimate: 10x the source size)
+        if (this._ast && this._mmapFile) {
+            usage += this._mmapFile.size * 10;
+        }
+        return usage;
+    }
+
+    /**
+     * Close the file and release all resources.
+     * After calling this, the file content cannot be accessed.
+     */
     close(): void {
         if (this._mmapFile) {
             this._mmapFile.close();
             this._mmapFile = undefined;
         }
+        this._ast = undefined;
+        this._astParsed = false;
     }
+}
+
+/**
+ * Create a transformed file that wraps new content without reading from disk.
+ * Used by transformation modules to create in-memory file representations.
+ *
+ * @param originalFile - The original file being transformed (will have its memory released)
+ * @param newContent - The new content for the transformed file
+ * @returns A new AbstractFile with the transformed content
+ */
+export function createTransformedFile(
+    originalFile: AbstractFile,
+    newContent: string
+): AbstractFile {
+    const contentBuffer = Buffer.from(newContent, 'utf8');
+    let cachedAST: ESTree.Node | undefined;
+    let astParsed = false;
+
+    const transformedFile: AbstractFile = {
+        path: originalFile.path,
+        filetype: originalFile.filetype,
+
+        getContent(): string {
+            return newContent;
+        },
+
+        getBuffer(): Buffer {
+            return contentBuffer;
+        },
+
+        getSize(): number {
+            return contentBuffer.length;
+        },
+
+        getAST(): ESTree.Node | undefined {
+            if (astParsed) {
+                return cachedAST;
+            }
+            astParsed = true;
+
+            if (originalFile.filetype !== ExtFileType.JS) {
+                return undefined;
+            }
+
+            try {
+                cachedAST = espree.parse(newContent, {
+                    ecmaVersion: 'latest',
+                    sourceType: 'script',
+                    loc: true,
+                    range: true,
+                } as any) as ESTree.Program;
+            } catch {
+                try {
+                    cachedAST = espree.parse(newContent, {
+                        ecmaVersion: 'latest',
+                        sourceType: 'module',
+                        loc: true,
+                        range: true,
+                    } as any) as ESTree.Program;
+                } catch {
+                    // Parsing failed
+                }
+            }
+
+            return cachedAST;
+        },
+
+        close(): void {
+            // No-op for in-memory transformed files
+            cachedAST = undefined;
+            astParsed = false;
+        },
+
+        releaseMemory(): void {
+            // Clear AST cache for in-memory files
+            cachedAST = undefined;
+            astParsed = false;
+        },
+
+        cleanContent(): AbstractFile {
+            cachedAST = undefined;
+            astParsed = false;
+            return transformedFile;
+        },
+    };
+
+    // Release the original file's memory since we now have transformed content
+    if (originalFile.releaseMemory) {
+        originalFile.releaseMemory();
+    }
+
+    return transformedFile;
 }

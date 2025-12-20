@@ -426,13 +426,25 @@ const storageHelper = {
         transformedFile._transformedContent = newContent;
         transformedFile._absolutePath = (originalFile as any)._absolutePath;
 
+        // Cache buffer for efficient access
+        const contentBuffer = Buffer.from(newContent, 'utf8');
+
         transformedFile.getContent = () => newContent;
-        transformedFile.getSize = () => Buffer.byteLength(newContent, 'utf8');
+        transformedFile.getBuffer = () => contentBuffer;
+        transformedFile.getSize = () => contentBuffer.length;
         transformedFile.close = () => {
             /* No-op for in-memory content */
         };
+        transformedFile.releaseMemory = () => {
+            /* No-op for in-memory content */
+        };
+        transformedFile.cleanContent = () => transformedFile;
         transformedFile.getAST = () => undefined;
-        transformedFile.getBuffer = () => Buffer.from(newContent, 'utf8');
+
+        // Release memory from original file
+        if (originalFile.releaseMemory) {
+            originalFile.releaseMemory();
+        }
 
         return transformedFile;
     }

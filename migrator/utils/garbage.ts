@@ -3,12 +3,55 @@ import { extensionUtils } from './extension_utils';
 import { logger } from './logger';
 
 /**
- * Memory management utilities
+ * Memory management utilities for preventing OOM errors in long-running processes.
+ */
+
+// Default memory thresholds in GB
+const DEFAULT_MEMORY_WARN_LIMIT_GB = 24;
+const DEFAULT_MEMORY_CRIT_LIMIT_GB = 32;
+
+// Threshold for triggering automatic GC
+const DEFAULT_GC_TRIGGER_THRESHOLD_GB = 16;
+
+/**
+ * Structured memory information
+ */
+export interface MemoryInfo {
+    heapUsedMB: number;
+    heapTotalMB: number;
+    rssMB: number;
+    externalMB: number;
+    arrayBuffersMB: number;
+    heapUsedGB: number;
+    rssGB: number;
+}
+
+/**
+ * Get structured memory usage information
+ */
+export function getMemoryInfo(): MemoryInfo {
+    const mem = process.memoryUsage();
+    return {
+        heapUsedMB: Math.round(mem.heapUsed / 1024 / 1024),
+        heapTotalMB: Math.round(mem.heapTotal / 1024 / 1024),
+        rssMB: Math.round(mem.rss / 1024 / 1024),
+        externalMB: Math.round(mem.external / 1024 / 1024),
+        arrayBuffersMB: Math.round(mem.arrayBuffers / 1024 / 1024),
+        heapUsedGB: mem.heapUsed / 1024 / 1024 / 1024,
+        rssGB: mem.rss / 1024 / 1024 / 1024,
+    };
+}
+
+/**
+ * Format memory usage for logging
  */
 export function formatMemoryUsage(memoryUsage: NodeJS.MemoryUsage): string {
     return `RSS: ${Math.round(memoryUsage.rss / 1024 / 1024)}MB, Heap Used: ${Math.round(memoryUsage.heapUsed / 1024 / 1024)}MB, Heap Total: ${Math.round(memoryUsage.heapTotal / 1024 / 1024)}MB`;
 }
 
+/**
+ * Log current memory usage
+ */
 export function logMemoryUsage(context: string): void {
     const memUsage = process.memoryUsage();
     const isMonitoringEnabled = process.env.MEMORY_MONITORING === 'true';
@@ -20,6 +63,18 @@ export function logMemoryUsage(context: string): void {
     }
 }
 
+/**
+ * Check if garbage collection should be triggered based on memory usage
+ */
+export function shouldTriggerGC(thresholdGB?: number): boolean {
+    const threshold = thresholdGB ?? DEFAULT_GC_TRIGGER_THRESHOLD_GB;
+    const info = getMemoryInfo();
+    return info.heapUsedGB > threshold || info.rssGB > threshold;
+}
+
+/**
+ * Force garbage collection if available (requires --expose-gc flag)
+ */
 export function forceGarbageCollection(): void {
     const isMonitoringEnabled = process.env.MEMORY_MONITORING === 'true';
 
@@ -49,41 +104,48 @@ export function forceGarbageCollection(): void {
     }
 }
 
+/**
+ * Check memory against configured thresholds
+ * @returns true if memory is within acceptable limits, false if critical
+ */
 export function checkMemoryThreshold(): boolean {
-    const memUsage = process.memoryUsage();
-    const heapUsedGB = memUsage.heapUsed / 1024 / 1024 / 1024;
-    const rssGB = memUsage.rss / 1024 / 1024 / 1024;
+    const memInfo = getMemoryInfo();
+    const critLimit = Number(process.env.MEMORY_CRIT_LIMIT) || DEFAULT_MEMORY_CRIT_LIMIT_GB;
+    const warnLimit = Number(process.env.MEMORY_WARN_LIMIT) || DEFAULT_MEMORY_WARN_LIMIT_GB;
 
-    if (
-        heapUsedGB > ((process.env.MEMORY_CRIT_LIMIT || 1.0) as number) ||
-        rssGB > ((process.env.MEMORY_CRIT_LIMIT || 1.0) as number)
-    ) {
+    if (memInfo.heapUsedGB > critLimit || memInfo.rssGB > critLimit) {
         logger.error(
             null,
-            `CRITICAL: Memory usage too high! Heap: ${heapUsedGB.toFixed(2)}GB, RSS: ${rssGB.toFixed(2)}GB`
+            `CRITICAL: Memory usage too high! Heap: ${memInfo.heapUsedGB.toFixed(2)}GB, RSS: ${memInfo.rssGB.toFixed(2)}GB (limit: ${critLimit}GB)`
         );
         return false;
-    } else if (
-        heapUsedGB > ((process.env.MEMORY_WARN_LIMIT || 1.0) as number) ||
-        rssGB > ((process.env.MEMORY_WARN_LIMIT || 1.0) as number)
-    ) {
+    }
+
+    if (memInfo.heapUsedGB > warnLimit || memInfo.rssGB > warnLimit) {
         logger.warn(
             null,
-            `WARNING: High memory usage detected! Heap: ${heapUsedGB.toFixed(2)}GB, RSS: ${rssGB.toFixed(2)}GB`
+            `WARNING: High memory usage detected! Heap: ${memInfo.heapUsedGB.toFixed(2)}GB, RSS: ${memInfo.rssGB.toFixed(2)}GB (limit: ${warnLimit}GB)`
         );
     }
 
     return true;
 }
 
+/**
+ * Clear all memory associated with an extension
+ * This should be called after an extension has been fully processed
+ */
 export function clearExtensionMemory(extension: Extension): void {
     // Close all file descriptors
     extensionUtils.closeExtensionFiles(extension);
 
     // Clear file contents and ASTs from memory
     extension.files.forEach((file) => {
-        if (file.cleanContent) {
-            file.cleanContent(); // This exists in LazyFile
+        // Use releaseMemory for new interface, fall back to cleanContent
+        if (file.releaseMemory) {
+            file.releaseMemory();
+        } else if (file.cleanContent) {
+            file.cleanContent();
         }
     });
 
@@ -111,4 +173,87 @@ export function clearExtensionMemory(extension: Extension): void {
         // Replace the full object with just the summary
         extension.fakeium_validation = summary as any;
     }
+}
+
+/**
+ * Aggressively clean up a batch of extensions and trigger GC
+ */
+export function aggressiveCleanup(extensions: Extension[]): void {
+    for (const ext of extensions) {
+        if (ext) {
+            clearExtensionMemory(ext);
+        }
+    }
+    extensions.length = 0;
+    forceGarbageCollection();
+}
+
+/**
+ * Periodically check memory and trigger cleanup if needed
+ * Returns true if memory is healthy, false if action was needed
+ */
+export function periodicMemoryCheck(context: string): boolean {
+    const isHealthy = checkMemoryThreshold();
+
+    if (shouldTriggerGC()) {
+        logMemoryUsage(`${context} - before GC`);
+        forceGarbageCollection();
+        logMemoryUsage(`${context} - after GC`);
+    }
+
+    return isHealthy;
+}
+
+/**
+ * Calculate total memory used by extension files
+ */
+export function calculateExtensionMemoryUsage(extension: Extension): number {
+    let totalBytes = 0;
+
+    for (const file of extension.files) {
+        // Check if file has getMemoryUsage method (LazyFile)
+        if ('getMemoryUsage' in file && typeof (file as any).getMemoryUsage === 'function') {
+            totalBytes += (file as any).getMemoryUsage();
+        } else {
+            // Fallback: estimate based on file size
+            try {
+                totalBytes += file.getSize();
+            } catch {
+                // File might be closed or unavailable
+            }
+        }
+    }
+
+    return totalBytes;
+}
+
+/**
+ * Get memory usage summary for an array of extensions
+ */
+export function getExtensionsMemorySummary(extensions: Extension[]): {
+    totalExtensions: number;
+    totalFilesLoaded: number;
+    estimatedMemoryMB: number;
+} {
+    let totalFiles = 0;
+    let totalMemory = 0;
+
+    for (const ext of extensions) {
+        if (!ext || !ext.files) continue;
+
+        for (const file of ext.files) {
+            if ('isLoaded' in file && typeof (file as any).isLoaded === 'function') {
+                if ((file as any).isLoaded()) {
+                    totalFiles++;
+                }
+            }
+            totalMemory += calculateExtensionMemoryUsage(ext);
+        }
+    }
+
+    return {
+        totalExtensions: extensions.filter(Boolean).length,
+        totalFilesLoaded: totalFiles,
+        estimatedMemoryMB: Math.round(totalMemory / 1024 / 1024),
+    };
 }
