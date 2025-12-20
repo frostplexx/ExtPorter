@@ -17,7 +17,7 @@ describe('MMapFile', () => {
     });
 
     describe('constructor', () => {
-        it('should open and read a text file correctly', () => {
+        it('should not open file descriptor until content is accessed (lazy loading)', () => {
             const testFile = path.join(testDir, 'test.txt');
             const testContent = 'Hello, World!\nThis is a test file.';
             fs.writeFileSync(testFile, testContent);
@@ -26,7 +26,8 @@ describe('MMapFile', () => {
 
             expect(mmapFile.path).toBe(testFile);
             expect(mmapFile.size).toBe(testContent.length);
-            expect(mmapFile.fd).toBeGreaterThanOrEqual(0);
+            expect(mmapFile.fd).toBe(-1); // Should be -1 until content is accessed
+            expect(mmapFile.isLoaded()).toBe(false);
 
             mmapFile.close();
         });
@@ -142,14 +143,20 @@ describe('MMapFile', () => {
     });
 
     describe('close', () => {
-        it('should close the file descriptor', () => {
+        it('should close the file descriptor after loading content', () => {
             const testFile = path.join(testDir, 'close.txt');
             fs.writeFileSync(testFile, 'test content');
 
             const mmapFile = new MMapFile(testFile);
-            const originalFd = mmapFile.fd;
 
-            expect(originalFd).toBeGreaterThanOrEqual(0);
+            // Initially fd should be -1 (not loaded yet)
+            expect(mmapFile.fd).toBe(-1);
+
+            // Load content
+            mmapFile.getContent();
+
+            // After loading, fd should still be -1 (closed immediately)
+            expect(mmapFile.fd).toBe(-1);
 
             mmapFile.close();
 

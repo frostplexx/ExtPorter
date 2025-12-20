@@ -88,13 +88,20 @@ export function transformWebRequestFiles(
         transformedFile._transformedContent = modifiedContent;
         transformedFile._absolutePath = (file as any)._absolutePath;
 
+        // Cache buffer for efficient access
+        const contentBuffer = Buffer.from(modifiedContent, 'utf8');
+
         // Override methods to work with transformed content
         transformedFile.getContent = () => modifiedContent;
-        transformedFile.getSize = () => Buffer.byteLength(modifiedContent, 'utf8');
-        transformedFile.getBuffer = () => Buffer.from(modifiedContent, 'utf8');
+        transformedFile.getBuffer = () => contentBuffer;
+        transformedFile.getSize = () => contentBuffer.length;
         transformedFile.close = () => {
             /* No-op for in-memory content */
         };
+        transformedFile.releaseMemory = () => {
+            /* No-op for in-memory content */
+        };
+        transformedFile.cleanContent = () => transformedFile;
         transformedFile.getAST = () => {
             try {
                 return espree.parse(modifiedContent, {
@@ -108,10 +115,12 @@ export function transformWebRequestFiles(
             }
         };
 
-        logger.info(
-            extension,
-            `Commented out ${usages.length} webRequest call(s) in ${file.path}`
-        );
+        // Release memory from original file since we now have transformed content
+        if (file.releaseMemory) {
+            file.releaseMemory();
+        }
+
+        logger.info(extension, `Commented out ${usages.length} webRequest call(s) in ${file.path}`);
 
         return transformedFile;
     });

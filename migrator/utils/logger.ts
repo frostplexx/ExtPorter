@@ -162,11 +162,13 @@ const MAX_LOG_ENTRY_SIZE = 15 * 1024 * 1024; // 15MB max per log entry (MongoDB 
 const MAX_META_SIZE = 10 * 1024 * 1024; // 10MB max for meta field
 const ERROR_LOG_RATE_LIMIT = 100; // Maximum error logs per interval
 const ERROR_LOG_RATE_INTERVAL = 1000; // 1 second interval for rate limiting
+const MAX_LOG_BATCH_SIZE = 100; // Maximum batch size to prevent memory issues
 
 let logBatch: any[] = [];
 let batchTimer: NodeJS.Timeout | null = null;
 let errorLogCount = 0;
 let lastErrorReset = Date.now();
+let droppedLogCount = 0; // Track dropped logs for monitoring
 
 /**
  * Flush log batch to database in smaller chunks
@@ -276,6 +278,18 @@ function addLogToBatch(
             );
             console.error(`[SHUTDOWN VIOLATION] Stack trace:`, new Error().stack);
             return;
+        }
+
+        // Enforce maximum batch size to prevent memory issues
+        if (logBatch.length >= MAX_LOG_BATCH_SIZE) {
+            const dropped = logBatch.splice(0, 10); // Remove oldest 10 logs
+            droppedLogCount += dropped.length;
+            if (droppedLogCount % 100 === dropped.length) {
+                // Log every ~100 dropped logs
+                console.warn(
+                    `[LOGGER] Dropped ${droppedLogCount} total logs due to batch overflow (batch size: ${logBatch.length})`
+                );
+            }
         }
 
         const logEntry = formatLog(extension, message, level, meta);
@@ -397,4 +411,13 @@ export const logger = {
     stop: () => {
         stopLogging();
     },
+
+    /**
+     * Get logger statistics for monitoring
+     */
+    getStats: () => ({
+        batchSize: logBatch.length,
+        droppedCount: droppedLogCount,
+        maxBatchSize: MAX_LOG_BATCH_SIZE,
+    }),
 };
