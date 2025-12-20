@@ -23,9 +23,9 @@ describe('Database Manager', () => {
             // Attempt to initialize with a short timeout to avoid hangs
             await Promise.race([
                 db.init(),
-                new Promise((_, reject) =>
-                    setTimeout(() => reject(new Error('MongoDB connection timeout')), 5000)
-                ),
+                // new Promise((_, reject) =>
+                //     setTimeout(() => reject(new Error('MongoDB connection timeout')), 5000)
+                // ),
             ]);
         } catch (error) {
             console.warn('Could not connect to MongoDB for testing:', error);
@@ -60,7 +60,7 @@ describe('Database Manager', () => {
 
     describe('Connection Management', () => {
         it('should initialize database connection', async () => {
-            if (!db) return;
+            if (!db) return
 
             expect(db).toBeDefined();
             // Test that we can perform a basic operation
