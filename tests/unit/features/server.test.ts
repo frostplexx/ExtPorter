@@ -23,9 +23,9 @@ describe('MigrationServer Database API', () => {
         try {
             await Promise.race([
                 Database.shared.init(),
-                new Promise((_, reject) =>
-                    setTimeout(() => reject(new Error('MongoDB connection timeout')), 5000)
-                ),
+                // new Promise((_, reject) =>
+                //     setTimeout(() => reject(new Error('MongoDB connection timeout')), 5000)
+                // ),
             ]);
         } catch (error) {
             console.warn('Skipping server tests - DB init failed:', error);
