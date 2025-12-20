@@ -188,6 +188,37 @@ export class MigrationServer {
         // Start periodic cleanup for memory management
         this.cleanupInterval = setInterval(() => this.periodicCleanup(), this.cleanupIntervalMs);
 
+        // Ensure server is actually listening before returning (avoid race conditions in tests)
+        await new Promise<void>((resolve, reject) => {
+            try {
+                if (this.server.address()) {
+                    resolve();
+                    return;
+                }
+
+                const onListening = () => {
+                    this.server.removeListener('error', onError);
+                    resolve();
+                };
+                const onError = (err: any) => {
+                    this.server.removeListener('listening', onListening);
+                    reject(err);
+                };
+
+                this.server.once('listening', onListening);
+                this.server.once('error', onError);
+
+                // Safety timeout
+                setTimeout(() => {
+                    this.server.removeListener('listening', onListening);
+                    this.server.removeListener('error', onError);
+                    reject(new Error('WebSocket server did not start listening within timeout'));
+                }, 5000);
+            } catch (err) {
+                reject(err as any);
+            }
+        });
+
         // Handle new client connections
         this.server.on('connection', (ws: WebSocket) => {
             console.log('New client connected');

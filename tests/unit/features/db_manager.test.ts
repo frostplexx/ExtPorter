@@ -38,6 +38,11 @@ describe('Database Manager', () => {
     afterAll(async () => {
         if (db) {
             try {
+                // Ensure all pending operations are completed before closing
+                if ((db as any).pendingOperations > 0 || (db as any).operationQueue.length > 0) {
+                    console.warn('Waiting for pending operations to complete before closing database.');
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                }
                 // Clean up test database
                 await db.close();
             } catch (error) {
