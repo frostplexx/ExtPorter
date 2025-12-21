@@ -32,6 +32,15 @@ export class Database {
     private readonly maxConcurrentOperations: number = 10;
     private readonly maxQueueSize: number = 1000; // Prevent unbounded queue growth
 
+    // Waiters used by enqueueOperation to avoid busy-waiting while the queue is full.
+    private queueWaiters: (() => void)[] = [];
+    private lastQueueWarnTime: number = 0;
+    private queueWasFull: boolean = false;
+    private readonly queueWarnIntervalMs: number =
+        Number(process.env.DB_QUEUE_WARN_INTERVAL_MS) || 5000;
+    private readonly queueWaitTimeoutMs: number =
+        Number(process.env.DB_QUEUE_WAIT_TIMEOUT_MS) || 30000;
+
     private constructor() {
         // Queue processor will be started after database initialization
     }
@@ -105,46 +114,85 @@ export class Database {
     }
 
     /**
+     * Notify waiting enqueues that space is available.
+     * This wakes up up to N waiters where N = available slots.
+     */
+    private notifyWaiters() {
+        if (this.queueWaiters.length === 0) return;
+
+        while (this.operationQueue.length < this.maxQueueSize && this.queueWaiters.length > 0) {
+            const waiter = this.queueWaiters.shift();
+            if (!waiter) break;
+            try {
+                waiter();
+            } catch (err) {
+                logger.debug(null, 'Error invoking queue waiter:', err);
+            }
+        }
+
+        if (this.queueWasFull && this.operationQueue.length < this.maxQueueSize) {
+            logger.info(
+                null,
+                `Database queue drained (${this.operationQueue.length}/${this.maxQueueSize})`
+            );
+            this.queueWasFull = false;
+            this.lastQueueWarnTime = 0;
+        }
+    }
+
+    /**
      * Processes queued operations with concurrency control
      */
     private async processQueue() {
         while (this.isProcessingQueue) {
-            // Collect promises for operations we're starting
-            const activePromises: Promise<void>[] = [];
+            try {
+                // Collect promises for operations we're starting
+                const activePromises: Promise<void>[] = [];
 
-            // Process operations up to max concurrency
-            while (
-                this.operationQueue.length > 0 &&
-                this.pendingOperations < this.maxConcurrentOperations
-            ) {
-                const item = this.operationQueue.shift();
-                if (!item) continue;
+                // Process operations up to max concurrency
+                while (
+                    this.operationQueue.length > 0 &&
+                    this.pendingOperations < this.maxConcurrentOperations
+                ) {
+                    const item = this.operationQueue.shift();
+                    if (!item) continue;
 
-                this.pendingOperations++;
-                const promise = item
-                    .operation()
-                    .then((result) => {
-                        item.resolve(result);
-                    })
-                    .catch((error) => {
-                        item.reject(error);
-                    })
-                    .finally(() => {
-                        this.pendingOperations--;
-                    });
+                    // A slot in the queue was freed, notify any waiters
+                    this.notifyWaiters();
 
-                activePromises.push(promise);
-            }
+                    this.pendingOperations++;
+                    const promise = item
+                        .operation()
+                        .then((result) => {
+                            item.resolve(result);
+                        })
+                        .catch((error) => {
+                            item.reject(error);
+                        })
+                        .finally(() => {
+                            this.pendingOperations--;
+                            // Notify waiters in case space freed up
+                            this.notifyWaiters();
+                        });
 
-            // Wait for at least one operation to complete or a short timeout
-            if (activePromises.length > 0) {
-                await Promise.race([
-                    Promise.all(activePromises),
-                    new Promise((resolve) => setTimeout(resolve, 10)),
-                ]);
-            } else {
-                // No operations to process, wait a bit before checking again
-                await new Promise((resolve) => setTimeout(resolve, 10));
+                    activePromises.push(promise);
+                }
+
+                // Wait for at least one operation to complete or a short timeout
+                if (activePromises.length > 0) {
+                    await Promise.race([
+                        Promise.all(activePromises),
+                        new Promise((resolve) => setTimeout(resolve, 10)),
+                    ]);
+                } else {
+                    // No operations to process, wait a bit before checking again
+                    await new Promise((resolve) => setTimeout(resolve, 50));
+                }
+            } catch (error) {
+                // Catch any unexpected error so the queue processor doesn't crash the process
+                logger.error(null, 'Error processing database queue:', error);
+                // Back off briefly to avoid tight error loops
+                await new Promise((resolve) => setTimeout(resolve, 1000));
             }
         }
     }
@@ -154,24 +202,80 @@ export class Database {
      * Implements backpressure by waiting when queue is full.
      */
     private async enqueueOperation<T>(operation: () => Promise<T>): Promise<T> {
-        // Backpressure: wait if queue is full
-        while (this.operationQueue.length >= this.maxQueueSize) {
-            if (this.isShuttingDown) {
-                throw new Error('Database is shutting down');
-            }
+        if (this.isShuttingDown) {
+            throw new Error('Database is shutting down');
+        }
+
+        // Quick path: if there's room, enqueue immediately
+        if (this.operationQueue.length < this.maxQueueSize) {
+            return new Promise<T>((resolve, reject) => {
+                if (this.isShuttingDown) {
+                    reject(new Error('Database is shutting down'));
+                    return;
+                }
+                this.operationQueue.push({ operation, resolve, reject });
+            });
+        }
+
+        // Rate-limited warning
+        const now = Date.now();
+        if (now - this.lastQueueWarnTime > this.queueWarnIntervalMs) {
             logger.warn(
                 null,
                 `Database queue full (${this.operationQueue.length}/${this.maxQueueSize}), waiting for drain...`
             );
-            await new Promise((resolve) => setTimeout(resolve, 100));
+            this.lastQueueWarnTime = now;
+            this.queueWasFull = true;
         }
 
+        // Wait for space up to configured timeout. If timeout expires, reject to prevent indefinite blocking.
         return new Promise<T>((resolve, reject) => {
             if (this.isShuttingDown) {
                 reject(new Error('Database is shutting down'));
                 return;
             }
-            this.operationQueue.push({ operation, resolve, reject });
+            
+                        let timeoutId: NodeJS.Timeout | undefined;
+                        let resolved = false;
+            
+                        const waiter = () => {
+                            if (resolved) return;
+                            if (timeoutId) {
+                                clearTimeout(timeoutId);
+                                timeoutId = undefined;
+                            }
+            
+                            if (this.isShuttingDown) {
+                                resolved = true;
+                                reject(new Error('Database is shutting down'));
+                                return;
+                            }
+            
+                            if (this.operationQueue.length < this.maxQueueSize) {
+                                this.operationQueue.push({ operation, resolve, reject });
+                                resolved = true;
+                                return;
+                            }
+            
+                            // Still full; leave waiter registered for next notification
+                        };
+            
+                        // Register waiter
+                        this.queueWaiters.push(waiter);
+            
+                        // Setup timeout to reject the enqueue after waiting too long
+                        timeoutId = setTimeout(() => {
+                            if (resolved) return;
+                            // Remove waiter from queueWaiters
+                            const idx = this.queueWaiters.indexOf(waiter);
+                            if (idx >= 0) this.queueWaiters.splice(idx, 1);
+                            resolved = true;
+                            logger.error(
+                                null,
+                                `Timed out waiting for database queue to drain (${this.queueWaitTimeoutMs}ms)`
+                            );
+                            reject(new Error(`Database queue full after waiting ${this.queueWaitTimeoutMs} ms`));
+                        }, this.queueWaitTimeoutMs);
         });
     }
 
@@ -225,21 +329,64 @@ export class Database {
         const MAX_BSON_SIZE = 15 * 1024 * 1024; // 15MB to be safe (MongoDB limit is 16MB)
 
         try {
-            const serialized = JSON.stringify(doc);
-            const byteSize = Buffer.byteLength(serialized, 'utf8');
+            // Fast heuristic: if the document contains files, estimate size from file contents
+            const hasFiles = doc && doc.files && Array.isArray(doc.files);
+            if (hasFiles) {
+                let estimatedSize = 0;
+                for (const file of doc.files) {
+                    if (!file) continue;
+                    if (typeof file.content === 'string') {
+                        estimatedSize += Buffer.byteLength(file.content, 'utf8');
+                    } else if (file.content && Buffer.isBuffer(file.content)) {
+                        estimatedSize += file.content.length;
+                    } else if (file.getContent && typeof file.getContent === 'function') {
+                        try {
+                            const c = file.getContent();
+                            if (typeof c === 'string') estimatedSize += Buffer.byteLength(c, 'utf8');
+                            else if (Buffer.isBuffer(c)) estimatedSize += c.length;
+                        } catch {
+                            // ignore
+                        }
+                    }
 
-            if (byteSize <= MAX_BSON_SIZE) {
-                return doc;
+                    if (estimatedSize > MAX_BSON_SIZE) break;
+                }
+
+                // If estimated size is below limit, try to serialize to confirm
+                if (estimatedSize <= MAX_BSON_SIZE) {
+                    try {
+                        const serialized = JSON.stringify(doc);
+                        const byteSize = Buffer.byteLength(serialized, 'utf8');
+                        if (byteSize <= MAX_BSON_SIZE) return doc;
+                        // otherwise fall through to truncation logic with measured size
+                    } catch {
+                        // fall through to truncation if serialization failed
+                    }
+                } else {
+                    logger.warn(
+                        null,
+                        `Document estimated too large (${(estimatedSize / 1024 / 1024).toFixed(2)}MB), truncating...`
+                    );
+                }
+            } else {
+                // Non-file documents - attempt to serialize and check size
+                const serialized = JSON.stringify(doc);
+                const byteSize = Buffer.byteLength(serialized, 'utf8');
+                if (byteSize <= MAX_BSON_SIZE) return doc;
             }
 
-            logger.warn(
-                null,
-                `Document too large (${(byteSize / 1024 / 1024).toFixed(2)}MB), truncating...`
-            );
-
+            // At this point, the document is too large - attempt to truncate intelligently
             // If it's an Extension object, aggressively truncate file contents
             if (doc.files && Array.isArray(doc.files)) {
                 const truncatedDoc = { ...doc };
+
+                // Try to get an accurate size if possible
+                let byteSize = 0;
+                try {
+                    byteSize = Buffer.byteLength(JSON.stringify(doc), 'utf8');
+                } catch {
+                    byteSize = MAX_BSON_SIZE + 1;
+                }
 
                 // For extremely large documents (>50MB), remove all file content
                 if (byteSize > 50 * 1024 * 1024) {
@@ -252,7 +399,11 @@ export class Database {
                         filetype: file.filetype,
                         _contentRemoved: true,
                         _reason: 'Document too large for MongoDB',
-                        _originalSize: file.content ? file.content.length : 0,
+                        _originalSize: file.content
+                            ? typeof file.content === 'string'
+                                ? file.content.length
+                                : file.content.length || 0
+                            : 0,
                     }));
                 } else {
                     // Keep first 5 files with limited content, summarize the rest
@@ -279,7 +430,11 @@ export class Database {
                                 filetype: file.filetype,
                                 _truncated: true,
                                 _reason: 'File removed to reduce document size',
-                                _originalSize: file.content ? file.content.length : 0,
+                                _originalSize: file.content
+                                    ? typeof file.content === 'string'
+                                        ? file.content.length
+                                        : file.content.length || 0
+                                    : 0,
                             };
                         }
                     });
@@ -287,13 +442,17 @@ export class Database {
 
                 truncatedDoc._documentTruncated = true;
                 truncatedDoc._originalFileCount = doc.files.length;
-                truncatedDoc._originalSize = byteSize;
+                try {
+                    truncatedDoc._originalSize = Buffer.byteLength(JSON.stringify(doc), 'utf8');
+                } catch {
+                    truncatedDoc._originalSize = undefined;
+                }
 
                 // Verify truncated size
                 const newSize = Buffer.byteLength(JSON.stringify(truncatedDoc), 'utf8');
                 logger.debug(
                     null,
-                    `Document truncated from ${(byteSize / 1024 / 1024).toFixed(2)}MB to ${(newSize / 1024 / 1024).toFixed(2)}MB`
+                    `Document truncated from ${(truncatedDoc._originalSize ? (truncatedDoc._originalSize / 1024 / 1024).toFixed(2) : 'unknown')}MB to ${(newSize / 1024 / 1024).toFixed(2)}MB`
                 );
 
                 if (newSize > MAX_BSON_SIZE) {
@@ -309,11 +468,19 @@ export class Database {
             }
 
             // Generic truncation for other types
+            let summary = '... [TRUNCATED]';
+            try {
+                const serialized = JSON.stringify(doc);
+                summary = serialized.substring(0, 1000) + '... [TRUNCATED]';
+            } catch {
+                summary = String(doc).substring(0, 1000) + '... [TRUNCATED]';
+            }
+
             return {
                 _truncated: true,
-                _originalSize: byteSize,
+                _originalSize: undefined,
                 _reason: 'Document too large for MongoDB',
-                summary: JSON.stringify(doc).substring(0, 1000) + '... [TRUNCATED]',
+                summary,
             };
         } catch (error) {
             logger.error(null, 'Error sanitizing document size:', error);
@@ -404,6 +571,18 @@ export class Database {
 
             // Set shutdown flag to prevent new operations
             this.isShuttingDown = true;
+
+            // Reject any waiters that are waiting for queue space so they don't hang
+            if (this.queueWaiters.length > 0) {
+                for (const waiter of this.queueWaiters.slice()) {
+                    try {
+                        waiter();
+                    } catch (e) {
+                        logger.debug(null, 'Error rejecting queue waiter during shutdown:', e);
+                    }
+                }
+                this.queueWaiters = [];
+            }
 
             logger.debug(
                 null,
