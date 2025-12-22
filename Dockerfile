@@ -28,7 +28,7 @@ COPY scripts/ ./scripts/
 RUN mkdir -p logs output cws
 
 # Set Node.js memory options
-ENV NODE_OPTIONS="--max-old-space-size=32000 --max-semi-space-size=512 --expose-gc"
+ENV NODE_OPTIONS="--max-old-space-size=128000 --max-semi-space-size=512 --expose-gc"
 
 
 # Expose WebSocket server port
