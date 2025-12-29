@@ -144,6 +144,12 @@ export class WebRequestMigrator implements MigrationModule {
         const usages: WebRequestUsage[] = [];
 
         for (const file of extension.files) {
+
+            if (!file) {
+                logger.error(extension, "File does not exist")
+                break;
+            }
+
             if (file.filetype !== ExtFileType.JS) {
                 continue;
             }
@@ -639,6 +645,10 @@ export class WebRequestMigrator implements MigrationModule {
 
         // Transform files that have webRequest usages
         return extension.files.map((file) => {
+            if (!file) {
+                logger.error(extension, "File is null");
+                return;
+            }
             const usages = usagesByFile.get(file);
             if (!usages || usages.length === 0) {
                 return file; // No changes needed

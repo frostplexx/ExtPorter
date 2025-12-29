@@ -28,7 +28,9 @@ export class ResourceDownloader extends MigrationModule {
             logger.debug(extension, 'Closing file descriptors before download');
             extension.files.forEach((file) => {
                 try {
-                    file.close();
+                    if (file) {
+                        file.close();
+                    }
                 } catch (error) {
                     logger.error(extension, error as any);
                     // Ignore errors when closing files

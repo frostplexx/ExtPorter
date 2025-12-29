@@ -14,7 +14,7 @@ export class ServiceWorkerInjector {
         bridgeFilename: string
     ): LazyFile | null {
         // Find the service worker file in the extension
-        const serviceWorkerFile = extension.files.find((file) => file.path === serviceWorkerPath);
+        const serviceWorkerFile = extension.files.find((file) => file!.path === serviceWorkerPath);
 
         if (!serviceWorkerFile) {
             logger.warn(extension, `Service worker file not found: ${serviceWorkerPath}`);
@@ -33,7 +33,8 @@ export class ServiceWorkerInjector {
             }
 
             // Prepend import statement
-            const newContent = `${importStatement}\n${currentContent}`;
+            const parts = [importStatement, currentContent];
+            const newContent = parts.join('\n');
 
             logger.info(extension, `Bridge injected into service worker: ${serviceWorkerPath}`);
 
@@ -47,10 +48,10 @@ export class ServiceWorkerInjector {
                     error:
                         error instanceof Error
                             ? {
-                                  message: error.message,
-                                  stack: error.stack,
-                                  name: error.name,
-                              }
+                                message: error.message,
+                                stack: error.stack,
+                                name: error.name,
+                            }
                             : String(error),
                 }
             );

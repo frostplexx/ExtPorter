@@ -15,7 +15,7 @@ export class ServiceWorkerTransformer {
         extension: Extension,
         serviceWorkerPath: string
     ): LazyFile | null {
-        const serviceWorkerFile = extension.files.find((file) => file.path === serviceWorkerPath);
+        const serviceWorkerFile = extension.files.find((file) => file!.path === serviceWorkerPath);
 
         if (!serviceWorkerFile) {
             logger.warn(extension, `Service worker file not found: ${serviceWorkerPath}`);
@@ -92,7 +92,8 @@ async function sendToOffscreen(type, data) {
 
 `;
 
-            const newContent = `${helperCode}\n${currentContent}`;
+            const parts = [helperCode, currentContent];
+            const newContent = parts.join('\n');
 
             logger.info(
                 extension,
@@ -366,7 +367,7 @@ const storageHelper = {
             needsDOMDownload: boolean;
         }
     ): LazyFile | null {
-        const swFile = extension.files.find((f) => f.path === serviceWorkerPath);
+        const swFile = extension.files.find((f) => f!.path === serviceWorkerPath);
         if (!swFile) {
             return null;
         }

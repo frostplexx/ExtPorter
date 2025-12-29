@@ -14,7 +14,9 @@ export interface Extension {
     version?: string;
     manifest_v2_path: string;
     manifest: any;
-    files: LazyFile[];
+    // Files may be set to null to allow releasing large in-memory objects to the GC.
+    // Consumers MUST handle null entries (filter or guard before accessing).
+    files: (LazyFile | null)[];
     isNewTabExtension?: boolean;
     mv3_extension_id?: string;
     manifest_v3_path?: string;

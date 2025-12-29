@@ -73,13 +73,13 @@ describe('OffscreenDocumentMigrator', () => {
                 expect(
                     result.files.some(
                         (f) =>
-                            f.path === OffscreenDocumentMigrator.testHelpers.OFFSCREEN_HTML_FILENAME
+                            f!.path === OffscreenDocumentMigrator.testHelpers.OFFSCREEN_HTML_FILENAME
                     )
                 ).toBe(true);
                 expect(
                     result.files.some(
                         (f) =>
-                            f.path === OffscreenDocumentMigrator.testHelpers.OFFSCREEN_JS_FILENAME
+                            f!.path === OffscreenDocumentMigrator.testHelpers.OFFSCREEN_JS_FILENAME
                     )
                 ).toBe(true);
             }
@@ -107,7 +107,7 @@ describe('OffscreenDocumentMigrator', () => {
 
             expect(result).not.toBeInstanceOf(MigrationError);
             if (!(result instanceof MigrationError)) {
-                const serviceWorkerFile = result.files.find((f) => f.path === 'background.js');
+                const serviceWorkerFile = result.files.find((f) => f!.path === 'background.js');
                 expect(serviceWorkerFile).toBeDefined();
                 if (serviceWorkerFile) {
                     const content = serviceWorkerFile.getContent();
@@ -739,12 +739,12 @@ describe('OffscreenDocumentMigrator', () => {
                 expect(result.manifest.permissions).toContain('offscreen');
 
                 const htmlFile = result.files.find(
-                    (f) => f.path === OffscreenDocumentMigrator.testHelpers.OFFSCREEN_HTML_FILENAME
+                    (f) => f!.path === OffscreenDocumentMigrator.testHelpers.OFFSCREEN_HTML_FILENAME
                 );
                 const jsFile = result.files.find(
-                    (f) => f.path === OffscreenDocumentMigrator.testHelpers.OFFSCREEN_JS_FILENAME
+                    (f) => f!.path === OffscreenDocumentMigrator.testHelpers.OFFSCREEN_JS_FILENAME
                 );
-                const serviceWorker = result.files.find((f) => f.path === 'background.js');
+                const serviceWorker = result.files.find((f) => f!.path === 'background.js');
 
                 expect(htmlFile).toBeDefined();
                 expect(jsFile).toBeDefined();

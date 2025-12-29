@@ -3,6 +3,7 @@ import { LazyFile } from '../../types/abstract_file';
 import { ExtFileType } from '../../types/ext_file_types';
 import { WebRequestUsage } from './types';
 import { traverseAST, isWebRequestEventListener } from './ast-utils';
+import { logger } from '../../utils/logger';
 
 /**
  * Find all blocking webRequest API usages in the extension
@@ -12,6 +13,12 @@ export function findWebRequestUsages(extension: Extension): WebRequestUsage[] {
     const usages: WebRequestUsage[] = [];
 
     for (const file of extension.files) {
+        
+        if(!file){
+            logger.error(extension, "File is null")
+            break;
+        }
+
         if (file.filetype !== ExtFileType.JS) {
             continue;
         }

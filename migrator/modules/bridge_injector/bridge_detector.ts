@@ -13,6 +13,11 @@ export class BridgeDetector {
     public static needsBridge(extension: Extension): boolean {
         // Check if any JS files contain callback patterns
         for (const file of extension.files) {
+
+            if (file == null) {
+                logger.error(extension, "File is null");
+                return false;
+            }
             if (file.filetype === ExtFileType.JS) {
                 try {
                     const content = file.getContent();
@@ -71,7 +76,7 @@ export class BridgeDetector {
         htmlPath: string,
         bridgeFilename: string
     ): boolean {
-        const htmlFile = extension.files.find((file) => file.path === htmlPath);
+        const htmlFile = extension.files.find((file) => file!.path === htmlPath);
 
         if (!htmlFile) {
             return false;

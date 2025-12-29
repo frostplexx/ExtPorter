@@ -14,7 +14,7 @@ export class HtmlInjector {
         htmlPath: string,
         bridgeFilename: string
     ): LazyFile | null {
-        const htmlFile = extension.files.find((file) => file.path === htmlPath);
+        const htmlFile = extension.files.find((file) => file!.path === htmlPath);
 
         if (!htmlFile) {
             logger.warn(extension, `HTML file not found: ${htmlPath}`);

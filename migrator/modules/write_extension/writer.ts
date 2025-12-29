@@ -105,6 +105,10 @@ export class Writer {
                 await this.acquireGlobalFileWriteSlot();
 
                 try {
+                    if (file == null) {
+                        logger.error(extension, "File is null");
+                        return
+                    }
                     const filePath = path.join(outputPath, file.path);
                     const fileDir = path.dirname(filePath);
 
@@ -130,6 +134,11 @@ export class Writer {
                     // Only log first few errors to prevent log flooding and cascading failures
                     if (errorCount <= maxErrorsToLog) {
                         // Use console.error to avoid triggering logger's MongoDB writes
+
+                        if (file == null) {
+                            logger.error(extension, "File is null");
+                            return
+                        }
                         console.error(
                             `Failed to write file ${file.path}:`,
                             error instanceof Error ? error.message : String(error)
@@ -148,7 +157,9 @@ export class Writer {
                     // CRITICAL: Close the file descriptor immediately after writing to prevent EMFILE
                     // This must be in finally block to ensure it runs even if there's an error
                     try {
-                        file.close();
+                        if (file) {
+                            file.close();
+                        }
                     } catch (closeError) {
                         // Ignore close errors
                         logger.error(extension, closeError as any)

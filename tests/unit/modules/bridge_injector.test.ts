@@ -92,7 +92,7 @@ describe('BridgeInjector', () => {
             if (!(result instanceof MigrationError)) {
                 expect(result.files).toHaveLength(3); // Original 2 + bridge file
                 expect(
-                    result.files.some((f) => f.path === BridgeInjector.testHelpers.BRIDGE_FILENAME)
+                    result.files.some((f) => f!.path === BridgeInjector.testHelpers.BRIDGE_FILENAME)
                 ).toBe(true);
             }
         });
@@ -1139,7 +1139,7 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
                 // Should add bridge file
                 expect(result.files).toHaveLength(3);
                 expect(
-                    result.files.some((f) => f.path === BridgeInjector.testHelpers.BRIDGE_FILENAME)
+                    result.files.some((f) => f!.path === BridgeInjector.testHelpers.BRIDGE_FILENAME)
                 ).toBe(true);
 
                 // Should inject bridge into all content scripts
@@ -1280,7 +1280,7 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
             expect(result).not.toBeInstanceOf(MigrationError);
             if (!(result instanceof MigrationError)) {
                 // Should transform service worker file in memory
-                const serviceWorkerFile = result.files.find((f) => f.path === 'background.js');
+                const serviceWorkerFile = result.files.find((f) => f!.path === 'background.js');
                 expect(serviceWorkerFile).toBeDefined();
                 if (serviceWorkerFile) {
                     const content = serviceWorkerFile.getContent();
