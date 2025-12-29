@@ -18,6 +18,7 @@ export class WriteQueue {
     private writeQueue: WriteTask[] = [];
     private isProcessing = false;
     private readonly concurrentWrites = 10;
+    private readonly MAX_QUEUE_SIZE = 10; // Limit queue size
     private activeWriters = 0;
     private autoPro = true; // Auto-process queue (can be disabled for testing)
     private readonly fileBatchSize = 50; // Number of files to write concurrently
@@ -51,6 +52,10 @@ export class WriteQueue {
     }
 
     public async queueExtension(extension: Extension, priority: number = 0): Promise<void> {
+        // Block if queue is full
+        while (this.writeQueue.length >= this.MAX_QUEUE_SIZE) {
+            await new Promise(resolve => setTimeout(resolve, 100));
+        }
         const task: WriteTask = { extension, priority };
 
         this.insertTaskByPriority(task);

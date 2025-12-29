@@ -16,7 +16,8 @@ export function injectScriptImports(
     }
 
     // Find the service worker file in the extension
-    const serviceWorkerFile = extension.files.find((file) => file.path === serviceWorkerPath);
+    // TODO: The "!" could lead to problems here
+    const serviceWorkerFile = extension.files.find((file) => file!.path === serviceWorkerPath);
 
     if (!serviceWorkerFile) {
         logger.warn(
@@ -36,7 +37,8 @@ export function injectScriptImports(
             .join('\n');
 
         // Prepend import statements to the beginning of the file
-        const newContent = `${importStatements}\n${currentContent}`;
+        const parts = [importStatements, currentContent];
+        const newContent = parts.join('\n');
 
         logger.info(
             extension,
@@ -56,10 +58,10 @@ export function injectScriptImports(
                 error:
                     error instanceof Error
                         ? {
-                              message: error.message,
-                              stack: error.stack,
-                              name: error.name,
-                          }
+                            message: error.message,
+                            stack: error.stack,
+                            name: error.name,
+                        }
                         : String(error),
             }
         );

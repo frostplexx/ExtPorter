@@ -93,7 +93,7 @@ describe('WebRequestMigrator', () => {
             // Should not create any rules since these are non-blocking
             expect(result).not.toBeInstanceOf(MigrationError);
             if (!(result instanceof MigrationError)) {
-                const rulesFile = result.files.find((f) => f.path === 'rules.json');
+                const rulesFile = result.files.find((f) => f!.path === 'rules.json');
                 expect(rulesFile).toBeUndefined();
             }
         });
@@ -135,7 +135,7 @@ describe('WebRequestMigrator', () => {
             // Should create exactly 1 rule for the blocking listener
             expect(result).not.toBeInstanceOf(MigrationError);
             if (!(result instanceof MigrationError)) {
-                const rulesFile = result.files.find((f) => f.path === 'rules.json');
+                const rulesFile = result.files.find((f) => f!.path === 'rules.json');
                 expect(rulesFile).toBeDefined();
 
                 if (rulesFile) {
@@ -167,7 +167,7 @@ describe('WebRequestMigrator', () => {
             expect(result).not.toBeInstanceOf(MigrationError);
             if (!(result instanceof MigrationError)) {
                 // Check that rules.json was created
-                const rulesFile = result.files.find((f) => f.path === 'rules.json');
+                const rulesFile = result.files.find((f) => f!.path === 'rules.json');
                 expect(rulesFile).toBeDefined();
 
                 if (rulesFile) {
@@ -308,7 +308,7 @@ describe('WebRequestMigrator', () => {
 
             expect(result).not.toBeInstanceOf(MigrationError);
             if (!(result instanceof MigrationError)) {
-                const rulesFile = result.files.find((f) => f.path === 'rules.json');
+                const rulesFile = result.files.find((f) => f!.path === 'rules.json');
                 expect(rulesFile).toBeDefined();
 
                 if (rulesFile) {
@@ -338,7 +338,7 @@ describe('WebRequestMigrator', () => {
 
             expect(result).not.toBeInstanceOf(MigrationError);
             if (!(result instanceof MigrationError)) {
-                const rulesFile = result.files.find((f) => f.path === 'rules.json');
+                const rulesFile = result.files.find((f) => f!.path === 'rules.json');
                 expect(rulesFile).toBeDefined();
 
                 if (rulesFile) {
@@ -396,7 +396,7 @@ describe('WebRequestMigrator', () => {
 
             expect(result).not.toBeInstanceOf(MigrationError);
             if (!(result instanceof MigrationError)) {
-                const rulesFile = result.files.find((f) => f.path === 'rules.json');
+                const rulesFile = result.files.find((f) => f!.path === 'rules.json');
                 expect(rulesFile).toBeDefined();
 
                 if (rulesFile) {
@@ -430,7 +430,7 @@ describe('WebRequestMigrator', () => {
 
             expect(result).not.toBeInstanceOf(MigrationError);
             if (!(result instanceof MigrationError)) {
-                const rulesFile = result.files.find((f) => f.path === 'rules.json');
+                const rulesFile = result.files.find((f) => f!.path === 'rules.json');
                 expect(rulesFile).toBeDefined();
 
                 if (rulesFile) {
@@ -473,7 +473,7 @@ describe('WebRequestMigrator', () => {
             expect(result).not.toBeInstanceOf(MigrationError);
             if (!(result instanceof MigrationError)) {
                 // Find the transformed JavaScript file
-                const transformedFile = result.files.find((f) => f.path === 'blockstop.js');
+                const transformedFile = result.files.find((f) => f!.path === 'blockstop.js');
                 expect(transformedFile).toBeDefined();
 
                 if (transformedFile) {
@@ -516,7 +516,7 @@ chrome.webRequest.onBeforeRequest.addListener(
 
             expect(result).not.toBeInstanceOf(MigrationError);
             if (!(result instanceof MigrationError)) {
-                const transformedFile = result.files.find((f) => f.path === 'background.js');
+                const transformedFile = result.files.find((f) => f!.path === 'background.js');
                 expect(transformedFile).toBeDefined();
 
                 if (transformedFile) {
@@ -552,14 +552,14 @@ chrome.webRequest.onBeforeRequest.addListener(
             expect(result).not.toBeInstanceOf(MigrationError);
             if (!(result instanceof MigrationError)) {
                 // content.js should remain unchanged
-                const contentFile = result.files.find((f) => f.path === 'content.js');
+                const contentFile = result.files.find((f) => f!.path === 'content.js');
                 expect(contentFile).toBeDefined();
                 if (contentFile) {
                     expect(contentFile.getContent()).toBe('console.log("content script");');
                 }
 
                 // background.js should be commented
-                const backgroundFile = result.files.find((f) => f.path === 'background.js');
+                const backgroundFile = result.files.find((f) => f!.path === 'background.js');
                 expect(backgroundFile).toBeDefined();
                 if (backgroundFile) {
                     expect(backgroundFile.getContent()).toContain('MIGRATED TO DECLARATIVE_NET_REQUEST');

@@ -72,7 +72,13 @@ export class RenameAPIS implements MigrationModule {
             let transformedFiles = 0;
             let blacklistedFiles = 0;
 
-            const transformedFilesArray = extension.files.map((file) => {
+            const transformedFilesArray: (LazyFile |null)[]= extension.files.map((file) => {
+
+                if(file == null){
+                    logger.error(extension, "File is null")
+                    return null;
+                }
+
                 // skip files that arent js
                 if (file.filetype !== ExtFileType.JS) {
                     return file;

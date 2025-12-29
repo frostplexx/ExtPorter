@@ -14,6 +14,13 @@ export function analyzeFiles(extension: Extension, scores: InterestingnessBreakd
     let networkRequestCount = 0;
 
     for (const file of extension.files) {
+
+
+        if(file == null){
+            logger.error(extension, "File is null")
+            break;
+        }
+
         try {
             const content = file.getContent();
 

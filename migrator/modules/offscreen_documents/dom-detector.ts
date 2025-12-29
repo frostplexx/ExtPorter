@@ -202,7 +202,7 @@ export class DOMDetector {
         }
 
         // Find the service worker file
-        const serviceWorkerFile = extension.files.find((file) => file.path === serviceWorkerPath);
+        const serviceWorkerFile = extension.files.find((file) => file!.path === serviceWorkerPath);
 
         if (!serviceWorkerFile || serviceWorkerFile.filetype !== ExtFileType.JS) {
             return result;

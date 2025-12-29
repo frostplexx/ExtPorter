@@ -8,7 +8,6 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as crypto from 'crypto';
 import * as zlib from 'zlib';
-// eslint-disable-next-line @typescript-eslint/no-require-imports
 const tar = require('tar-stream');
 
 // Prevent noisy MaxListeners warnings and accidental memory leaks in tests/runtime
@@ -96,7 +95,7 @@ export class MigrationServer {
         // eslint-disable-next-line @typescript-eslint/no-this-alias
         const self = this;
 
-        console.log = function (...args: any[]) {
+        console.log = function(...args: any[]) {
             const message = args
                 .map((arg) =>
                     typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)
@@ -107,7 +106,7 @@ export class MigrationServer {
             self.originalConsoleLog.apply(console, args);
         };
 
-        console.info = function (...args: any[]) {
+        console.info = function(...args: any[]) {
             const message = args
                 .map((arg) =>
                     typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)
@@ -118,7 +117,7 @@ export class MigrationServer {
             self.originalConsoleInfo.apply(console, args);
         };
 
-        console.debug = function (...args: any[]) {
+        console.debug = function(...args: any[]) {
             const message = args
                 .map((arg) =>
                     typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)
@@ -129,7 +128,7 @@ export class MigrationServer {
             self.originalConsoleDebug.apply(console, args);
         };
 
-        console.error = function (...args: any[]) {
+        console.error = function(...args: any[]) {
             const message = args
                 .map((arg) =>
                     typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)
@@ -140,7 +139,7 @@ export class MigrationServer {
             self.originalConsoleError.apply(console, args);
         };
 
-        console.warn = function (...args: any[]) {
+        console.warn = function(...args: any[]) {
             const message = args
                 .map((arg) =>
                     typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)
@@ -396,7 +395,6 @@ export class MigrationServer {
             // Import migration dependencies dynamically to avoid circular dependencies
             const { find_extensions } = await import('../../utils/find_extensions.js');
             // logger is imported but not used in this scope - it's used elsewhere in the codebase
-            // eslint-disable-next-line @typescript-eslint/no-unused-vars
             const { logger } = await import('../../utils/logger.js');
             const { RenameAPIS } = await import('../../modules/api_renames/index.js');
             const { MigrateManifest } = await import('../../modules/manifest/index.js');
@@ -449,6 +447,7 @@ export class MigrationServer {
             const totalExtensions = extensions.length;
             this.migrationState.progress.total = totalExtensions;
             let writeIndex = 0;
+            let processedCount = 0;
 
             this.broadcastToClients(
                 `Processing ${totalExtensions} extensions in batches of ${BATCH_SIZE}`
@@ -493,12 +492,21 @@ export class MigrationServer {
                         }
                     }
 
+                    processedCount++;
+                    if (processedCount % 10 === 0 && global.gc) {
+                        global.gc(); // Force GC every 10 extensions
+
+                        const used = process.memoryUsage();
+                        logger.info(null, `GC after ${processedCount} extensions: ${Math.round(used.heapUsed / 1024 / 1024)}MB`);
+                    }
+
                     // Write the migrated extension to disk
                     if (migrationSuccessful) {
                         try {
                             const useNewTabSubfolder = process.env.NEW_TAB_SUBFOLDER === 'true';
                             const isNewTab = extension.isNewTabExtension || false;
                             const extensionId = extension.mv3_extension_id || extension.id;
+
 
                             let outputPath: string;
                             if (useNewTabSubfolder && isNewTab) {
@@ -1891,6 +1899,6 @@ export class MigrationServer {
         console.error = this.originalConsoleError;
         console.warn = this.originalConsoleWarn;
 
-        this.server.close(() => {});
+        this.server.close(() => { });
     }
 }

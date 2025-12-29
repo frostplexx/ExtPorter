@@ -46,3 +46,7 @@ export function loadApiMappings(): TwinningMapping {
     // At this point api_mappings is guaranteed to not be null
     return api_mappings!;
 }
+
+export function releaseApiMappings(): void {
+    api_mappings = null;
+}

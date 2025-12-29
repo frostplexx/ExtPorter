@@ -258,7 +258,7 @@ describe('MigrateManifest', () => {
 
                     // Verify that the background file was transformed in memory
                     const transformedBackgroundFile = result.files.find(
-                        (f) => f.path === 'background.js'
+                        (f) => f!.path === 'background.js'
                     );
                     expect(transformedBackgroundFile).toBeDefined();
 
@@ -346,7 +346,7 @@ describe('MigrateManifest', () => {
 
                     // Verify that the background file was transformed in memory
                     const transformedBackgroundFile = result.files.find(
-                        (f) => f.path === 'background.js'
+                        (f) => f!.path === 'background.js'
                     );
                     expect(transformedBackgroundFile).toBeDefined();
 

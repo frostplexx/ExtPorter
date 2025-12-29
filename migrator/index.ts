@@ -3,6 +3,7 @@ import { logger } from './utils/logger';
 import { Globals } from './types/globals';
 import { Database } from './features/database/db_manager';
 import { MigrationServer } from './features/server/app';
+import { releaseApiMappings } from './modules/api_renames/api-mappings-loader';
 
 // Load environment variables once at application startup
 console.log('📝 Loading environment variables...');
@@ -70,6 +71,8 @@ async function teardown() {
     logger.stop();
     // Close database connection
     await Database.shared.close();
+
+    releaseApiMappings()
 }
 
 // Handle uncaught exceptions to prevent crashes
@@ -101,7 +104,6 @@ function print_info() {
         // Load OS functions if available (works in CommonJS-aware environments)
         let os: any = null;
         try {
-            // eslint-disable-next-line @typescript-eslint/no-var-requires
             os = require('os');
         } catch {
             // In some environments require might not be available — that's fine, we will still print process-level info.
@@ -146,7 +148,6 @@ function print_info() {
 
         if (!nodeMaxBytes) {
             try {
-                // eslint-disable-next-line @typescript-eslint/no-var-requires
                 const v8 = require('v8');
                 const stats = (typeof v8.getHeapStatistics === 'function') ? v8.getHeapStatistics() : null;
                 if (stats && typeof stats.heap_size_limit === 'number') {

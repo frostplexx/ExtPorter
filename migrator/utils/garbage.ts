@@ -142,10 +142,10 @@ export function clearExtensionMemory(extension: Extension): void {
     // Clear file contents and ASTs from memory
     extension.files.forEach((file) => {
         // Use releaseMemory for new interface, fall back to cleanContent
-        if (file.releaseMemory) {
+        if (file && file.releaseMemory) {
             file.releaseMemory();
-        } else if (file.cleanContent) {
-            file.cleanContent();
+        } else {
+            logger.warn(extension, "Can't clean memory for file because it is null")
         }
     });
 
@@ -211,6 +211,10 @@ export function calculateExtensionMemoryUsage(extension: Extension): number {
     let totalBytes = 0;
 
     for (const file of extension.files) {
+        if(!file){
+            console.error(extension, "File is null")
+            return -1;
+        }
         // Check if file has getMemoryUsage method (LazyFile)
         if ('getMemoryUsage' in file && typeof (file as any).getMemoryUsage === 'function') {
             totalBytes += (file as any).getMemoryUsage();
@@ -242,6 +246,12 @@ export function getExtensionsMemorySummary(extensions: Extension[]): {
         if (!ext || !ext.files) continue;
 
         for (const file of ext.files) {
+
+            if(!file){
+                console.error(ext, "File is null")
+                continue;
+            }
+
             if ('isLoaded' in file && typeof (file as any).isLoaded === 'function') {
                 if ((file as any).isLoaded()) {
                     totalFiles++;

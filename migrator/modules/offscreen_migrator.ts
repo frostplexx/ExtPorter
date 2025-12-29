@@ -58,7 +58,7 @@ export class OffscreenMigrator implements MigrationModule {
         // Check service worker file
         const serviceWorker = extension.manifest.background?.service_worker;
         if (serviceWorker) {
-            const swFile = extension.files.find((f) => f.path === serviceWorker);
+            const swFile = extension.files.find((f) => f!.path === serviceWorker);
             if (swFile && swFile.filetype === ExtFileType.JS) {
                 try {
                     const content = swFile.getContent();
@@ -312,7 +312,7 @@ console.log('Offscreen document loaded and ready');
         serviceWorkerPath: string,
         needsLocalStorage: boolean
     ): LazyFile | null {
-        const swFile = extension.files.find((f) => f.path === serviceWorkerPath);
+        const swFile = extension.files.find((f) => f!.path === serviceWorkerPath);
         if (!swFile) {
             return null;
         }
@@ -505,10 +505,10 @@ const storageHelper = {
 
             // Check if offscreen files already exist
             const hasOffscreenHTML = extension.files.some(
-                (f) => f.path === OffscreenMigrator.OFFSCREEN_HTML
+                (f) => f!.path === OffscreenMigrator.OFFSCREEN_HTML
             );
             const hasOffscreenJS = extension.files.some(
-                (f) => f.path === OffscreenMigrator.OFFSCREEN_JS
+                (f) => f!.path === OffscreenMigrator.OFFSCREEN_JS
             );
 
             if (hasOffscreenHTML && hasOffscreenJS) {
@@ -531,7 +531,7 @@ const storageHelper = {
             let updatedFiles = [...extension.files];
             if (transformedSW) {
                 updatedFiles = updatedFiles.map((f) =>
-                    f.path === transformedSW.path ? transformedSW : f
+                    f!.path === transformedSW.path ? transformedSW : f
                 );
             }
 

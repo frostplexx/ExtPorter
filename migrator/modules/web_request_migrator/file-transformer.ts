@@ -20,8 +20,15 @@ export function transformWebRequestFiles(
         usagesByFile.get(usage.file)!.push(usage);
     }
 
+
     // Transform files that have webRequest usages
     return extension.files.map((file) => {
+
+        if(!file){
+            logger.error(extension, "File is null")
+            return;
+        }
+
         const usages = usagesByFile.get(file);
         if (!usages || usages.length === 0) {
             return file; // No changes needed

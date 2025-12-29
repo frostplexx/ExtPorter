@@ -33,6 +33,12 @@ export function analyzeMigrationChanges(extension: Extension, scores: Interestin
     // Estimate file modifications based on presence of common migration patterns
     let modifiedFileCount = 0;
     for (const file of extension.files) {
+
+        if (file == null) {
+            console.error(extension, "File is null");
+            break
+        }
+
         if (file.filetype === ExtFileType.JS) {
             try {
                 const content = file.getContent();

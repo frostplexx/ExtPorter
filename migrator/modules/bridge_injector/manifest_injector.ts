@@ -149,10 +149,10 @@ export function injectBridgeIntoManifest(
             }
         }
 
-        // Replace files in extension.files with transformed versions
+        // Replace files in `extension.files` with transformed versions
         if (transformedFiles.size > 0) {
             extension.files = extension.files.map((file) =>
-                transformedFiles.has(file.path) ? transformedFiles.get(file.path)! : file
+                transformedFiles.has(file!.path) ? transformedFiles.get(file!.path)! : file
             );
         }
     }

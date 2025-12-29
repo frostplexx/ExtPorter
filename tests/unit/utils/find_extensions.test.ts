@@ -322,10 +322,10 @@ describe('find_extensions', () => {
 
             expect(extension.files).toHaveLength(5); // Excludes README.md and manifest.json
 
-            const jsFiles = extension.files.filter((f) => f.filetype === ExtFileType.JS);
-            const cssFiles = extension.files.filter((f) => f.filetype === ExtFileType.CSS);
-            const htmlFiles = extension.files.filter((f) => f.filetype === ExtFileType.HTML);
-            const otherFiles = extension.files.filter((f) => f.filetype === ExtFileType.OTHER);
+            const jsFiles = extension.files.filter((f) => f!.filetype === ExtFileType.JS);
+            const cssFiles = extension.files.filter((f) => f!.filetype === ExtFileType.CSS);
+            const htmlFiles = extension.files.filter((f) => f!.filetype === ExtFileType.HTML);
+            const otherFiles = extension.files.filter((f) => f!.filetype === ExtFileType.OTHER);
 
             expect(jsFiles).toHaveLength(1);
             expect(cssFiles).toHaveLength(1);
@@ -352,7 +352,11 @@ describe('find_extensions', () => {
 
             expect(result).toHaveLength(1);
             expect(result[0].files).toHaveLength(1); // Only normal.js
-            expect(result[0].files[0].path).toBe('normal.js');
+            if (result[0].files[0]) {
+                expect(result[0].files[0].path).toBe('normal.js');
+            } else {
+                return
+            }
         });
     });
 

@@ -19,14 +19,15 @@ export function applyApiTransformations(
     mappings: TwinningMapping,
     filePath: string
 ): { transformedAST: ESTree.Node; transformationCount: number } {
+    // TODO: check if NOT cloning AST breaks anything
     // clone AST to avoid modifying original
     // stringifing and parsing the ast is really the way youre supposed to do it:
     // https://dev.to/fpaghar/copy-objects-ways-in-javascript-24gj
-    const transformedAST = JSON.parse(JSON.stringify(ast));
+    // const transformedAST = JSON.parse(JSON.stringify(ast));
     let transformationCount = 0;
 
     // traverse the AST
-    traverseAST(transformedAST, (node: any) => {
+    traverseAST(ast, (node: any) => {
         if (applySpecialTransforms(node)) {
             transformationCount++;
             return;
@@ -46,7 +47,7 @@ export function applyApiTransformations(
     // Add contextMenus.onClicked listener after all other transformations
     if (ContextMenuTransform.contextMenuCalls.length > 0) {
         ContextMenuTransform.addContextMenusOnClickedListener(
-            transformedAST,
+            ast,
             ContextMenuTransform.contextMenuCalls
         );
         // Clear the accumulated calls for the next file
@@ -60,7 +61,7 @@ export function applyApiTransformations(
         });
     }
 
-    return { transformedAST, transformationCount };
+    return { transformedAST: ast, transformationCount };
 }
 
 /**

@@ -86,7 +86,7 @@ describe('ResourceDownloader', () => {
                 expect(result.files).toHaveLength(2);
             }
 
-            extension.files.forEach((file) => file.close());
+            extension.files.forEach((file) => { if (file) { file.close() } });
         });
 
         it('should find and process remote resources in JavaScript files', () => {
@@ -126,7 +126,7 @@ describe('ResourceDownloader', () => {
                 expect(result.files.length).toBeGreaterThan(extension.files.length);
 
                 // Check that URLs were replaced in content
-                const contentFile = result.files.find((f) => f.path === 'content.js');
+                const contentFile = result.files.find((f) => f!.path === 'content.js');
                 expect(contentFile).toBeDefined();
                 if (contentFile) {
                     const content = contentFile.getContent();
@@ -135,9 +135,9 @@ describe('ResourceDownloader', () => {
                 }
             }
 
-            extension.files.forEach((file) => file.close());
+            extension.files.forEach((file) => { if (file) { file.close() } });
             if (!(result instanceof MigrationError)) {
-                result.files.forEach((file) => file.close());
+                result.files.forEach((file) => { if (file) { file.close() } });
             }
         });
 
@@ -169,7 +169,7 @@ describe('ResourceDownloader', () => {
 
             expect(result).not.toBeInstanceOf(MigrationError);
             if (!(result instanceof MigrationError)) {
-                const contentFile = result.files.find((f) => f.path === 'style.css');
+                const contentFile = result.files.find((f) => f!.path === 'style.css');
                 expect(contentFile).toBeDefined();
                 if (contentFile) {
                     const content = contentFile.getContent();
@@ -179,9 +179,9 @@ describe('ResourceDownloader', () => {
                 }
             }
 
-            extension.files.forEach((file) => file.close());
+            extension.files.forEach((file) => { if (file) { file.close() } });
             if (!(result instanceof MigrationError)) {
-                result.files.forEach((file) => file.close());
+                result.files.forEach((file) => { if (file) { file.close() } });
             }
         });
 
@@ -217,7 +217,7 @@ describe('ResourceDownloader', () => {
 
             expect(result).not.toBeInstanceOf(MigrationError);
             if (!(result instanceof MigrationError)) {
-                const contentFile = result.files.find((f) => f.path === 'popup.html');
+                const contentFile = result.files.find((f) => f!.path === 'popup.html');
                 expect(contentFile).toBeDefined();
                 if (contentFile) {
                     const content = contentFile.getContent();
@@ -227,9 +227,9 @@ describe('ResourceDownloader', () => {
                 }
             }
 
-            extension.files.forEach((file) => file.close());
+            extension.files.forEach((file) => { if (file) { file.close() } });
             if (!(result instanceof MigrationError)) {
-                result.files.forEach((file) => file.close());
+                result.files.forEach((file) => { if (file) { file.close() } });
             }
         });
 
@@ -262,9 +262,9 @@ describe('ResourceDownloader', () => {
                 }
             }
 
-            extension.files.forEach((file) => file.close());
+            extension.files.forEach((file) => { if (file) { file.close() } });
             if (!(result instanceof MigrationError)) {
-                result.files.forEach((file) => file.close());
+                result.files.forEach((file) => { if (file) { file.close() } });
             }
         });
 
@@ -296,12 +296,12 @@ describe('ResourceDownloader', () => {
             if (!(result instanceof MigrationError)) {
                 // Should have multiple downloaded files
                 const downloadedFiles = result.files.filter((f) =>
-                    f.path.startsWith('remote_resources/')
+                    f!.path.startsWith('remote_resources/')
                 );
                 expect(downloadedFiles.length).toBeGreaterThan(0);
 
                 // Check that all URLs were replaced
-                const contentFile = result.files.find((f) => f.path === 'content.js');
+                const contentFile = result.files.find((f) => f!.path === 'content.js');
                 expect(contentFile).toBeDefined();
                 if (contentFile) {
                     const content = contentFile.getContent();
@@ -315,9 +315,9 @@ describe('ResourceDownloader', () => {
                 }
             }
 
-            extension.files.forEach((file) => file.close());
+            extension.files.forEach((file) => { if (file) { file.close() } });
             if (!(result instanceof MigrationError)) {
-                result.files.forEach((file) => file.close());
+                result.files.forEach((file) => { if (file) { file.close() } });
             }
         });
 
@@ -348,7 +348,7 @@ describe('ResourceDownloader', () => {
 
             expect(result).not.toBeInstanceOf(MigrationError);
             if (!(result instanceof MigrationError)) {
-                const contentFile = result.files.find((f) => f.path === 'content.js');
+                const contentFile = result.files.find((f) => f!.path === 'content.js');
                 expect(contentFile).toBeDefined();
                 if (contentFile) {
                     const content = contentFile.getContent();
@@ -362,9 +362,9 @@ describe('ResourceDownloader', () => {
                 }
             }
 
-            extension.files.forEach((file) => file.close());
+            extension.files.forEach((file) => { if (file) { file.close() } });
             if (!(result instanceof MigrationError)) {
-                result.files.forEach((file) => file.close());
+                result.files.forEach((file) => { if (file) { file.close() } });
             }
         });
 
@@ -416,9 +416,9 @@ describe('ResourceDownloader', () => {
                 expect(resourceFiles.some((f) => f.endsWith('.js'))).toBe(true);
             }
 
-            extension.files.forEach((file) => file.close());
+            extension.files.forEach((file) => { if (file) { file.close() } });
             if (!(result instanceof MigrationError)) {
-                result.files.forEach((file) => file.close());
+                result.files.forEach((file) => { if (file) { file.close() } });
             }
         });
 
@@ -443,7 +443,7 @@ describe('ResourceDownloader', () => {
             }
 
             if (!(result instanceof MigrationError)) {
-                result.files.forEach((file) => file.close());
+                result.files.forEach((file) => { if (file) { file.close() } });
             }
         });
 
@@ -492,7 +492,7 @@ describe('ResourceDownloader', () => {
 
             expect(result).not.toBeInstanceOf(MigrationError);
             if (!(result instanceof MigrationError)) {
-                const testFile = result.files.find((f) => f.path === 'test.css');
+                const testFile = result.files.find((f) => f!.path === 'test.css');
                 expect(testFile).toBeDefined();
                 if (testFile) {
                     const content = testFile.getContent();
@@ -502,9 +502,9 @@ describe('ResourceDownloader', () => {
                 }
             }
 
-            extension.files.forEach((file) => file.close());
+            extension.files.forEach((file) => { if (file) { file.close() } });
             if (!(result instanceof MigrationError)) {
-                result.files.forEach((file) => file.close());
+                result.files.forEach((file) => { if (file) { file.close() } });
             }
         });
 
@@ -533,7 +533,7 @@ describe('ResourceDownloader', () => {
 
             expect(result).not.toBeInstanceOf(MigrationError);
             if (!(result instanceof MigrationError)) {
-                const testFile = result.files.find((f) => f.path === 'test.html');
+                const testFile = result.files.find((f) => f!.path === 'test.html');
                 expect(testFile).toBeDefined();
                 if (testFile) {
                     const content = testFile.getContent();
@@ -544,9 +544,9 @@ describe('ResourceDownloader', () => {
                 }
             }
 
-            extension.files.forEach((file) => file.close());
+            extension.files.forEach((file) => { if (file) { file.close() } });
             if (!(result instanceof MigrationError)) {
-                result.files.forEach((file) => file.close());
+                result.files.forEach((file) => { if (file) { file.close() } });
             }
         });
     });

@@ -64,7 +64,7 @@ export class ServiceWorkerCompat implements MigrationModule {
 
         result.serviceWorkerPath = serviceWorkerPath;
 
-        const swFile = extension.files.find((f) => f.path === serviceWorkerPath);
+        const swFile = extension.files.find((f) => f!.path === serviceWorkerPath);
         if (!swFile || swFile.filetype !== ExtFileType.JS) {
             return result;
         }
@@ -117,7 +117,7 @@ export class ServiceWorkerCompat implements MigrationModule {
         serviceWorkerPath: string,
         fixes: { hasWindowOnload: boolean; hasLocalStorage: boolean; hasDOMDownload: boolean }
     ): LazyFile | null {
-        const swFile = extension.files.find((f) => f.path === serviceWorkerPath);
+        const swFile = extension.files.find((f) => f!.path === serviceWorkerPath);
         if (!swFile) {
             return null;
         }
@@ -505,7 +505,7 @@ const storageHelper = {
             let updatedFiles = [...extension.files];
             if (transformedSW) {
                 updatedFiles = updatedFiles.map((f) =>
-                    f.path === transformedSW.path ? transformedSW : f
+                    f!.path === transformedSW.path ? transformedSW : f
                 );
             }
 

@@ -377,7 +377,7 @@ window.onload = function() {
 
             expect(result).not.toBeInstanceOf(MigrationError);
             if (!(result instanceof MigrationError)) {
-                const swFile = result.files.find((f) => f.path === 'background.js');
+                const swFile = result.files.find((f) => f!.path === 'background.js');
                 expect(swFile).toBeDefined();
                 const content = swFile!.getContent();
                 expect(content).toContain('async function initializeServiceWorker');
@@ -395,7 +395,7 @@ const val = localStorage.getItem('key');
 
             expect(result).not.toBeInstanceOf(MigrationError);
             if (!(result instanceof MigrationError)) {
-                const swFile = result.files.find((f) => f.path === 'background.js');
+                const swFile = result.files.find((f) => f!.path === 'background.js');
                 const content = swFile!.getContent();
                 expect(content).toContain('storageHelper');
                 expect(content).toContain('await storageHelper.set');
@@ -419,7 +419,7 @@ function exportFile() {
 
             expect(result).not.toBeInstanceOf(MigrationError);
             if (!(result instanceof MigrationError)) {
-                const swFile = result.files.find((f) => f.path === 'background.js');
+                const swFile = result.files.find((f) => f!.path === 'background.js');
                 const content = swFile!.getContent();
                 expect(content).toContain('chrome.downloads.download');
                 expect(result.manifest.permissions).toContain('downloads');
@@ -447,7 +447,7 @@ function exportData() {
 
             expect(result).not.toBeInstanceOf(MigrationError);
             if (!(result instanceof MigrationError)) {
-                const swFile = result.files.find((f) => f.path === 'background.js');
+                const swFile = result.files.find((f) => f!.path === 'background.js');
                 const content = swFile!.getContent();
 
                 expect(content).toContain('async function initializeServiceWorker');

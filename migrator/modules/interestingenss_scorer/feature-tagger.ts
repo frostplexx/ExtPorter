@@ -76,6 +76,12 @@ export class FeatureTagger {
         let hasMinified = false;
 
         for (const file of extension.files) {
+
+            if(file == null) {
+                logger.error(extension, "File is null");
+                break;
+            }
+
             if (file.filetype === ExtFileType.JS) {
                 try {
                     const content = file.getContent();
