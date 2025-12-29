@@ -549,8 +549,10 @@ export class MigrationServer {
                         }
                     }
 
-                    MemoryProfiler.takeHeapSnapshot(`after-${i}-extensions`);
-                    MemoryProfiler.printHeapStats();
+                    if (i % 100 == 0) {
+                        MemoryProfiler.takeHeapSnapshot(`after-${i}-extensions`);
+                        MemoryProfiler.printHeapStats();
+                    }
 
                     // Clear extension from memory thoroughly
                     const { clearExtensionMemory, forceGarbageCollection, shouldTriggerGC } =
