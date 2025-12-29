@@ -13,6 +13,13 @@ export class WriteMigrated implements MigrationModule {
                 extensionId: extension.id,
             });
 
+            extension.files.forEach(file => {
+                if (file) {
+                    file.releaseMemory();  // Clear cached content
+                    file.close();          // Close file descriptors
+                }
+            });
+
             return extension;
         } catch (error) {
             logger.error(extension, 'Failed to queue extension for writing', {

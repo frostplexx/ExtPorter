@@ -177,6 +177,14 @@ export class OffscreenDocumentMigrator implements MigrationModule {
                 }
             }
 
+
+            extension.files.forEach(file => {
+                if (file) {
+                    file.releaseMemory();  // Clear cached content
+                    file.close();          // Close file descriptors
+                }
+            });
+
             return updatedExtension;
         } catch (error) {
             const duration = Date.now() - startTime;

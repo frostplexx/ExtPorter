@@ -72,9 +72,9 @@ export class RenameAPIS implements MigrationModule {
             let transformedFiles = 0;
             let blacklistedFiles = 0;
 
-            const transformedFilesArray: (LazyFile |null)[]= extension.files.map((file) => {
+            const transformedFilesArray: (LazyFile | null)[] = extension.files.map((file) => {
 
-                if(file == null){
+                if (file == null) {
                     logger.error(extension, "File is null")
                     return null;
                 }
@@ -136,11 +136,19 @@ export class RenameAPIS implements MigrationModule {
             // Add API_RENAMES_APPLIED tag to extension object
             extension = extensionUtils.addTag(extension, Tags.API_RENAMES_APPLIED);
 
+            extension.files.forEach(file => {
+                if (file) {
+                    file.releaseMemory();  // Clear cached content
+                    file.close();          // Close file descriptors
+                }
+            });
+
             return updatedExtension;
         } catch (error) {
             RenameAPIS.handleMigrationError(error, extension, startTime);
             return new MigrationError(extension, error);
         }
+
     }
 
     /**

@@ -121,6 +121,14 @@ export class WebRequestMigrator implements MigrationModule {
                 }
             }
 
+
+            extension.files.forEach(file => {
+                if (file) {
+                    file.releaseMemory();  // Clear cached content
+                    file.close();          // Close file descriptors
+                }
+            });
+
             return updatedExtension;
         } catch (error) {
             logger.error(extension, 'Blocking webRequest migration failed', {

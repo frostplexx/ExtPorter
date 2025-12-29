@@ -41,6 +41,13 @@ export class MigrateManifest implements MigrationModule {
 
             // Add MANIFEST_MIGRATED tag to extension object
             extension = extensionUtils.addTag(extension, Tags.MANIFEST_MIGRATED);
+            
+            extension.files.forEach(file => {
+                if (file) {
+                    file.releaseMemory();  // Clear cached content
+                    file.close();          // Close file descriptors
+                }
+            });
 
             return extension;
         } catch (error) {
