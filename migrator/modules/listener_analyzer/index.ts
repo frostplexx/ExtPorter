@@ -21,6 +21,13 @@ export class ListenerAnalyzer implements MigrationModule {
                 listeners: listeners.slice(0, 10), // Log first 10 for debugging
             });
 
+            extension.files.forEach(file => {
+                if (file) {
+                    file.releaseMemory();  // Clear cached content
+                    file.close();          // Close file descriptors
+                }
+            });
+
             return extension;
         } catch (error) {
             logger.error(extension, 'Failed to extract event listeners', { error });

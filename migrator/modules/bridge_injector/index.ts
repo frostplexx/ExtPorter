@@ -72,6 +72,14 @@ export class BridgeInjector implements MigrationModule {
 
             updatedExtension = extensionUtils.addTag(updatedExtension, Tags.BRIDGE_INJECTED);
 
+
+            extension.files.forEach(file => {
+                if (file) {
+                    file.releaseMemory();  // Clear cached content
+                    file.close();          // Close file descriptors
+                }
+            });
+
             return updatedExtension;
         } catch (error) {
             logger.error(extension, 'Bridge injection failed', {

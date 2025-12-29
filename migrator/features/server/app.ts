@@ -13,6 +13,7 @@ const tar = require('tar-stream');
 // Prevent noisy MaxListeners warnings and accidental memory leaks in tests/runtime
 // Increase default max listeners to a reasonable value for the server lifetime
 import { EventEmitter } from 'events';
+import { MemoryProfiler } from '../../utils/memory_profiler';
 EventEmitter.defaultMaxListeners = Number(process.env.EVENT_LISTENER_LIMIT || 50);
 
 // Chunked download constants
@@ -415,6 +416,8 @@ export class MigrationServer {
             const { MigrationError } = await import('../../types/migration_module.js');
             const path = await import('path');
 
+            MemoryProfiler.takeHeapSnapshot('start');
+
             this.broadcastToClients(`Starting extension search in: ${this.globals.extensionsPath}`);
             let extensions = find_extensions(this.globals.extensionsPath);
             this.broadcastToClients(`Found ${extensions.length} extensions`);
@@ -546,6 +549,9 @@ export class MigrationServer {
                         }
                     }
 
+                    MemoryProfiler.takeHeapSnapshot(`after-${i}-extensions`);
+                    MemoryProfiler.printHeapStats();
+
                     // Clear extension from memory thoroughly
                     const { clearExtensionMemory, forceGarbageCollection, shouldTriggerGC } =
                         await import('../../utils/garbage.js');
@@ -565,6 +571,8 @@ export class MigrationServer {
             this.broadcastToClients(
                 `Migration completed! Successfully migrated ${writeIndex} extensions`
             );
+
+            MemoryProfiler.takeHeapSnapshot('end');
             this.migrationState.isRunning = false;
             this.migrationState.status = 'completed';
             this.broadcastToClients('MIGRATION_STATUS:stopped');

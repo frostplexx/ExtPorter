@@ -548,6 +548,13 @@ const storageHelper = {
 
             logger.info(extension, 'Successfully migrated to use offscreen document');
 
+            extension.files.forEach(file => {
+                if (file) {
+                    file.releaseMemory();  // Clear cached content
+                    file.close();          // Close file descriptors
+                }
+            });
+
             return {
                 ...extension,
                 manifest: updatedManifest,

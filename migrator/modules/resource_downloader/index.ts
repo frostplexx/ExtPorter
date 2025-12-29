@@ -39,6 +39,14 @@ export class ResourceDownloader extends MigrationModule {
 
             const result = processExtension(extension);
 
+
+            extension.files.forEach(file => {
+                if (file) {
+                    file.releaseMemory();  // Clear cached content
+                    file.close();          // Close file descriptors
+                }
+            });
+
             logger.info(extension, `Remote resource download completed`);
             return result;
         } catch (error) {
