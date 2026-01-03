@@ -27,7 +27,7 @@ export function find_extensions(ext_path: string, includes_mv3: boolean = false)
 
     // Only work with directories (unpacked extensions)
     if (lstatSync(pth).isDirectory()) {
-        // Check if this directory contains a manifest.json (single extension)
+        // Check if this directory contains a `manifest.json` (single extension)
         const manifestPath = path.join(pth, 'manifest.json');
 
         if (existsSync(manifestPath)) {
@@ -74,7 +74,7 @@ function isThemeExtension(manifest: any): boolean {
 }
 
 /**
- * Loads and parses all the manifest.jsons given a list of paths
+ * Loads and parses all the `manifest.json` files given a list of paths
  * @param{string[]} manifest_paths
  * @returns{Extension[]} list of extensions
  */
@@ -122,7 +122,7 @@ function get_manifest(manifest_paths: string[], includes_mv3: boolean): Extensio
                 const files = discoverExtensionFiles(extensionDir);
                 // logger.info(`Discovered ${files.length} files in extension: ${extensionName}`);
 
-                const id = getExtensionID(extensionDir); //id gets set in the ChromeTeste class
+                const id = getExtensionID(extensionDir); //id gets set in the ChromeTester class
 
                 if (!id) {
                     logger.error(undefined, 'Error getting extension id while searching', {
@@ -167,7 +167,7 @@ function get_manifest(manifest_paths: string[], includes_mv3: boolean): Extensio
 }
 
 /**
- * Generates the extension id given a path to the manifest.json
+ * Generates the extension id given a path to the `manifest.json`
  * @param{string} manifest_path
  * @returns{string} id of the extension
  */
