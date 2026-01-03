@@ -1,4 +1,4 @@
-migrator/logs/*
+*logs/*
 migrator/output/*
 migrator/extensions
 migrator/node_modules
