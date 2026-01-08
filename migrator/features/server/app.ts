@@ -27,6 +27,7 @@ const MAX_PAGE_SIZE = Number(process.env.MAX_PAGE_SIZE || 1000); // maximum page
 interface MigratorProcess {
     process: ChildProcess | null;
     clientId: string;
+    createdAt: number; // Track when the migrator was created
 }
 
 interface MigrationState {
@@ -36,6 +37,12 @@ interface MigrationState {
         current: number;
         total: number;
     };
+}
+
+// Track connection metadata for cleanup
+interface ConnectionMetadata {
+    connectedAt: number;
+    lastActivityAt: number;
 }
 
 export class MigrationServer {
@@ -57,7 +64,10 @@ export class MigrationServer {
 
     // Memory management: connection timeouts and periodic cleanup
     private readonly connectionTimeout = 5 * 60 * 1000; // 5 minutes inactivity timeout
+    private readonly maxConnectionAge = 60 * 60 * 1000; // 1 hour max connection age
+    private readonly maxMigratorAge = 30 * 60 * 1000; // 30 minutes max migrator age
     private connectionTimers: Map<WebSocket, NodeJS.Timeout> = new Map();
+    private connectionMetadata: Map<WebSocket, ConnectionMetadata> = new Map();
     private cleanupInterval: NodeJS.Timeout | null = null;
     private readonly cleanupIntervalMs = 60 * 1000; // Run cleanup every minute
 
@@ -223,8 +233,13 @@ export class MigrationServer {
         this.server.on('connection', (ws: WebSocket) => {
             console.log('New client connected');
 
-            // Add to connected clients
+            // Add to connected clients and track metadata
             this.connectedClients.add(ws);
+            const now = Date.now();
+            this.connectionMetadata.set(ws, {
+                connectedAt: now,
+                lastActivityAt: now,
+            });
 
             // Set initial connection timeout
             this.resetConnectionTimeout(ws);
@@ -245,6 +260,12 @@ export class MigrationServer {
             ws.on('message', (message: Buffer) => {
                 // Reset connection timeout on any activity
                 this.resetConnectionTimeout(ws);
+                
+                // Update last activity timestamp
+                const metadata = this.connectionMetadata.get(ws);
+                if (metadata) {
+                    metadata.lastActivityAt = Date.now();
+                }
 
                 const command = message.toString().trim();
                 console.log(`Received command from client: "${command}"`);
@@ -344,11 +365,16 @@ export class MigrationServer {
                 console.log('Client disconnected');
                 this.clearConnectionTimeout(ws);
                 this.connectedClients.delete(ws);
+                this.connectionMetadata.delete(ws);
             });
 
             // Handle errors
             ws.on('error', (error: Error) => {
                 console.error('WebSocket error:', error);
+                // Clean up on error as well
+                this.clearConnectionTimeout(ws);
+                this.connectedClients.delete(ws);
+                this.connectionMetadata.delete(ws);
             });
         });
 
@@ -612,6 +638,7 @@ export class MigrationServer {
         this.activeMigrators.set(clientId, {
             process: migratorProcess,
             clientId,
+            createdAt: Date.now(),
         });
 
         ws.send(`Starting migration for extension: ${extensionId}`);
@@ -1829,6 +1856,7 @@ export class MigrationServer {
 
     /**
      * Periodic cleanup of stale resources to prevent memory leaks
+     * MEMORY OPTIMIZATION: Now includes age-based cleanup for long-running connections
      */
     private async periodicCleanup(): Promise<void> {
         // Import garbage collection utilities dynamically to avoid circular deps
@@ -1836,29 +1864,115 @@ export class MigrationServer {
             '../../utils/garbage.js'
         );
 
-        // Clean up dead connections from connectedClients
+        const now = Date.now();
         let deadConnections = 0;
+        let agedOutConnections = 0;
+        let staleMigrators = 0;
+        let agedOutMigrators = 0;
+
+        // Clean up dead connections and connections that exceeded max age
         for (const client of this.connectedClients) {
+            let shouldRemove = false;
+            let reason = '';
+
             if (client.readyState !== WebSocket.OPEN) {
+                shouldRemove = true;
+                reason = 'dead';
+                deadConnections++;
+            } else {
+                // Check for aged out connections
+                const metadata = this.connectionMetadata.get(client);
+                if (metadata) {
+                    const connectionAge = now - metadata.connectedAt;
+                    const inactiveTime = now - metadata.lastActivityAt;
+                    
+                    if (connectionAge > this.maxConnectionAge) {
+                        shouldRemove = true;
+                        reason = 'max age exceeded';
+                        agedOutConnections++;
+                    } else if (inactiveTime > this.connectionTimeout * 2) {
+                        // Double-check for connections that might have missed the timeout
+                        shouldRemove = true;
+                        reason = 'inactive too long';
+                        agedOutConnections++;
+                    }
+                }
+            }
+
+            if (shouldRemove) {
+                try {
+                    if (client.readyState === WebSocket.OPEN) {
+                        client.close(1000, `Connection closed: ${reason}`);
+                    }
+                } catch {
+                    // Ignore close errors
+                }
                 this.connectedClients.delete(client);
                 this.clearConnectionTimeout(client);
-                deadConnections++;
+                this.connectionMetadata.delete(client);
             }
         }
 
-        // Clean up stale migrators (processes that have exited)
-        let staleMigrators = 0;
+        // Clean up stale migrators (processes that have exited or exceeded max age)
         for (const [clientId, migrator] of this.activeMigrators) {
+            let shouldRemove = false;
+
             if (migrator.process && migrator.process.killed) {
-                this.activeMigrators.delete(clientId);
+                shouldRemove = true;
                 staleMigrators++;
+            } else if (migrator.createdAt && (now - migrator.createdAt) > this.maxMigratorAge) {
+                // Migrator exceeded max age - kill it and cleanup listeners
+                if (migrator.process && !migrator.process.killed) {
+                    try {
+                        // Remove event listeners to prevent memory leaks
+                        migrator.process.stdout?.removeAllListeners();
+                        migrator.process.stderr?.removeAllListeners();
+                        migrator.process.removeAllListeners();
+                        migrator.process.kill('SIGTERM');
+                    } catch {
+                        // Ignore kill errors
+                    }
+                }
+                shouldRemove = true;
+                agedOutMigrators++;
+            }
+
+            if (shouldRemove) {
+                // Ensure listeners are cleaned up for any remaining process reference
+                if (migrator.process) {
+                    try {
+                        migrator.process.stdout?.removeAllListeners();
+                        migrator.process.stderr?.removeAllListeners();
+                        migrator.process.removeAllListeners();
+                    } catch {
+                        // Ignore cleanup errors
+                    }
+                }
+                this.activeMigrators.delete(clientId);
+            }
+        }
+
+        // Clean up orphaned metadata entries (defensive cleanup)
+        for (const client of this.connectionMetadata.keys()) {
+            if (!this.connectedClients.has(client)) {
+                this.connectionMetadata.delete(client);
+            }
+        }
+        for (const client of this.connectionTimers.keys()) {
+            if (!this.connectedClients.has(client)) {
+                const timer = this.connectionTimers.get(client);
+                if (timer) clearTimeout(timer);
+                this.connectionTimers.delete(client);
             }
         }
 
         // Log cleanup stats if anything was cleaned
-        if (deadConnections > 0 || staleMigrators > 0) {
+        const totalCleaned = deadConnections + agedOutConnections + staleMigrators + agedOutMigrators;
+        if (totalCleaned > 0) {
             console.log(
-                `[Cleanup] Removed ${deadConnections} dead connections, ${staleMigrators} stale migrators`
+                `[Cleanup] Removed: ${deadConnections} dead connections, ${agedOutConnections} aged connections, ` +
+                `${staleMigrators} stale migrators, ${agedOutMigrators} aged migrators. ` +
+                `Active: ${this.connectedClients.size} clients, ${this.activeMigrators.size} migrators`
             );
         }
 
@@ -1885,10 +1999,25 @@ export class MigrationServer {
         }
         this.connectionTimers.clear();
 
-        // Stop all active migrators
+        // Flush any pending write operations
+        try {
+            const { WriteQueue } = await import('../../modules/write_extension/write-queue.js');
+            await WriteQueue.shared.flush();
+        } catch (err) {
+            console.error('[close] Failed to flush write queue:', err);
+        }
+
+        // Stop all active migrators and clean up their listeners
         for (const migrator of this.activeMigrators.values()) {
             if (migrator.process) {
-                migrator.process.kill('SIGTERM');
+                try {
+                    migrator.process.stdout?.removeAllListeners();
+                    migrator.process.stderr?.removeAllListeners();
+                    migrator.process.removeAllListeners();
+                    migrator.process.kill('SIGTERM');
+                } catch {
+                    // Ignore cleanup errors
+                }
             }
         }
         this.activeMigrators.clear();

@@ -163,12 +163,20 @@ const MAX_META_SIZE = 10 * 1024 * 1024; // 10MB max for meta field
 const ERROR_LOG_RATE_LIMIT = 100; // Maximum error logs per interval
 const ERROR_LOG_RATE_INTERVAL = 1000; // 1 second interval for rate limiting
 const MAX_LOG_BATCH_SIZE = 100; // Maximum batch size to prevent memory issues
+const MAX_LOG_RETRY_COUNT = 3; // Maximum number of retries before discarding a log entry
 
-let logBatch: any[] = [];
+// Internal type for tracking log retries
+interface BatchedLogEntry {
+    entry: any;
+    retryCount: number;
+}
+
+let logBatch: BatchedLogEntry[] = [];
 let batchTimer: NodeJS.Timeout | null = null;
 let errorLogCount = 0;
 let lastErrorReset = Date.now();
 let droppedLogCount = 0; // Track dropped logs for monitoring
+let discardedDueToRetries = 0; // Track logs discarded after max retries
 
 /**
  * Flush log batch to database in smaller chunks
@@ -196,12 +204,12 @@ async function flushLogBatch() {
     }
 
     // Split into smaller chunks to prevent MongoDB buffer overflow
-    const chunks = [];
+    const chunks: BatchedLogEntry[][] = [];
     for (let i = 0; i < logsToFlush.length; i += MAX_MONGODB_BATCH_SIZE) {
         chunks.push(logsToFlush.slice(i, i + MAX_MONGODB_BATCH_SIZE));
     }
 
-    const failedLogs = [];
+    const failedLogs: BatchedLogEntry[] = [];
 
     for (const chunk of chunks) {
         // Check shutdown status before each chunk to handle mid-flush shutdowns
@@ -211,12 +219,14 @@ async function flushLogBatch() {
         }
 
         try {
-            if (chunk.length === 1) {
+            // Extract the actual log entries for database insertion
+            const entries = chunk.map(b => b.entry);
+            if (entries.length === 1) {
                 // Use single insert for individual documents
-                await Database.shared.insertLog(chunk[0]);
+                await Database.shared.insertLog(entries[0]);
             } else {
-                // Use bulk insert for multiple documents (should not happen with MAX_MONGODB_BATCH_SIZE = 1)
-                await Database.shared.insertManyLogs(chunk);
+                // Use bulk insert for multiple documents
+                await Database.shared.insertManyLogs(entries);
             }
         } catch (error) {
             console.error(`Failed to flush log chunk (${chunk.length} logs) to database:`, error);
@@ -228,8 +238,21 @@ async function flushLogBatch() {
                 console.warn(`Database closed, discarding ${chunk.length} logs`);
                 continue;
             }
-            // Collect failed chunks for retry
-            failedLogs.push(...chunk);
+            // Increment retry count and collect failed chunks for retry
+            for (const batchedLog of chunk) {
+                batchedLog.retryCount++;
+                if (batchedLog.retryCount >= MAX_LOG_RETRY_COUNT) {
+                    // Discard logs that have exceeded retry limit
+                    discardedDueToRetries++;
+                    if (discardedDueToRetries % 100 === 1) {
+                        console.warn(
+                            `[LOGGER] Discarded ${discardedDueToRetries} total logs after ${MAX_LOG_RETRY_COUNT} retry attempts`
+                        );
+                    }
+                } else {
+                    failedLogs.push(batchedLog);
+                }
+            }
         }
     }
 
@@ -293,7 +316,8 @@ function addLogToBatch(
         }
 
         const logEntry = formatLog(extension, message, level, meta);
-        logBatch.push(logEntry);
+        // Wrap log entry with retry tracking
+        logBatch.push({ entry: logEntry, retryCount: 0 });
 
         // Schedule periodic flush if not already scheduled
         if (!batchTimer && Database.shared.database) {
@@ -418,6 +442,8 @@ export const logger = {
     getStats: () => ({
         batchSize: logBatch.length,
         droppedCount: droppedLogCount,
+        discardedDueToRetries: discardedDueToRetries,
         maxBatchSize: MAX_LOG_BATCH_SIZE,
+        maxRetryCount: MAX_LOG_RETRY_COUNT,
     }),
 };

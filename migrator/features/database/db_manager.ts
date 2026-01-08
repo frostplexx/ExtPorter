@@ -40,6 +40,8 @@ export class Database {
         Number(process.env.DB_QUEUE_WARN_INTERVAL_MS) || 5000;
     private readonly queueWaitTimeoutMs: number =
         Number(process.env.DB_QUEUE_WAIT_TIMEOUT_MS) || 30000;
+    // Maximum waiters to prevent unbounded memory growth under extreme load
+    private readonly maxQueueWaiters: number = 500;
 
     private constructor() {
         // Queue processor will be started after database initialization
@@ -226,6 +228,15 @@ export class Database {
             );
             this.lastQueueWarnTime = now;
             this.queueWasFull = true;
+        }
+
+        // Reject immediately if too many waiters are already queued (prevents unbounded memory growth)
+        if (this.queueWaiters.length >= this.maxQueueWaiters) {
+            logger.error(
+                null,
+                `Database waiter queue full (${this.queueWaiters.length}/${this.maxQueueWaiters}), rejecting operation`
+            );
+            return Promise.reject(new Error(`Database waiter queue full (${this.maxQueueWaiters} waiters)`));
         }
 
         // Wait for space up to configured timeout. If timeout expires, reject to prevent indefinite blocking.
