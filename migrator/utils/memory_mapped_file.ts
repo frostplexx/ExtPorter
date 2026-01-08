@@ -68,6 +68,8 @@ export class MMapFile implements MemoryMappedFile {
     /**
      * Get file content as a UTF-8 string.
      * Content is cached after first read.
+     * MEMORY OPTIMIZATION: Buffer is released after string conversion to avoid
+     * storing file content twice (as Buffer AND string).
      */
     getContent(): string {
         if (this._content !== undefined) {
@@ -75,11 +77,16 @@ export class MMapFile implements MemoryMappedFile {
         }
         this.ensureLoaded();
         this._content = this.buffer!.toString('utf-8');
+        // Release buffer after string conversion - we only need one representation
+        // This prevents storing file content twice (Buffer + String)
+        this.buffer = null;
         return this._content;
     }
 
     /**
      * Get raw file content as a Buffer.
+     * Note: If getContent() was previously called, this will re-read from disk
+     * since the buffer is released after string conversion to save memory.
      */
     getBuffer(): Buffer {
         this.ensureLoaded();
@@ -99,19 +106,23 @@ export class MMapFile implements MemoryMappedFile {
 
     /**
      * Check if file content is currently loaded in memory.
+     * Returns true if either buffer or string content is available.
      */
     isLoaded(): boolean {
-        return this._loaded && this.buffer !== null;
+        return (this._loaded && this.buffer !== null) || this._content !== undefined;
     }
 
     /**
      * Get memory usage of this file in bytes.
      * Returns 0 if content is not loaded.
+     * Note: After getContent() is called, only the string representation is kept
+     * (buffer is released to save memory).
      */
     getMemoryUsage(): number {
-        if (!this.buffer) return 0;
-        // Buffer size + approximate string size (if cached)
-        let usage = this.buffer.length;
+        let usage = 0;
+        if (this.buffer) {
+            usage += this.buffer.length;
+        }
         if (this._content) {
             usage += this._content.length * 2; // UTF-16 internal representation
         }

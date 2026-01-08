@@ -41,6 +41,7 @@ export class ExtensionFixer {
     // Memory management limits
     private readonly maxFileCacheSize: number = 50; // Maximum number of files to cache for diffs
     private readonly maxConversationMessages: number = 100; // Maximum conversation history length
+    private readonly maxToolCallHistory: number = 200; // Maximum tool call history length
 
     // Tracking data for database storage
     private conversationHistory: LLMMessage[] = [];
@@ -402,6 +403,9 @@ Please analyze the issues and fix them. Start by listing the files you need to e
                 this.toolCallHistory.push(toolCallRecord);
             }
 
+            // Trim tool call history to prevent memory growth
+            this.trimToolCallHistory();
+
             // Add LLM response and tool results to conversation
             messages.push({ role: 'assistant', content: response });
             const toolResultsMessage = `Tool Results:\n\n${toolResults.join('\n\n---\n\n')}\n\nContinue analyzing or making fixes. When done, respond with DONE.`;
@@ -478,14 +482,40 @@ Please analyze the issues and fix them. Start by listing the files you need to e
     }
 
     /**
+     * Trim tool call history to prevent unbounded memory growth.
+     * Keeps only the most recent tool calls.
+     */
+    private trimToolCallHistory(): void {
+        if (this.toolCallHistory.length <= this.maxToolCallHistory) {
+            return;
+        }
+
+        // Remove oldest entries, keeping most recent
+        const toRemove = this.toolCallHistory.length - this.maxToolCallHistory;
+        this.toolCallHistory.splice(0, toRemove);
+        logger.debug(
+            null,
+            `Trimmed ${toRemove} entries from tool call history (limit: ${this.maxToolCallHistory})`
+        );
+    }
+
+    /**
      * Clean up all caches and resources after fix completes.
      * Should be called in finally block.
+     * MEMORY OPTIMIZATION: Explicitly clear all arrays and maps to help GC
      */
     cleanup(): void {
-        this.conversationHistory = [];
-        this.toolCallHistory = [];
-        this.fileDiffs = [];
+        // Clear arrays by setting length to 0 (faster than reassignment)
+        this.conversationHistory.length = 0;
+        this.toolCallHistory.length = 0;
+        this.fileDiffs.length = 0;
+        
+        // Clear the file content cache
         this.fileContentCache.clear();
+        
+        // Reset iteration counter
+        this.iterations = 0;
+        
         logger.debug(null, 'ExtensionFixer cleanup completed');
     }
 

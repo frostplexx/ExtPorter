@@ -133,23 +133,36 @@ export function checkMemoryThreshold(): boolean {
 
 /**
  * Clear all memory associated with an extension
- * This should be called after an extension has been fully processed
+ * This should be called after an extension has been fully processed.
+ * MEMORY OPTIMIZATION: This function aggressively releases all large objects
+ * to prevent memory accumulation during batch processing.
  */
 export function clearExtensionMemory(extension: Extension): void {
-    // Close all file descriptors
+    // Close all file descriptors first (this calls close() which releases AST and content)
     extensionUtils.closeExtensionFiles(extension);
 
-    // Clear file contents and ASTs from memory
-    extension.files.forEach((file) => {
-        // Use releaseMemory for new interface, fall back to cleanContent
-        if (file && file.releaseMemory) {
-            file.releaseMemory();
-        } else {
-            logger.warn(extension, "Can't clean memory for file because it is null")
+    // Clear file contents and ASTs from memory (redundant but ensures cleanup)
+    for (let i = 0; i < extension.files.length; i++) {
+        const file = extension.files[i];
+        if (file) {
+            // Use releaseMemory for new interface, fall back to cleanContent
+            if (file.releaseMemory) {
+                file.releaseMemory();
+            }
+            // Also call close() to ensure file descriptors are released
+            if (file.close) {
+                try {
+                    file.close();
+                } catch {
+                    // Ignore close errors - file might already be closed
+                }
+            }
+            // Nullify the reference immediately to help GC
+            extension.files[i] = null as any;
         }
-    });
+    }
 
-    // Clear the files array
+    // Clear the files array completely
     extension.files.length = 0;
 
     // Clear large manifest data (keep minimal info for logging)
@@ -172,6 +185,26 @@ export function clearExtensionMemory(extension: Extension): void {
         };
         // Replace the full object with just the summary
         extension.fakeium_validation = summary as any;
+    }
+
+    // Clear event listeners if present (can be large arrays with code snippets)
+    if (extension.event_listeners) {
+        extension.event_listeners.length = 0;
+    }
+
+    // Clear CWS info large fields (descriptions and images can be large)
+    if (extension.cws_info) {
+        // Keep minimal data, clear description and images
+        const minimalCws = {
+            description: '', // Clear long description
+            images: {
+                screenshots: [],
+                videoThumbnails: [],
+                videoEmbeds: [],
+            },
+            details: extension.cws_info.details, // Keep small details object
+        };
+        extension.cws_info = minimalCws as any;
     }
 }
 
