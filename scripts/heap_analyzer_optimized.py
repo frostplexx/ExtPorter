@@ -63,7 +63,9 @@ class AnalysisConfig:
     """Configuration for heap analysis optimization"""
 
     # Performance settings
-    max_workers: int = field(default_factory=lambda: mp.cpu_count())
+    max_workers: int = field(
+        default_factory=lambda: min(32, max(1, mp.cpu_count()))
+    )  # Cap at 32 workers
     chunk_size_mb: int = 64  # Size of chunks for streaming processing
     memory_limit_gb: float = 8.0  # Memory limit for analysis
     use_streaming: bool = True  # Use streaming parser for large files

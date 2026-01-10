@@ -420,7 +420,8 @@ export class MigrationServer {
 
         try {
             // Import migration dependencies dynamically to avoid circular dependencies
-            const { find_extensions } = await import('../../utils/find_extensions.js');
+            // Use iterator pattern to avoid loading all extensions into memory at once
+            const { find_extensions_iterator, count_extensions } = await import('../../utils/find_extensions.js');
             // logger is imported but not used in this scope - it's used elsewhere in the codebase
             const { logger } = await import('../../utils/logger.js');
             const { RenameAPIS } = await import('../../modules/api_renames/index.js');
@@ -445,19 +446,13 @@ export class MigrationServer {
             MemoryProfiler.takeHeapSnapshot('start');
 
             this.broadcastToClients(`Starting extension search in: ${this.globals.extensionsPath}`);
-            let extensions = find_extensions(this.globals.extensionsPath);
-            this.broadcastToClients(`Found ${extensions.length} extensions`);
+            
+            // Count extensions first (low memory operation) for progress tracking
+            const totalExtensions = count_extensions(this.globals.extensionsPath);
+            this.broadcastToClients(`Found ${totalExtensions} extensions`);
 
-            // Filter out new-tab extensions if setting is enabled
+            // Filter setting for new-tab extensions
             const filterNewTab = process.env.FILTER_NEW_TAB_EXTENSIONS === 'true';
-            if (filterNewTab) {
-                const originalCount = extensions.length;
-                extensions = extensions.filter((extension) => !extension.isNewTabExtension);
-                const filteredCount = originalCount - extensions.length;
-                if (filteredCount > 0) {
-                    this.broadcastToClients(`Filtered out ${filteredCount} new-tab extensions`);
-                }
-            }
 
             // Migration modules
             const migrationModules = [
@@ -473,127 +468,126 @@ export class MigrationServer {
             ];
 
             const BATCH_SIZE = parseInt(process.env.MIGRATION_BATCH_SIZE || '10');
-            const totalExtensions = extensions.length;
             this.migrationState.progress.total = totalExtensions;
             let writeIndex = 0;
             let processedCount = 0;
+            let filteredCount = 0;
 
             this.broadcastToClients(
-                `Processing ${totalExtensions} extensions in batches of ${BATCH_SIZE}`
+                `Processing ${totalExtensions} extensions (streaming one at a time for memory efficiency)`
             );
 
-            // Process extensions in batches
-            for (let batchStart = 0; batchStart < totalExtensions; batchStart += BATCH_SIZE) {
+            // Use iterator to process extensions one at a time - never hold all in memory
+            const extensionIterator = find_extensions_iterator(this.globals.extensionsPath);
+            
+            for (const rawExtension of extensionIterator) {
                 // Check if migration was stopped
                 if (!this.migrationState.isRunning) {
                     this.broadcastToClients('Migration stopped by user');
                     break;
                 }
 
-                const batchEnd = Math.min(batchStart + BATCH_SIZE, totalExtensions);
-                const batchNumber = Math.floor(batchStart / BATCH_SIZE) + 1;
-                const totalBatches = Math.ceil(totalExtensions / BATCH_SIZE);
+                // Filter out new-tab extensions if setting is enabled
+                if (filterNewTab && rawExtension.isNewTabExtension) {
+                    filteredCount++;
+                    continue;
+                }
 
-                this.broadcastToClients(
-                    `Processing batch ${batchNumber}/${totalBatches}: extensions ${batchStart + 1}-${batchEnd}`
-                );
+                let extension = rawExtension;
+                let migrationSuccessful = true;
 
-                // Process each extension in the current batch
-                for (let i = batchStart; i < batchEnd; i++) {
-                    // Check if migration was stopped
-                    if (!this.migrationState.isRunning) {
-                        this.broadcastToClients('Migration stopped by user');
+                // Run through migration pipeline (excluding WriteMigrated for now)
+                const migrationOnly = migrationModules.slice(0, -1);
+                for (const migrateFunction of migrationOnly) {
+                    const migrated = await migrateFunction(extension);
+                    if (migrated && !(migrated instanceof MigrationError)) {
+                        extension = migrated;
+                    } else {
+                        migrationSuccessful = false;
                         break;
-                    }
-
-                    let extension = extensions[i];
-                    let migrationSuccessful = true;
-
-                    // Run through migration pipeline (excluding WriteMigrated for now)
-                    const migrationOnly = migrationModules.slice(0, -1);
-                    for (const migrateFunction of migrationOnly) {
-                        const migrated = await migrateFunction(extension);
-                        if (migrated && !(migrated instanceof MigrationError)) {
-                            extension = migrated;
-                        } else {
-                            migrationSuccessful = false;
-                            break;
-                        }
-                    }
-
-                    processedCount++;
-                    if (processedCount % 10 === 0 && global.gc) {
-                        global.gc(); // Force GC every 10 extensions
-
-                        const used = process.memoryUsage();
-                        logger.info(null, `GC after ${processedCount} extensions: ${Math.round(used.heapUsed / 1024 / 1024)}MB`);
-                    }
-
-                    // Write the migrated extension to disk
-                    if (migrationSuccessful) {
-                        try {
-                            const useNewTabSubfolder = process.env.NEW_TAB_SUBFOLDER === 'true';
-                            const isNewTab = extension.isNewTabExtension || false;
-                            const extensionId = extension.mv3_extension_id || extension.id;
-
-
-                            let outputPath: string;
-                            if (useNewTabSubfolder && isNewTab) {
-                                outputPath = path.join(
-                                    this.globals.outputDir,
-                                    'new_tab_extensions',
-                                    extensionId
-                                );
-                            } else {
-                                outputPath = path.join(this.globals.outputDir, extensionId);
-                            }
-
-                            await WriteQueue.shared.writeExtensionSync(extension, outputPath);
-
-                            // Insert migrated extension to database
-                            const Database = (await import('../database/db_manager.js')).Database;
-                            const dbExtension = {
-                                ...extension,
-                                manifest_v3_path: outputPath,
-                                files: [],
-                            };
-
-                            await Database.shared.insertMigratedExtension(dbExtension);
-                            writeIndex++;
-                            this.migrationState.progress.current = writeIndex;
-
-                            if (writeIndex % 5 === 0) {
-                                this.broadcastToClients(
-                                    `Progress: ${writeIndex}/${totalExtensions} extensions migrated`
-                                );
-                            }
-                        } catch (writeError) {
-                            migrationSuccessful = false;
-                            this.broadcastToClients(
-                                `Error writing extension ${extension.name}: ${writeError instanceof Error ? writeError.message : String(writeError)}`
-                            );
-                        }
-                    }
-
-                    if (i % 100 == 0) {
-                        MemoryProfiler.takeHeapSnapshot(`after-${i}-extensions`);
-                        MemoryProfiler.printHeapStats();
-                    }
-
-                    // Clear extension from memory thoroughly
-                    const { clearExtensionMemory, forceGarbageCollection, shouldTriggerGC } =
-                        await import('../../utils/garbage.js');
-                    clearExtensionMemory(extension);
-                    extensions[i] = null as any;
-
-                    // Trigger GC periodically during migration
-                    if (writeIndex % 10 === 0 && shouldTriggerGC(16)) {
-                        forceGarbageCollection();
                     }
                 }
 
-                await WriteQueue.shared.flush();
-                this.broadcastToClients(`Completed batch ${batchNumber}/${totalBatches}`);
+                processedCount++;
+                if (processedCount % 10 === 0 && global.gc) {
+                    global.gc(); // Force GC every 10 extensions
+
+                    const used = process.memoryUsage();
+                    logger.info(null, `GC after ${processedCount} extensions: ${Math.round(used.heapUsed / 1024 / 1024)}MB`);
+                }
+
+                // Write the migrated extension to disk
+                if (migrationSuccessful) {
+                    try {
+                        const useNewTabSubfolder = process.env.NEW_TAB_SUBFOLDER === 'true';
+                        const isNewTab = extension.isNewTabExtension || false;
+                        const extensionId = extension.mv3_extension_id || extension.id;
+
+                        let outputPath: string;
+                        if (useNewTabSubfolder && isNewTab) {
+                            outputPath = path.join(
+                                this.globals.outputDir,
+                                'new_tab_extensions',
+                                extensionId
+                            );
+                        } else {
+                            outputPath = path.join(this.globals.outputDir, extensionId);
+                        }
+
+                        await WriteQueue.shared.writeExtensionSync(extension, outputPath);
+
+                        // Insert migrated extension to database
+                        const Database = (await import('../database/db_manager.js')).Database;
+                        const dbExtension = {
+                            ...extension,
+                            manifest_v3_path: outputPath,
+                            files: [],
+                        };
+
+                        await Database.shared.insertMigratedExtension(dbExtension);
+                        writeIndex++;
+                        this.migrationState.progress.current = writeIndex;
+
+                        if (writeIndex % 5 === 0) {
+                            this.broadcastToClients(
+                                `Progress: ${writeIndex}/${totalExtensions} extensions migrated`
+                            );
+                        }
+                    } catch (writeError) {
+                        migrationSuccessful = false;
+                        this.broadcastToClients(
+                            `Error writing extension ${extension.name}: ${writeError instanceof Error ? writeError.message : String(writeError)}`
+                        );
+                    }
+                }
+
+                if (processedCount % 100 === 0) {
+                    MemoryProfiler.takeHeapSnapshot(`after-${processedCount}-extensions`);
+                    MemoryProfiler.printHeapStats();
+                }
+
+                // Clear extension from memory thoroughly
+                const { clearExtensionMemory, forceGarbageCollection, shouldTriggerGC } =
+                    await import('../../utils/garbage.js');
+                clearExtensionMemory(extension);
+
+                // Trigger GC periodically during migration
+                if (processedCount % 10 === 0 && shouldTriggerGC(16)) {
+                    forceGarbageCollection();
+                }
+
+                // Flush write queue periodically
+                if (processedCount % BATCH_SIZE === 0) {
+                    await WriteQueue.shared.flush();
+                    this.broadcastToClients(`Processed ${processedCount}/${totalExtensions} extensions`);
+                }
+            }
+
+            // Final flush
+            await WriteQueue.shared.flush();
+            
+            if (filteredCount > 0) {
+                this.broadcastToClients(`Filtered out ${filteredCount} new-tab extensions`);
             }
 
             this.broadcastToClients(

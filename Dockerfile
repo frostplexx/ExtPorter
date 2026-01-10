@@ -4,6 +4,7 @@ FROM node:22-slim
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
     git \
+    procps \
     && rm -rf /var/lib/apt/lists/*
 
 # Create user with matching host UID/GID
@@ -39,11 +40,13 @@ COPY scripts/ ./scripts/
 # Create directories that the application expects
 RUN mkdir -p logs output cws
 
-# Set Node.js memory options
-ENV NODE_OPTIONS="--max-old-space-size=128000 --max-semi-space-size=512 --expose-gc"
+# Make bootstrap script executable
+USER root
+RUN chmod +x /app/scripts/start-server.sh
+USER migrator_user
 
 # Expose WebSocket server port
 EXPOSE 8080
 
-# Default command - start the migration server
-CMD ["yarn", "server"]
+# Default command - use bootstrap script that auto-detects RAM and sets NODE_OPTIONS
+CMD ["/app/scripts/start-server.sh"]

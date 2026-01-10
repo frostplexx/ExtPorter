@@ -172,7 +172,11 @@ export function createTransformedFile(
     originalFile: AbstractFile,
     newContent: string
 ): AbstractFile {
-    const contentBuffer = Buffer.from(newContent, 'utf8');
+    // Use a wrapper object so content can be released later
+    let contentRef: { content: string; buffer: Buffer | null } | null = {
+        content: newContent,
+        buffer: null, // Lazily create buffer only when needed
+    };
     let cachedAST: ESTree.Node | undefined;
     let astParsed = false;
 
@@ -181,15 +185,28 @@ export function createTransformedFile(
         filetype: originalFile.filetype,
 
         getContent(): string {
-            return newContent;
+            if (!contentRef) {
+                throw new Error(`File content has been released: ${originalFile.path}`);
+            }
+            return contentRef.content;
         },
 
         getBuffer(): Buffer {
-            return contentBuffer;
+            if (!contentRef) {
+                throw new Error(`File content has been released: ${originalFile.path}`);
+            }
+            // Lazily create buffer to avoid double memory usage
+            if (!contentRef.buffer) {
+                contentRef.buffer = Buffer.from(contentRef.content, 'utf8');
+            }
+            return contentRef.buffer;
         },
 
         getSize(): number {
-            return contentBuffer.length;
+            if (!contentRef) {
+                return 0;
+            }
+            return contentRef.buffer ? contentRef.buffer.length : Buffer.byteLength(contentRef.content, 'utf8');
         },
 
         getAST(): ESTree.Node | undefined {
@@ -202,8 +219,12 @@ export function createTransformedFile(
                 return undefined;
             }
 
+            if (!contentRef) {
+                return undefined;
+            }
+
             try {
-                cachedAST = espree.parse(newContent, {
+                cachedAST = espree.parse(contentRef.content, {
                     ecmaVersion: 'latest',
                     sourceType: 'script',
                     loc: true,
@@ -211,7 +232,7 @@ export function createTransformedFile(
                 } as any) as ESTree.Program;
             } catch {
                 try {
-                    cachedAST = espree.parse(newContent, {
+                    cachedAST = espree.parse(contentRef.content, {
                         ecmaVersion: 'latest',
                         sourceType: 'module',
                         loc: true,
@@ -226,20 +247,28 @@ export function createTransformedFile(
         },
 
         close(): void {
-            // No-op for in-memory transformed files
+            // Release all memory
+            contentRef = null;
             cachedAST = undefined;
             astParsed = false;
         },
 
         releaseMemory(): void {
-            // Clear AST cache for in-memory files
+            // Clear AST cache but keep content for potential re-use
             cachedAST = undefined;
             astParsed = false;
+            // Release buffer to save memory (can be recreated from content)
+            if (contentRef) {
+                contentRef.buffer = null;
+            }
         },
 
         cleanContent(): AbstractFile {
             cachedAST = undefined;
             astParsed = false;
+            if (contentRef) {
+                contentRef.buffer = null;
+            }
             return transformedFile;
         },
     };
