@@ -13,7 +13,6 @@ ARG GROUP_ID=424242
 RUN groupadd -g $GROUP_ID migrator_group 2>/dev/null || groupmod -n migrator_group $(getent group $GROUP_ID | cut -d: -f1) && \
     useradd -u $USER_ID -g $GROUP_ID -m -s /bin/bash migrator_user 2>/dev/null || usermod -l migrator_user -d /home/migrator_user -m $(getent passwd $USER_ID | cut -d: -f1)
 
-USER migrator_user
 # Set working directory
 WORKDIR /app
 
@@ -43,6 +42,8 @@ RUN mkdir -p logs output cws
 
 # Make bootstrap script executable
 RUN chmod +x /app/scripts/start-server.sh
+
+RUN chown /app/logs migrator_user
 
 # Expose WebSocket server port
 EXPOSE 8080
