@@ -1,5 +1,6 @@
 // migrator/utils/memory_profiler.ts
 import * as v8 from 'v8';
+import * as fs from 'fs';
 import * as path from 'path';
 
 export class MemoryProfiler {
@@ -8,13 +9,35 @@ export class MemoryProfiler {
      */
     static takeHeapSnapshot(label: string = 'snapshot'): string {
         const filename = `heap-${label}-${Date.now()}.heapsnapshot`;
-        const filepath = path.join(process.cwd(), 'logs', filename);
+        const logsDir = path.join(process.cwd(), 'logs');
+        
+        // Ensure logs directory exists
+        try {
+            if (!fs.existsSync(logsDir)) {
+                fs.mkdirSync(logsDir, { recursive: true });
+            }
+        } catch (err) {
+            console.error(`Failed to create logs directory: ${err}`);
+            // Fall back to /tmp if logs directory is not writable
+            const tmpPath = path.join('/tmp', filename);
+            console.log(`Falling back to tmp directory: ${tmpPath}`);
+            return v8.writeHeapSnapshot(tmpPath);
+        }
+        
+        const filepath = path.join(logsDir, filename);
         
         console.log(`Taking heap snapshot: ${filename}`);
-        const snapshot = v8.writeHeapSnapshot(filepath);
-        console.log(`Heap snapshot saved: ${snapshot}`);
-        
-        return snapshot;
+        try {
+            const snapshot = v8.writeHeapSnapshot(filepath);
+            console.log(`Heap snapshot saved: ${snapshot}`);
+            return snapshot;
+        } catch (err) {
+            console.error(`Failed to write heap snapshot to ${filepath}: ${err}`);
+            // Fall back to /tmp if write fails
+            const tmpPath = path.join('/tmp', filename);
+            console.log(`Falling back to tmp directory: ${tmpPath}`);
+            return v8.writeHeapSnapshot(tmpPath);
+        }
     }
 
     /**
