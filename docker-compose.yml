@@ -3,6 +3,9 @@ services:
         build:
             context: .
             dockerfile: Dockerfile
+            args:
+                USER_ID: ${UID:-1000}
+                GROUP_ID: ${GID:-1000}
         container_name: migrator-server
         restart: unless-stopped
         ports:
