@@ -18,6 +18,7 @@ describe('ServiceWorkerCompat', () => {
             getSize: () => 0,
             getBuffer: () => Buffer.from(''),
             close: () => {},
+            releaseMemory: () => {},
         } as LazyFile;
 
         baseExtension = {

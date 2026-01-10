@@ -1,6 +1,5 @@
 // migrator/utils/memory_profiler.ts
 import * as v8 from 'v8';
-import * as fs from 'fs';
 import * as path from 'path';
 
 export class MemoryProfiler {
@@ -21,7 +20,7 @@ export class MemoryProfiler {
     /**
      * Get heap statistics
      */
-    static getHeapStats(): v8.HeapSpaceStatistics[] {
+    static getHeapStats(): v8.HeapSpaceInfo[] {
         return v8.getHeapSpaceStatistics();
     }
 

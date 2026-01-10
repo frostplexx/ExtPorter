@@ -24,6 +24,8 @@ describe('InterestingnessScorer', () => {
             getPath: jest.fn().mockReturnValue('test.js'),
             getSize: jest.fn().mockReturnValue(100),
             getType: jest.fn().mockReturnValue('js' as any),
+            releaseMemory: jest.fn(),
+            close: jest.fn(),
         } as any;
 
         mockExtension = {

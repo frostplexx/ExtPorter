@@ -67,7 +67,8 @@ describe('Memory Management', () => {
 
             expect(content).toBe(testContent);
             expect(mmapFile.isLoaded()).toBe(true);
-            expect(mmapFile.buffer).not.toBeNull();
+            // After getContent(), buffer is released for memory optimization but content remains loaded
+            expect(mmapFile.buffer).toBeNull();
 
             mmapFile.close();
         });
