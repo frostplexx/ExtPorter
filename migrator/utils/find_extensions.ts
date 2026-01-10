@@ -14,15 +14,26 @@ import { findAndParseCWSInfo } from './cws_parser';
  * Finds all unpacked extensions given a path. Can be pointed to a single extension directory or a directory containing multiple extensions.
  * @param{string} ext_path to extension(s) - must be unpacked (no .crx files)
  * @returns{Extension} list of extensions that it found
+ * @deprecated Use find_extensions_iterator for better memory efficiency with large extension sets
  */
 export function find_extensions(ext_path: string, includes_mv3: boolean = false): Extension[] {
+    return [...find_extensions_iterator(ext_path, includes_mv3)];
+}
+
+/**
+ * Memory-efficient iterator that yields extensions one at a time.
+ * Use this instead of find_extensions() when processing large numbers of extensions.
+ * @param{string} ext_path to extension(s) - must be unpacked (no .crx files)
+ * @yields{Extension} extensions found one at a time
+ */
+export function* find_extensions_iterator(ext_path: string, includes_mv3: boolean = false): Generator<Extension> {
     // Convert to absolute path to avoid relative path issues
     const pth = path.resolve(ext_path);
 
     // Check if path exists first
     if (!existsSync(pth)) {
         logger.error(null, `Extension path does not exist: ${pth}`);
-        return [];
+        return;
     }
 
     // Only work with directories (unpacked extensions)
@@ -32,10 +43,11 @@ export function find_extensions(ext_path: string, includes_mv3: boolean = false)
 
         if (existsSync(manifestPath)) {
             // Single unpacked extension directory
-            return get_manifest([manifestPath], includes_mv3);
+            const ext = get_single_extension(manifestPath, includes_mv3);
+            if (ext) yield ext;
         } else {
             // Directory containing multiple extension directories - search recursively
-            return findExtensionsRecursively(pth, includes_mv3);
+            yield* findExtensionsRecursivelyIterator(pth, includes_mv3);
         }
     } else if (lstatSync(pth).isFile()) {
         logger.error(
@@ -46,10 +58,67 @@ export function find_extensions(ext_path: string, includes_mv3: boolean = false)
                 file_type: path.extname(pth),
             }
         );
-        return [];
+        return;
+    }
+}
+
+/**
+ * Counts the total number of extensions without loading them into memory.
+ * Useful for progress tracking without memory overhead.
+ */
+export function count_extensions(ext_path: string, includes_mv3: boolean = false): number {
+    const pth = path.resolve(ext_path);
+    
+    if (!existsSync(pth) || !lstatSync(pth).isDirectory()) {
+        return 0;
     }
 
-    return [];
+    const manifestPath = path.join(pth, 'manifest.json');
+    if (existsSync(manifestPath)) {
+        return 1;
+    }
+
+    return countExtensionsRecursively(pth, includes_mv3);
+}
+
+function countExtensionsRecursively(dirPath: string, includes_mv3: boolean): number {
+    let count = 0;
+    try {
+        const items = readdirSync(dirPath);
+        for (const item of items) {
+            const itemPath = path.join(dirPath, item);
+            if (lstatSync(itemPath).isDirectory()) {
+                const manifestPath = path.join(itemPath, 'manifest.json');
+                if (existsSync(manifestPath)) {
+                    // Quick check if it's a valid MV2 extension (or MV3 if included)
+                    if (isValidExtensionManifest(manifestPath, includes_mv3)) {
+                        count++;
+                    }
+                } else {
+                    count += countExtensionsRecursively(itemPath, includes_mv3);
+                }
+            }
+        }
+    } catch (error) {
+        // Ignore errors during counting
+    }
+    return count;
+}
+
+function isValidExtensionManifest(manifestPath: string, includes_mv3: boolean): boolean {
+    let manifestMMapFile: MMapFile | undefined;
+    try {
+        manifestMMapFile = new MMapFile(manifestPath);
+        const json = JSON5.parse(manifestMMapFile.getContent());
+        if (isChromeApp(json) || isThemeExtension(json)) {
+            return false;
+        }
+        return json['manifest_version'] === 2 || includes_mv3;
+    } catch {
+        return false;
+    } finally {
+        manifestMMapFile?.close();
+    }
 }
 
 /**
@@ -74,93 +143,104 @@ function isThemeExtension(manifest: any): boolean {
 }
 
 /**
+ * Parses a single manifest and returns the extension, or null if invalid
+ */
+function get_single_extension(manifestPath: string, includes_mv3: boolean): Extension | null {
+    let manifestMMapFile: MMapFile | undefined;
+    try {
+        // Read manifest using memory mapping
+        manifestMMapFile = new MMapFile(manifestPath);
+        const manifestContent = manifestMMapFile.getContent();
+
+        const json = JSON5.parse(manifestContent) as any;
+
+        // Skip Chrome Apps - they are deprecated and cannot be migrated
+        if (isChromeApp(json)) {
+            logger.info(
+                null,
+                `Skipping Chrome App (deprecated): ${json['name'] || 'Unknown'}`,
+                {
+                    manifest_path: manifestPath,
+                }
+            );
+            return null;
+        }
+
+        // Skip theme extensions - they only contain visual customizations and no executable code
+        if (isThemeExtension(json)) {
+            logger.info(null, `Skipping theme extension: ${json['name'] || 'Unknown'}`, {
+                manifest_path: manifestPath,
+            });
+            return null;
+        }
+
+        if (json['manifest_version'] == 2 || includes_mv3) {
+            const extensionDir = path.dirname(manifestPath);
+            let extensionName: string = json['name'];
+
+            // Handle __MSG_name__ pattern
+            if (extensionName && extensionName.includes('__MSG')) {
+                extensionName = getLocalizedMessage(extensionDir, 'name');
+            }
+
+            const files = discoverExtensionFiles(extensionDir);
+
+            const id = getExtensionID(extensionDir);
+
+            if (!id) {
+                logger.error(undefined, 'Error getting extension id while searching', {
+                    manifest_v2_path: manifestPath,
+                    manifest_content: manifestContent,
+                    extension_dir: extensionDir,
+                });
+                return null;
+            }
+
+            // Parse CWS information from HTML file if available
+            const cwsInfo = findAndParseCWSInfo(extensionDir);
+
+            const extension: Extension = {
+                id: id,
+                name: extensionName,
+                version: json['version'] || cwsInfo?.details.version,
+                manifest_v2_path: extensionDir,
+                manifest: json,
+                files: files,
+                isNewTabExtension: extensionUtils.isNewTabExtension({
+                    manifest: json,
+                } as Extension),
+                cws_info: cwsInfo || undefined,
+            };
+
+            return extension;
+        }
+        return null;
+    } catch (error) {
+        logger.error(null, `Error processing manifest file: ${manifestPath}`, {
+            error: (error as any).message,
+            manifest_v2_path: manifestPath,
+        });
+        return null;
+    } finally {
+        // Ensure file descriptor is always closed
+        if (manifestMMapFile) {
+            manifestMMapFile.close();
+        }
+    }
+}
+
+/**
  * Loads and parses all the `manifest.json` files given a list of paths
  * @param{string[]} manifest_paths
  * @returns{Extension[]} list of extensions
+ * @deprecated Use get_single_extension with the iterator pattern instead
  */
 function get_manifest(manifest_paths: string[], includes_mv3: boolean): Extension[] {
     const extensions: Extension[] = [];
     for (const manifestPath of manifest_paths) {
-        let manifestMMapFile: MMapFile | undefined;
-        try {
-            // Read manifest using memory mapping
-            manifestMMapFile = new MMapFile(manifestPath);
-            const manifestContent = manifestMMapFile.getContent();
-
-            const json = JSON5.parse(manifestContent) as any;
-
-            // Skip Chrome Apps - they are deprecated and cannot be migrated
-            if (isChromeApp(json)) {
-                logger.info(
-                    null,
-                    `Skipping Chrome App (deprecated): ${json['name'] || 'Unknown'}`,
-                    {
-                        manifest_path: manifestPath,
-                    }
-                );
-                continue;
-            }
-
-            // Skip theme extensions - they only contain visual customizations and no executable code
-            if (isThemeExtension(json)) {
-                logger.info(null, `Skipping theme extension: ${json['name'] || 'Unknown'}`, {
-                    manifest_path: manifestPath,
-                });
-                continue;
-            }
-
-            if (json['manifest_version'] == 2 || includes_mv3) {
-                // logger.info(`Found valid Manifest V2 extension: ${json["name"] || 'Unknown'}`);
-                const extensionDir = path.dirname(manifestPath);
-                let extensionName: string = json['name'];
-
-                // Handle __MSG_name__ pattern
-                if (extensionName.includes('__MSG')) {
-                    extensionName = getLocalizedMessage(extensionDir, 'name');
-                }
-
-                const files = discoverExtensionFiles(extensionDir);
-                // logger.info(`Discovered ${files.length} files in extension: ${extensionName}`);
-
-                const id = getExtensionID(extensionDir); //id gets set in the ChromeTester class
-
-                if (!id) {
-                    logger.error(undefined, 'Error getting extension id while searching', {
-                        manifest_v2_path: manifestPath,
-                        manifest_content: manifestContent,
-                        extension_dir: extensionDir,
-                    });
-                    return [];
-                }
-
-                // Parse CWS information from HTML file if available
-                const cwsInfo = findAndParseCWSInfo(extensionDir);
-
-                const extension: Extension = {
-                    id: id,
-                    name: extensionName,
-                    version: json['version'] || cwsInfo?.details.version,
-                    manifest_v2_path: extensionDir,
-                    manifest: json,
-                    files: files,
-                    isNewTabExtension: extensionUtils.isNewTabExtension({
-                        manifest: json,
-                    } as Extension),
-                    cws_info: cwsInfo || undefined,
-                };
-
-                extensions.push(extension);
-            }
-        } catch (error) {
-            logger.error(null, `Error processing manifest file: ${manifestPath}`, {
-                error: (error as any).message,
-                manifest_v2_path: manifestPath,
-            });
-        } finally {
-            // Ensure file descriptor is always closed
-            if (manifestMMapFile) {
-                manifestMMapFile.close();
-            }
+        const ext = get_single_extension(manifestPath, includes_mv3);
+        if (ext) {
+            extensions.push(ext);
         }
     }
     return extensions;
@@ -320,9 +400,10 @@ function getFileType(filePath: string): ExtFileType {
     }
 }
 
-function findExtensionsRecursively(dirPath: string, includes_mv3: boolean): Extension[] {
-    const extensions: Extension[] = [];
-
+/**
+ * Iterator version that yields extensions one at a time instead of collecting them all
+ */
+function* findExtensionsRecursivelyIterator(dirPath: string, includes_mv3: boolean): Generator<Extension> {
     try {
         const items = readdirSync(dirPath);
 
@@ -333,11 +414,12 @@ function findExtensionsRecursively(dirPath: string, includes_mv3: boolean): Exte
                 const manifestPath = path.join(itemPath, 'manifest.json');
 
                 if (existsSync(manifestPath)) {
-                    // Found an unpacked extension directory
-                    extensions.push(...get_manifest([manifestPath], includes_mv3));
+                    // Found an unpacked extension directory - yield it directly
+                    const ext = get_single_extension(manifestPath, includes_mv3);
+                    if (ext) yield ext;
                 } else {
                     // Recursively search subdirectories for more extension directories
-                    extensions.push(...findExtensionsRecursively(itemPath, includes_mv3));
+                    yield* findExtensionsRecursivelyIterator(itemPath, includes_mv3);
                 }
             }
             // Note: Files are ignored - only looking for unpacked extension directories
@@ -348,6 +430,11 @@ function findExtensionsRecursively(dirPath: string, includes_mv3: boolean): Exte
             dir_path: dirPath,
         });
     }
+}
 
-    return extensions;
+/**
+ * @deprecated Use findExtensionsRecursivelyIterator instead
+ */
+function findExtensionsRecursively(dirPath: string, includes_mv3: boolean): Extension[] {
+    return [...findExtensionsRecursivelyIterator(dirPath, includes_mv3)];
 }
