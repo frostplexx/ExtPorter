@@ -4,8 +4,8 @@ services:
             context: .
             dockerfile: Dockerfile
             args:
-                USER_ID: ${UID:-1000}
-                GROUP_ID: ${GID:-1000}
+                USER_ID: ${UID:-424242}
+                GROUP_ID: ${GID:-424242}
         container_name: migrator-server
         restart: unless-stopped
         ports:
