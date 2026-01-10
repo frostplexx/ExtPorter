@@ -30,6 +30,7 @@ describe('OffscreenDocumentMigrator', () => {
             getSize: jest.fn().mockReturnValue(1000),
             getBuffer: jest.fn(),
             close: jest.fn(),
+            releaseMemory: jest.fn(),
         } as unknown as LazyFile;
 
         mockOtherFile = {
@@ -40,6 +41,7 @@ describe('OffscreenDocumentMigrator', () => {
             getSize: jest.fn().mockReturnValue(500),
             getBuffer: jest.fn(),
             close: jest.fn(),
+            releaseMemory: jest.fn(),
         } as unknown as LazyFile;
 
         baseExtension = {

@@ -54,6 +54,7 @@ describe('BridgeInjector', () => {
             getSize: jest.fn().mockReturnValue(1000),
             getBuffer: jest.fn(),
             close: jest.fn(),
+            releaseMemory: jest.fn(),
         } as unknown as LazyFile;
 
         mockNonJsFile = {
@@ -64,6 +65,7 @@ describe('BridgeInjector', () => {
             getSize: jest.fn().mockReturnValue(500),
             getBuffer: jest.fn(),
             close: jest.fn(),
+            releaseMemory: jest.fn(),
         } as unknown as LazyFile;
 
         baseExtension = {
@@ -1119,6 +1121,7 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
                         getSize: () => 500,
                         getBuffer: jest.fn(),
                         close: jest.fn(),
+                        releaseMemory: jest.fn(),
                     } as unknown as LazyFile,
                     {
                         path: 'content2.js',
@@ -1128,6 +1131,7 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
                         getSize: () => 400,
                         getBuffer: jest.fn(),
                         close: jest.fn(),
+                        releaseMemory: jest.fn(),
                     } as unknown as LazyFile,
                 ],
             };
@@ -1180,6 +1184,7 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
                 getSize: () => 300,
                 getBuffer: jest.fn(),
                 close: jest.fn(),
+                releaseMemory: jest.fn(),
             } as unknown as LazyFile;
 
             const mixedExtension = {

@@ -35,6 +35,7 @@ export function createMockFile(options: MockFileOptions): LazyFile {
     mockFile.getSize = jest.fn().mockReturnValue(Buffer.byteLength(content, 'utf8'));
     mockFile.close = jest.fn();
     mockFile.getAST = jest.fn().mockReturnValue(undefined);
+    mockFile.releaseMemory = jest.fn();
 
     return mockFile;
 }

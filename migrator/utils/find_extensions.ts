@@ -99,7 +99,7 @@ function countExtensionsRecursively(dirPath: string, includes_mv3: boolean): num
                 }
             }
         }
-    } catch (error) {
+    } catch {
         // Ignore errors during counting
     }
     return count;
@@ -235,17 +235,6 @@ function get_single_extension(manifestPath: string, includes_mv3: boolean): Exte
  * @returns{Extension[]} list of extensions
  * @deprecated Use get_single_extension with the iterator pattern instead
  */
-function get_manifest(manifest_paths: string[], includes_mv3: boolean): Extension[] {
-    const extensions: Extension[] = [];
-    for (const manifestPath of manifest_paths) {
-        const ext = get_single_extension(manifestPath, includes_mv3);
-        if (ext) {
-            extensions.push(ext);
-        }
-    }
-    return extensions;
-}
-
 /**
  * Generates the extension id given a path to the `manifest.json`
  * @param{string} manifest_path
@@ -433,8 +422,7 @@ function* findExtensionsRecursivelyIterator(dirPath: string, includes_mv3: boole
 }
 
 /**
- * @deprecated Use findExtensionsRecursivelyIterator instead
+ * Generates the extension id given a path to the `manifest.json`
+ * @param{string} manifest_path
+ * @returns{string} id of the extension
  */
-function findExtensionsRecursively(dirPath: string, includes_mv3: boolean): Extension[] {
-    return [...findExtensionsRecursivelyIterator(dirPath, includes_mv3)];
-}

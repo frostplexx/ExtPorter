@@ -148,6 +148,8 @@ export function clearExtensionMemory(extension: Extension): void {
             // Use releaseMemory for new interface, fall back to cleanContent
             if (file.releaseMemory) {
                 file.releaseMemory();
+            } else if ((file as any).cleanContent) {
+                (file as any).cleanContent();
             }
             // Also call close() to ensure file descriptors are released
             if (file.close) {
