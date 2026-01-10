@@ -16,5 +16,17 @@ CURRENT_GID=$(id -g)
 
 echo "Setting up Docker containers with UID=$CURRENT_UID and GID=$CURRENT_GID"
 
+# Ensure required directories exist with correct permissions
+# These directories are mounted as volumes and need to be writable by the container
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+
+for dir in logs output cws; do
+    mkdir -p "$PROJECT_ROOT/$dir"
+    chmod 755 "$PROJECT_ROOT/$dir"
+done
+
+echo "Created/verified directories: logs, output, cws"
+
 # Pass all arguments to docker-compose
 exec docker-compose "$@"
