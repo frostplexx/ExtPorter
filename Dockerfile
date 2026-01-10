@@ -43,7 +43,7 @@ RUN mkdir -p logs output cws
 # Make bootstrap script executable
 USER root
 RUN chmod +x /app/scripts/start-server.sh
-# USER migrator_user
+USER migrator_user
 
 # Expose WebSocket server port
 EXPOSE 8080
