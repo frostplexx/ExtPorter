@@ -8,10 +8,10 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Create user with matching host UID/GID
-ARG USER_ID=1000
-ARG GROUP_ID=1000
-# RUN groupadd -g $GROUP_ID migrator_group && \
-#     useradd -u $USER_ID -g $GROUP_ID -m -s /bin/bash migrator_user
+ARG USER_ID=424242
+ARG GROUP_ID=424242
+RUN groupadd -g $GROUP_ID migrator_group && \
+    useradd -u $USER_ID -g $GROUP_ID -m -s /bin/bash migrator_user
 
 # Set working directory
 WORKDIR /app
@@ -20,7 +20,7 @@ WORKDIR /app
 RUN chown -R migrator_user:migrator_group /app
 
 # Switch to migrator_user for remaining operations
-# USER migrator_user
+USER migrator_user
 
 # Copy package files
 COPY package*.json yarn.lock ./
