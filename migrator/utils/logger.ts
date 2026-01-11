@@ -163,7 +163,8 @@ const MAX_META_SIZE = 10 * 1024 * 1024; // 10MB max for meta field
 const ERROR_LOG_RATE_LIMIT = 100; // Maximum error logs per interval
 const ERROR_LOG_RATE_INTERVAL = 1000; // 1 second interval for rate limiting
 const MAX_LOG_BATCH_SIZE = 100; // Maximum batch size to prevent memory issues
-const MAX_LOG_RETRY_COUNT = 3; // Maximum number of retries before discarding a log entry
+const MAX_LOG_RETRY_COUNT = 2; // Reduced: Maximum retries before discarding (was 3)
+const MAX_FAILED_LOGS_IN_BATCH = 20; // Maximum failed logs to keep for retry
 
 // Internal type for tracking log retries
 interface BatchedLogEntry {
@@ -257,8 +258,25 @@ async function flushLogBatch() {
     }
 
     // Re-add failed logs to the front of the batch for retry (only if not database closure)
+    // MEMORY FIX: Limit the number of failed logs we keep for retry
     if (failedLogs.length > 0 && !(Database.shared as any).isShuttingDown) {
-        logBatch = [...failedLogs, ...logBatch];
+        // Only keep a limited number of failed logs to prevent unbounded growth
+        const logsToRetry = failedLogs.slice(0, MAX_FAILED_LOGS_IN_BATCH);
+        if (failedLogs.length > MAX_FAILED_LOGS_IN_BATCH) {
+            const discarded = failedLogs.length - MAX_FAILED_LOGS_IN_BATCH;
+            discardedDueToRetries += discarded;
+            console.warn(
+                `[LOGGER] Discarded ${discarded} failed logs exceeding retry batch limit (${MAX_FAILED_LOGS_IN_BATCH})`
+            );
+        }
+        logBatch = [...logsToRetry, ...logBatch];
+        
+        // Ensure total batch size doesn't exceed limit after adding retries
+        if (logBatch.length > MAX_LOG_BATCH_SIZE) {
+            const overflow = logBatch.length - MAX_LOG_BATCH_SIZE;
+            logBatch.splice(MAX_LOG_BATCH_SIZE); // Keep only up to MAX_LOG_BATCH_SIZE
+            droppedLogCount += overflow;
+        }
     }
 }
 

@@ -118,11 +118,16 @@ describe('WriteQueue', () => {
             const outputPath = '/test/output/test-extension';
             const error = new Error('Write failed');
 
+            // Suppress expected console.error output
+            const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
             (fs.writeFile as any).mockRejectedValue(error);
 
             await expect(writer.writeExtensionSync(mockExtension, outputPath)).rejects.toThrow(
                 'Write failed'
             );
+
+            consoleSpy.mockRestore();
         });
 
         it('should create output directory if it does not exist', async () => {
@@ -364,6 +369,9 @@ describe('WriteQueue', () => {
             const writer = WriteQueue.shared;
             writer.setAutoProcess(false);
 
+            // Suppress expected console.error output
+            const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
             (fs.writeFile as any).mockRejectedValue(new Error('File write failed'));
 
             await writer.queueExtension(mockExtension);
@@ -374,6 +382,8 @@ describe('WriteQueue', () => {
             // Should not throw, but log the error
             const status = writer.getQueueStatus();
             expect(status.queueLength).toBe(0);
+
+            consoleSpy.mockRestore();
         });
     });
 

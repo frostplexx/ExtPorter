@@ -42,6 +42,7 @@ export class ExtensionFixer {
     private readonly maxFileCacheSize: number = 50; // Maximum number of files to cache for diffs
     private readonly maxConversationMessages: number = 100; // Maximum conversation history length
     private readonly maxToolCallHistory: number = 200; // Maximum tool call history length
+    private readonly maxFileDiffs: number = 100; // Maximum file diffs to keep
 
     // Tracking data for database storage
     private conversationHistory: LLMMessage[] = [];
@@ -520,13 +521,21 @@ Please analyze the issues and fix them. Start by listing the files you need to e
     }
 
     /**
-     * Record a file diff after modification
+     * Record a file diff after modification.
+     * Implements size limit to prevent unbounded memory growth.
      */
     private recordFileDiff(filePath: string, newContent: string): void {
         const beforeContent = this.fileContentCache.get(filePath) ?? null;
 
         // Only record if content actually changed
         if (beforeContent !== newContent) {
+            // MEMORY FIX: Limit the number of diffs we keep
+            if (this.fileDiffs.length >= this.maxFileDiffs) {
+                // Remove oldest diff
+                this.fileDiffs.shift();
+                logger.debug(null, `Evicted oldest file diff (limit: ${this.maxFileDiffs})`);
+            }
+            
             this.fileDiffs.push({
                 filePath,
                 before: beforeContent,

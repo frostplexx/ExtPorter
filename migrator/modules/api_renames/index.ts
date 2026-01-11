@@ -217,6 +217,9 @@ export class RenameAPIS implements MigrationModule {
      * maintains the same interface as the original LazyFile but serves
      * the transformed content instead of reading from disk.
      *
+     * MEMORY OPTIMIZATION: The releaseMemory() method now properly clears
+     * the cached content and buffer to allow garbage collection.
+     *
      * @param originalFile Original file to base the transformation on
      * @param newContent Transformed JavaScript content
      * @returns New LazyFile instance with transformed content
@@ -232,18 +235,44 @@ export class RenameAPIS implements MigrationModule {
         // Copy absolute path so file can be updated later
         transformedFile._absolutePath = (originalFile as any)._absolutePath;
 
-        // Cache the buffer for getBuffer() calls
-        const contentBuffer = Buffer.from(newContent, 'utf8');
+        // Cache the buffer for getBuffer() calls - stored in closure variable that can be cleared
+        let contentBuffer: Buffer | null = Buffer.from(newContent, 'utf8');
+        let cachedContent: string | null = newContent;
+        let isReleased = false;
 
         // Override methods to work with transformed content
-        transformedFile.getContent = () => newContent;
-        transformedFile.getBuffer = () => contentBuffer;
-        transformedFile.getSize = () => contentBuffer.length;
+        transformedFile.getContent = () => {
+            if (isReleased) {
+                // Re-read from _transformedContent if memory was released but content is needed again
+                return transformedFile._transformedContent || '';
+            }
+            return cachedContent || '';
+        };
+        transformedFile.getBuffer = () => {
+            if (isReleased || !contentBuffer) {
+                // Recreate buffer if needed after memory release
+                const content = transformedFile.getContent();
+                return Buffer.from(content, 'utf8');
+            }
+            return contentBuffer;
+        };
+        transformedFile.getSize = () => {
+            if (contentBuffer) {
+                return contentBuffer.length;
+            }
+            return Buffer.byteLength(transformedFile.getContent(), 'utf8');
+        };
         transformedFile.close = () => {
-            /* No-op for in-memory content */
+            // Release memory when file is closed
+            contentBuffer = null;
+            cachedContent = null;
+            isReleased = true;
         };
         transformedFile.releaseMemory = () => {
-            /* No-op for in-memory content */
+            // MEMORY FIX: Actually release the cached content and buffer
+            contentBuffer = null;
+            cachedContent = null;
+            isReleased = true;
         };
         transformedFile.cleanContent = () => transformedFile;
 
@@ -269,7 +298,7 @@ export class RenameAPIS implements MigrationModule {
                             moduleError instanceof Error
                                 ? moduleError.message
                                 : String(moduleError),
-                        contentSize: contentBuffer.length,
+                        contentSize: transformedFile.getSize(),
                     });
                     return undefined;
                 }

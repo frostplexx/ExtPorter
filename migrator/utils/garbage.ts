@@ -159,6 +159,17 @@ export function clearExtensionMemory(extension: Extension): void {
                     // Ignore close errors - file might already be closed
                 }
             }
+            // Clear any AST cache
+            if ((file as any)._cachedAST) {
+                (file as any)._cachedAST = null;
+            }
+            if ((file as any)._ast) {
+                (file as any)._ast = null;
+            }
+            // Clear transformed content if present
+            if ((file as any)._transformedContent) {
+                (file as any)._transformedContent = null;
+            }
             // Nullify the reference immediately to help GC
             extension.files[i] = null as any;
         }
@@ -207,6 +218,16 @@ export function clearExtensionMemory(extension: Extension): void {
             details: extension.cws_info.details, // Keep small details object
         };
         extension.cws_info = minimalCws as any;
+    }
+    
+    // Clear tags array if it exists and is large
+    if ((extension as any).tags && Array.isArray((extension as any).tags)) {
+        (extension as any).tags.length = 0;
+    }
+    
+    // Clear any migration metadata that might be holding references
+    if ((extension as any)._migrationData) {
+        (extension as any)._migrationData = null;
     }
 }
 
