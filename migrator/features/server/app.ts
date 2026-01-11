@@ -19,6 +19,7 @@ EventEmitter.defaultMaxListeners = Number(process.env.EVENT_LISTENER_LIMIT || 50
 // Chunked download constants
 const CHUNK_SIZE = 1 * 1024 * 1024; // 1MB chunks
 const CHUNK_THRESHOLD = 10 * 1024 * 1024; // 10MB - chunk if larger
+const MAX_IMAGE_SIZE = 50 * 1024 * 1024; // 50MB max image size to prevent memory issues
 
 // Server-side limits to protect memory
 const MAX_FULL_EXTENSIONS = Number(process.env.MAX_FULL_EXTENSIONS || 2000); // max items when a full list is explicitly requested
@@ -1748,7 +1749,7 @@ export class MigrationServer {
                 timeout: 15000,
             };
 
-            // Download image
+            // Download image with size limit
             const imageData = await new Promise<Buffer>((resolve, reject) => {
                 const request = protocol.get(highResUrl, options, (response) => {
                     // Follow redirects
@@ -1764,8 +1765,27 @@ export class MigrationServer {
                         return;
                     }
 
+                    // MEMORY FIX: Check content-length header if available
+                    const contentLength = parseInt(response.headers['content-length'] || '0', 10);
+                    if (contentLength > MAX_IMAGE_SIZE) {
+                        request.destroy();
+                        reject(new Error(`Image too large: ${contentLength} bytes (max: ${MAX_IMAGE_SIZE})`));
+                        return;
+                    }
+
                     const chunks: Buffer[] = [];
-                    response.on('data', (chunk) => chunks.push(chunk));
+                    let totalSize = 0;
+                    
+                    response.on('data', (chunk) => {
+                        totalSize += chunk.length;
+                        // MEMORY FIX: Check size during download
+                        if (totalSize > MAX_IMAGE_SIZE) {
+                            request.destroy();
+                            reject(new Error(`Image too large: exceeded ${MAX_IMAGE_SIZE} bytes during download`));
+                            return;
+                        }
+                        chunks.push(chunk);
+                    });
                     response.on('end', () => resolve(Buffer.concat(chunks)));
                     response.on('error', reject);
                 });

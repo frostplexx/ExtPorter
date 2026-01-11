@@ -41,6 +41,7 @@ COPY scripts/ ./scripts/
 RUN mkdir -p logs output cws
 
 # Make bootstrap script executable
+USER root
 RUN chmod +x /app/scripts/start-server.sh
 
 RUN chown /app/logs migrator_user
