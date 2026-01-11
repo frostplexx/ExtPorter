@@ -44,8 +44,6 @@ RUN mkdir -p logs output cws
 USER root
 RUN chmod +x /app/scripts/start-server.sh
 
-RUN chown /app/logs migrator_user
-
 # Expose WebSocket server port
 EXPOSE 8080
 
