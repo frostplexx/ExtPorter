@@ -1160,6 +1160,49 @@ export class Database {
     }
 
     /**
+     * Get all extension IDs that have been successfully migrated (have mv3_extension_id set)
+     * This is used for resume functionality to skip already-migrated extensions
+     * Returns both original extension IDs and mv3_extension_ids for comprehensive matching
+     * @returns Object containing:
+     *   - sourceIds: Set of original extension.id values
+     *   - mv3Ids: Set of mv3_extension_id values (used as folder names)
+     *   - mv3ToSourceMap: Map from mv3_extension_id to extension.id for reverse lookup
+     */
+    async getMigratedExtensionIds(): Promise<{
+        sourceIds: Set<string>;
+        mv3Ids: Set<string>;
+        mv3ToSourceMap: Map<string, string>;
+    }> {
+        return this.enqueueOperation(async () => {
+            if (!this.database) throw new Error('Database not initialized');
+
+            // Find all extensions that have mv3_extension_id set (indicating successful migration)
+            const docs = await this.database.collection(Collections.EXTENSIONS).find(
+                { mv3_extension_id: { $exists: true, $ne: null } },
+                { projection: { id: 1, mv3_extension_id: 1 } }
+            ).toArray();
+
+            const sourceIds = new Set<string>();
+            const mv3Ids = new Set<string>();
+            const mv3ToSourceMap = new Map<string, string>();
+
+            for (const doc of docs) {
+                if (doc.id) {
+                    sourceIds.add(doc.id);
+                }
+                if (doc.mv3_extension_id) {
+                    mv3Ids.add(doc.mv3_extension_id);
+                    if (doc.id) {
+                        mv3ToSourceMap.set(doc.mv3_extension_id, doc.id);
+                    }
+                }
+            }
+
+            return { sourceIds, mv3Ids, mv3ToSourceMap };
+        });
+    }
+
+    /**
      * Get LLM fix attempts statistics
      */
     async getLLMFixAttemptsStats() {

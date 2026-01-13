@@ -452,6 +452,42 @@ export class MigrationServer {
             const totalExtensions = count_extensions(this.globals.extensionsPath);
             this.broadcastToClients(`Found ${totalExtensions} extensions`);
 
+            // ========== RESUME FUNCTIONALITY ==========
+            // Get already-migrated extension IDs from database and output folder
+            this.broadcastToClients('Checking for previously migrated extensions (resume support)...');
+            
+            // 1. Get IDs from database (extensions that were successfully migrated and recorded)
+            const dbMigrated = await Database.shared.getMigratedExtensionIds();
+            this.broadcastToClients(`Found ${dbMigrated.sourceIds.size} extensions in database`);
+            
+            // 2. Get IDs from output folder (extensions that were written to disk)
+            // These are mv3_extension_id values (folder names), we need to convert them to source IDs
+            const diskMv3Ids = await this.getAlreadyMigratedFromDisk(this.globals.outputDir);
+            this.broadcastToClients(`Found ${diskMv3Ids.size} extension folders on disk`);
+            
+            // 3. Combine both sets - an extension is considered migrated if:
+            //    - Its source ID is in the database, OR
+            //    - Its mv3_extension_id (folder name) is found on disk
+            // We track by SOURCE ID since that's what we'll check against rawExtension.id
+            const alreadyMigratedIds = new Set<string>([...dbMigrated.sourceIds]);
+            
+            // For disk-based extensions, use the mapping to convert mv3_extension_id -> source ID
+            // If no mapping exists, the folder might be from a previous run, so we also check
+            // if the folder name itself matches the source ID pattern (fallback)
+            for (const mv3Id of diskMv3Ids) {
+                const sourceId = dbMigrated.mv3ToSourceMap.get(mv3Id);
+                if (sourceId) {
+                    alreadyMigratedIds.add(sourceId);
+                } else {
+                    // If folder name matches the pattern of a source ID, add it directly
+                    // This handles the case where mv3_extension_id == extension.id (fallback case)
+                    alreadyMigratedIds.add(mv3Id);
+                }
+            }
+            
+            this.broadcastToClients(`Total already migrated: ${alreadyMigratedIds.size} extensions (will be skipped)`);
+            // ==========================================
+
             // Filter setting for new-tab extensions
             const filterNewTab = process.env.FILTER_NEW_TAB_EXTENSIONS === 'true';
 
@@ -473,9 +509,11 @@ export class MigrationServer {
             let writeIndex = 0;
             let processedCount = 0;
             let filteredCount = 0;
+            let skippedCount = 0; // Track extensions skipped due to resume
 
+            const remainingExtensions = totalExtensions - alreadyMigratedIds.size;
             this.broadcastToClients(
-                `Processing ${totalExtensions} extensions (streaming one at a time for memory efficiency)`
+                `Processing ${totalExtensions} extensions (${alreadyMigratedIds.size} already done, ${remainingExtensions} remaining)`
             );
 
             // Use iterator to process extensions one at a time - never hold all in memory
@@ -493,6 +531,22 @@ export class MigrationServer {
                     filteredCount++;
                     continue;
                 }
+
+                // ========== RESUME: Skip already-migrated extensions ==========
+                if (alreadyMigratedIds.has(rawExtension.id)) {
+                    skippedCount++;
+                    processedCount++;
+                    
+                    // Log progress periodically for skipped extensions
+                    if (skippedCount % 100 === 0) {
+                        this.broadcastToClients(`Skipped ${skippedCount} already-migrated extensions...`);
+                    }
+                    
+                    // Update progress to reflect total processed (including skipped)
+                    this.migrationState.progress.current = writeIndex + skippedCount;
+                    continue;
+                }
+                // ==============================================================
 
                 let extension = rawExtension;
                 let migrationSuccessful = true;
@@ -538,7 +592,6 @@ export class MigrationServer {
                         await WriteQueue.shared.writeExtensionSync(extension, outputPath);
 
                         // Insert migrated extension to database
-                        const Database = (await import('../database/db_manager.js')).Database;
                         const dbExtension = {
                             ...extension,
                             manifest_v3_path: outputPath,
@@ -547,11 +600,11 @@ export class MigrationServer {
 
                         await Database.shared.insertMigratedExtension(dbExtension);
                         writeIndex++;
-                        this.migrationState.progress.current = writeIndex;
+                        this.migrationState.progress.current = writeIndex + skippedCount;
 
                         if (writeIndex % 5 === 0) {
                             this.broadcastToClients(
-                                `Progress: ${writeIndex}/${totalExtensions} extensions migrated`
+                                `Progress: ${writeIndex} new + ${skippedCount} skipped = ${writeIndex + skippedCount}/${totalExtensions} extensions`
                             );
                         }
                     } catch (writeError) {
@@ -591,8 +644,9 @@ export class MigrationServer {
                 this.broadcastToClients(`Filtered out ${filteredCount} new-tab extensions`);
             }
 
+            // Final summary with resume stats
             this.broadcastToClients(
-                `Migration completed! Successfully migrated ${writeIndex} extensions`
+                `Migration completed! Newly migrated: ${writeIndex}, Skipped (already done): ${skippedCount}, Total: ${writeIndex + skippedCount}`
             );
 
             MemoryProfiler.takeHeapSnapshot('end');
@@ -608,6 +662,71 @@ export class MigrationServer {
         } finally {
             // Restore console to original state
             restoreConsole();
+        }
+    }
+
+    /**
+     * Scans the output directory to find extension IDs that have already been written to disk.
+     * This supports resume functionality by identifying extensions that don't need re-migration.
+     * 
+     * An extension folder is considered valid if it contains a manifest.json file.
+     * This handles both regular extensions and new_tab_extensions subfolder structure.
+     * 
+     * @param outputDir The output directory path
+     * @returns Set of extension IDs found on disk
+     */
+    private async getAlreadyMigratedFromDisk(outputDir: string): Promise<Set<string>> {
+        const migratedIds = new Set<string>();
+        
+        try {
+            // Check if output directory exists
+            if (!fs.existsSync(outputDir)) {
+                return migratedIds;
+            }
+
+            const entries = fs.readdirSync(outputDir, { withFileTypes: true });
+            
+            for (const entry of entries) {
+                if (!entry.isDirectory()) continue;
+                
+                const dirPath = path.join(outputDir, entry.name);
+                
+                // Handle new_tab_extensions subfolder
+                if (entry.name === 'new_tab_extensions') {
+                    const subEntries = fs.readdirSync(dirPath, { withFileTypes: true });
+                    for (const subEntry of subEntries) {
+                        if (subEntry.isDirectory()) {
+                            const subDirPath = path.join(dirPath, subEntry.name);
+                            if (this.isValidMigratedExtension(subDirPath)) {
+                                migratedIds.add(subEntry.name);
+                            }
+                        }
+                    }
+                } else {
+                    // Regular extension folder
+                    if (this.isValidMigratedExtension(dirPath)) {
+                        migratedIds.add(entry.name);
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('Error scanning output directory for migrated extensions:', error);
+        }
+        
+        return migratedIds;
+    }
+
+    /**
+     * Checks if a directory is a valid migrated extension by verifying it has a manifest.json
+     * @param dirPath The directory path to check
+     * @returns true if it's a valid migrated extension
+     */
+    private isValidMigratedExtension(dirPath: string): boolean {
+        try {
+            const manifestPath = path.join(dirPath, 'manifest.json');
+            return fs.existsSync(manifestPath);
+        } catch {
+            return false;
         }
     }
 
