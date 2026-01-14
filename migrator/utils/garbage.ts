@@ -1,17 +1,41 @@
 import { Extension } from '../types/extension';
 import { extensionUtils } from './extension_utils';
 import { logger } from './logger';
+import * as os from 'os';
 
 /**
  * Memory management utilities for preventing OOM errors in long-running processes.
  */
 
-// Default memory thresholds in GB
-const DEFAULT_MEMORY_WARN_LIMIT_GB = 24;
-const DEFAULT_MEMORY_CRIT_LIMIT_GB = 32;
+/**
+ * Get the effective memory limit for Node.js
+ * Takes into account --max-old-space-size if set, otherwise uses system memory
+ */
+function getEffectiveMemoryLimitGB(): number {
+    // Check if max-old-space-size is set in NODE_OPTIONS
+    const nodeOptions = process.env.NODE_OPTIONS || '';
+    const maxOldSpaceMatch = nodeOptions.match(/--max-old-space-size=(\d+)/);
+    
+    if (maxOldSpaceMatch) {
+        const maxOldSpaceMB = parseInt(maxOldSpaceMatch[1], 10);
+        return maxOldSpaceMB / 1024;
+    }
+    
+    // Fall back to 80% of system memory
+    const totalMemoryGB = os.totalmem() / 1024 / 1024 / 1024;
+    return totalMemoryGB * 0.8;
+}
 
-// Threshold for triggering automatic GC
-const DEFAULT_GC_TRIGGER_THRESHOLD_GB = 16;
+// Calculate dynamic thresholds based on available memory
+const EFFECTIVE_MEMORY_LIMIT_GB = getEffectiveMemoryLimitGB();
+
+// Default memory thresholds as percentages of effective limit
+// Use lower percentages for very large memory limits to prevent runaway growth
+const DEFAULT_MEMORY_WARN_LIMIT_GB = Math.min(EFFECTIVE_MEMORY_LIMIT_GB * 0.6, 48);
+const DEFAULT_MEMORY_CRIT_LIMIT_GB = Math.min(EFFECTIVE_MEMORY_LIMIT_GB * 0.75, 64);
+
+// Threshold for triggering automatic GC - more aggressive for large heaps
+const DEFAULT_GC_TRIGGER_THRESHOLD_GB = Math.min(EFFECTIVE_MEMORY_LIMIT_GB * 0.4, 12);
 
 /**
  * Structured memory information

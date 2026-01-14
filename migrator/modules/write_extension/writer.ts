@@ -5,8 +5,8 @@ import { ExtFileType } from '../../types/ext_file_types';
 import { logger } from '../../utils/logger';
 
 export class Writer {
-    private static readonly MAX_CONCURRENT_FILE_WRITES = 20; // Limit concurrent file operations per extension
-    private static readonly MAX_GLOBAL_FILE_WRITES = 100; // Global limit across all extensions to prevent EMFILE
+    private static readonly MAX_CONCURRENT_FILE_WRITES = 10; // Reduced from 20 to lower memory pressure
+    private static readonly MAX_GLOBAL_FILE_WRITES = 50; // Reduced from 100 to prevent OOM during large batches
 
     // Global semaphore to track and limit file operations across all extensions
     private static globalFileWriteCount = 0;

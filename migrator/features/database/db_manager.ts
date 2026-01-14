@@ -1176,17 +1176,22 @@ export class Database {
         return this.enqueueOperation(async () => {
             if (!this.database) throw new Error('Database not initialized');
 
-            // Find all extensions that have mv3_extension_id set (indicating successful migration)
-            const docs = await this.database.collection(Collections.EXTENSIONS).find(
-                { mv3_extension_id: { $exists: true, $ne: null } },
-                { projection: { id: 1, mv3_extension_id: 1 } }
-            ).toArray();
-
             const sourceIds = new Set<string>();
             const mv3Ids = new Set<string>();
             const mv3ToSourceMap = new Map<string, string>();
 
-            for (const doc of docs) {
+            // Use cursor-based streaming to avoid loading all documents into memory at once
+            // The cursor fetches documents in batches (default 101 documents per batch)
+            const cursor = this.database.collection(Collections.EXTENSIONS).find(
+                { mv3_extension_id: { $exists: true, $ne: null } },
+                { 
+                    projection: { id: 1, mv3_extension_id: 1 },
+                    batchSize: 1000 // Process in batches of 1000 for efficiency
+                }
+            );
+
+            // Stream documents one at a time to minimize memory footprint
+            for await (const doc of cursor) {
                 if (doc.id) {
                     sourceIds.add(doc.id);
                 }
