@@ -17,11 +17,11 @@ export class WriteQueue {
     private static instance: WriteQueue;
     private writeQueue: WriteTask[] = [];
     private isProcessing = false;
-    private readonly concurrentWrites = 10;
-    private readonly MAX_QUEUE_SIZE = 10; // Limit queue size
+    private readonly concurrentWrites = 5; // Reduced from 10 to lower memory pressure
+    private readonly MAX_QUEUE_SIZE = 5; // Reduced from 10 to limit memory usage
     private activeWriters = 0;
     private autoPro = true; // Auto-process queue (can be disabled for testing)
-    private readonly fileBatchSize = 50; // Number of files to write concurrently
+    private readonly fileBatchSize = 25; // Reduced from 50 for better memory management
 
     private constructor() {
         // Handle graceful shutdown via beforeExit (non-signal cleanup)

@@ -255,7 +255,7 @@ class MockCursor {
 // - simple equality
 // - $or array
 // - $regex with $options (case-insensitive)
-// - $ne and $in operators
+// - $ne, $in, and $exists operators
 function matchesFilter(doc: AnyDoc, filter: AnyDoc): boolean {
     if (!filter || Object.keys(filter).length === 0) return true;
     if (filter.$or && Array.isArray(filter.$or)) {
@@ -265,16 +265,34 @@ function matchesFilter(doc: AnyDoc, filter: AnyDoc): boolean {
     return Object.keys(filter).every((k) => {
         const val = filter[k];
         if (val && typeof val === 'object' && !Array.isArray(val)) {
+            // Handle compound queries like { $exists: true, $ne: null }
+            let result = true;
+            let hasOperator = false;
+            
+            if (val.$exists !== undefined) {
+                hasOperator = true;
+                const fieldExists = k in doc && doc[k] !== undefined;
+                if (val.$exists && !fieldExists) result = false;
+                if (!val.$exists && fieldExists) result = false;
+            }
+            
             if (val.$regex) {
+                hasOperator = true;
                 const re = new RegExp(val.$regex, val.$options || '');
-                return re.test(String(doc[k] || ''));
+                if (!re.test(String(doc[k] || ''))) result = false;
             }
+            
             if (val.$ne !== undefined) {
-                return doc[k] !== val.$ne;
+                hasOperator = true;
+                if (doc[k] === val.$ne) result = false;
             }
+            
             if (val.$in) {
-                return val.$in.includes(doc[k]);
+                hasOperator = true;
+                if (!val.$in.includes(doc[k])) result = false;
             }
+            
+            if (hasOperator) return result;
         }
         return doc[k] === val;
     });

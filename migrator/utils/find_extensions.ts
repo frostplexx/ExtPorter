@@ -11,6 +11,17 @@ import { extensionUtils } from './extension_utils';
 import { findAndParseCWSInfo } from './cws_parser';
 
 /**
+ * Options for extension discovery
+ */
+export interface FindExtensionsOptions {
+    includes_mv3?: boolean;
+    /** Set of extension IDs to skip (for resume functionality) - checked BEFORE creating Extension objects */
+    skipIds?: Set<string>;
+    /** Callback to report skipped extension count */
+    onSkip?: (id: string) => void;
+}
+
+/**
  * Finds all unpacked extensions given a path. Can be pointed to a single extension directory or a directory containing multiple extensions.
  * @param{string} ext_path to extension(s) - must be unpacked (no .crx files)
  * @returns{Extension} list of extensions that it found
@@ -24,9 +35,20 @@ export function find_extensions(ext_path: string, includes_mv3: boolean = false)
  * Memory-efficient iterator that yields extensions one at a time.
  * Use this instead of find_extensions() when processing large numbers of extensions.
  * @param{string} ext_path to extension(s) - must be unpacked (no .crx files)
+ * @param{boolean | FindExtensionsOptions} optionsOrIncludesMv3 - options or legacy includes_mv3 boolean
  * @yields{Extension} extensions found one at a time
  */
-export function* find_extensions_iterator(ext_path: string, includes_mv3: boolean = false): Generator<Extension> {
+export function* find_extensions_iterator(
+    ext_path: string, 
+    optionsOrIncludesMv3: boolean | FindExtensionsOptions = false
+): Generator<Extension> {
+    // Support legacy boolean argument
+    const options: FindExtensionsOptions = typeof optionsOrIncludesMv3 === 'boolean' 
+        ? { includes_mv3: optionsOrIncludesMv3 }
+        : optionsOrIncludesMv3;
+    
+    const includes_mv3 = options.includes_mv3 ?? false;
+    
     // Convert to absolute path to avoid relative path issues
     const pth = path.resolve(ext_path);
 
@@ -43,11 +65,11 @@ export function* find_extensions_iterator(ext_path: string, includes_mv3: boolea
 
         if (existsSync(manifestPath)) {
             // Single unpacked extension directory
-            const ext = get_single_extension(manifestPath, includes_mv3);
+            const ext = get_single_extension(manifestPath, includes_mv3, options.skipIds, options.onSkip);
             if (ext) yield ext;
         } else {
             // Directory containing multiple extension directories - search recursively
-            yield* findExtensionsRecursivelyIterator(pth, includes_mv3);
+            yield* findExtensionsRecursivelyIterator(pth, includes_mv3, options.skipIds, options.onSkip);
         }
     } else if (lstatSync(pth).isFile()) {
         logger.error(

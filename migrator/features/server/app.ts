@@ -519,16 +519,40 @@ export class MigrationServer {
             // Use iterator to process extensions one at a time - never hold all in memory
             const extensionIterator = find_extensions_iterator(this.globals.extensionsPath);
             
+            // Import memory utilities once outside the loop for memory pressure checks
+            const memUtils = await import('../../utils/garbage.js');
+            
             for (const rawExtension of extensionIterator) {
                 // Check if migration was stopped
                 if (!this.migrationState.isRunning) {
                     this.broadcastToClients('Migration stopped by user');
                     break;
                 }
+                
+                // ========== MEMORY PRESSURE CHECK ==========
+                // Check memory before processing each extension to prevent OOM
+                const memInfo = memUtils.getMemoryInfo();
+                if (memInfo.heapUsedGB > 12) {
+                    // Memory pressure: force GC and wait a bit
+                    memUtils.forceGarbageCollection();
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                    
+                    // Re-check after GC
+                    const afterGC = memUtils.getMemoryInfo();
+                    if (afterGC.heapUsedGB > 14) {
+                        // Still high - warn and potentially pause
+                        this.broadcastToClients(`Warning: High memory usage (${afterGC.heapUsedGB.toFixed(1)}GB). Processing continues but may be slower.`);
+                        // Give more time for async operations to complete
+                        await new Promise(resolve => setTimeout(resolve, 500));
+                    }
+                }
+                // ==========================================
 
                 // Filter out new-tab extensions if setting is enabled
                 if (filterNewTab && rawExtension.isNewTabExtension) {
                     filteredCount++;
+                    // MEMORY FIX: Clean up filtered extension before continuing
+                    memUtils.clearExtensionMemory(rawExtension);
                     continue;
                 }
 
@@ -537,9 +561,18 @@ export class MigrationServer {
                     skippedCount++;
                     processedCount++;
                     
+                    // MEMORY FIX: Clean up skipped extension before continuing
+                    // This is critical - previously skipped extensions were never cleaned up!
+                    memUtils.clearExtensionMemory(rawExtension);
+                    
                     // Log progress periodically for skipped extensions
                     if (skippedCount % 100 === 0) {
                         this.broadcastToClients(`Skipped ${skippedCount} already-migrated extensions...`);
+                    }
+                    
+                    // Trigger GC periodically even for skipped extensions
+                    if (skippedCount % 500 === 0 && global.gc) {
+                        global.gc();
                     }
                     
                     // Update progress to reflect total processed (including skipped)
