@@ -39,16 +39,16 @@ export function find_extensions(ext_path: string, includes_mv3: boolean = false)
  * @yields{Extension} extensions found one at a time
  */
 export function* find_extensions_iterator(
-    ext_path: string, 
+    ext_path: string,
     optionsOrIncludesMv3: boolean | FindExtensionsOptions = false
 ): Generator<Extension> {
     // Support legacy boolean argument
-    const options: FindExtensionsOptions = typeof optionsOrIncludesMv3 === 'boolean' 
+    const options: FindExtensionsOptions = typeof optionsOrIncludesMv3 === 'boolean'
         ? { includes_mv3: optionsOrIncludesMv3 }
         : optionsOrIncludesMv3;
-    
+
     const includes_mv3 = options.includes_mv3 ?? false;
-    
+
     // Convert to absolute path to avoid relative path issues
     const pth = path.resolve(ext_path);
 
@@ -90,7 +90,7 @@ export function* find_extensions_iterator(
  */
 export function count_extensions(ext_path: string, includes_mv3: boolean = false): number {
     const pth = path.resolve(ext_path);
-    
+
     if (!existsSync(pth) || !lstatSync(pth).isDirectory()) {
         return 0;
     }
@@ -178,7 +178,7 @@ function get_single_extension(manifestPath: string, includes_mv3: boolean): Exte
 
         // Skip Chrome Apps - they are deprecated and cannot be migrated
         if (isChromeApp(json)) {
-            logger.info(
+            logger.debug(
                 null,
                 `Skipping Chrome App (deprecated): ${json['name'] || 'Unknown'}`,
                 {
@@ -190,7 +190,7 @@ function get_single_extension(manifestPath: string, includes_mv3: boolean): Exte
 
         // Skip theme extensions - they only contain visual customizations and no executable code
         if (isThemeExtension(json)) {
-            logger.info(null, `Skipping theme extension: ${json['name'] || 'Unknown'}`, {
+            logger.debug(null, `Skipping theme extension: ${json['name'] || 'Unknown'}`, {
                 manifest_path: manifestPath,
             });
             return null;
