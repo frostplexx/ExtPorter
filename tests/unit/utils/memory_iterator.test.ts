@@ -1,10 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
 import * as fs from 'fs-extra';
 import * as path from 'path';
-import { 
-    find_extensions, 
-    find_extensions_iterator, 
-    count_extensions 
+import {
+    find_extensions,
+    find_extensions_iterator,
+    count_extensions
 } from '../../../migrator/utils/find_extensions';
 import { clearExtensionMemory } from '../../../migrator/utils/garbage';
 import { createTransformedFile, LazyFile } from '../../../migrator/types/abstract_file';
@@ -80,7 +80,7 @@ describe('Memory-efficient extension processing', () => {
 
             for (const ext of iterator) {
                 processedCount++;
-                
+
                 // Access file content to trigger loading
                 for (const file of ext.files) {
                     if (file) {
@@ -97,7 +97,7 @@ describe('Memory-efficient extension processing', () => {
             }
 
             expect(processedCount).toBe(extensionCount);
-            
+
             // Memory should not grow linearly with extension count
             // With 20 extensions of ~5KB each, if all loaded at once = ~100KB minimum
             // With iterator, should stay much lower per iteration
@@ -113,10 +113,67 @@ describe('Memory-efficient extension processing', () => {
             const iteratorResult = [...find_extensions_iterator(testDir)];
 
             expect(iteratorResult.length).toBe(arrayResult.length);
-            
+
             const arrayNames = arrayResult.map(e => e.name).sort();
             const iteratorNames = iteratorResult.map(e => e.name).sort();
             expect(iteratorNames).toEqual(arrayNames);
+        });
+
+        it('should skip extensions matching skipIds without loading them', () => {
+            // Create 3 extensions
+            createTestExtension('ext1', 5, 10); // More files to make loading expensive
+            createTestExtension('ext2', 5, 10);
+            createTestExtension('ext3', 5, 10);
+
+            // Get all extension IDs first
+            const allExtensions = [...find_extensions_iterator(testDir)];
+            expect(allExtensions).toHaveLength(3);
+
+            // Create skipIds set with the first extension's ID
+            const skipIds = new Set([allExtensions[0].id]);
+            let skippedCount = 0;
+            const skippedIds: string[] = [];
+
+            // Iterate with skipIds option
+            const results = [...find_extensions_iterator(testDir, {
+                skipIds,
+                onSkip: (id) => {
+                    skippedCount++;
+                    skippedIds.push(id);
+                }
+            })];
+
+            // Should only yield 2 extensions (one was skipped)
+            expect(results.length).toBe(2);
+            expect(skippedCount).toBe(1);
+            expect(skippedIds).toContain(allExtensions[0].id);
+
+            // Verify the skipped extension is not in results
+            const resultIds = results.map(e => e.id);
+            expect(resultIds).not.toContain(allExtensions[0].id);
+        });
+
+        it('should skip multiple extensions when multiple IDs in skipIds', () => {
+            createTestExtension('ext1', 2);
+            createTestExtension('ext2', 2);
+            createTestExtension('ext3', 2);
+            createTestExtension('ext4', 2);
+
+            // Get all extension IDs
+            const allExtensions = [...find_extensions_iterator(testDir)];
+            expect(allExtensions).toHaveLength(4);
+
+            // Skip 2 extensions
+            const skipIds = new Set([allExtensions[0].id, allExtensions[2].id]);
+            let skippedCount = 0;
+
+            const results = [...find_extensions_iterator(testDir, {
+                skipIds,
+                onSkip: () => skippedCount++
+            })];
+
+            expect(results.length).toBe(2);
+            expect(skippedCount).toBe(2);
         });
     });
 
@@ -131,11 +188,11 @@ describe('Memory-efficient extension processing', () => {
             const afterMemory = process.memoryUsage().heapUsed;
 
             expect(count).toBe(3);
-            
+
             // Memory increase should be minimal (no file content loaded)
             const memoryIncrease = afterMemory - beforeMemory;
             console.log(`Memory increase from count_extensions: ${Math.round(memoryIncrease / 1024)}KB`);
-            
+
             // Should be less than 1MB for just counting
             expect(memoryIncrease).toBeLessThan(1024 * 1024);
         });
@@ -220,13 +277,13 @@ describe('Memory-efficient extension processing', () => {
             const originalFile = extensions[0].files[0]!;
 
             const transformedFile = createTransformedFile(originalFile, 'new content');
-            
+
             // Should work before close
             expect(transformedFile.getContent()).toBe('new content');
-            
+
             // Close should release memory
             transformedFile.close();
-            
+
             // After close, accessing content should throw
             expect(() => transformedFile.getContent()).toThrow();
         });
@@ -241,14 +298,14 @@ describe('Memory-efficient extension processing', () => {
 
             // Getting content should work without creating buffer
             expect(transformedFile.getContent()).toBe(largeContent);
-            
+
             // Getting buffer should create it
             const buffer = transformedFile.getBuffer();
             expect(buffer.length).toBe(largeContent.length);
-            
+
             // Release memory should clear buffer but keep content
             transformedFile.releaseMemory();
-            
+
             // Content should still be accessible
             expect(transformedFile.getContent()).toBe(largeContent);
         });

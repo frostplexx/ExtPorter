@@ -166,8 +166,17 @@ function isThemeExtension(manifest: any): boolean {
 
 /**
  * Parses a single manifest and returns the extension, or null if invalid
+ * @param manifestPath Path to the manifest.json file
+ * @param includes_mv3 Whether to include MV3 extensions
+ * @param skipIds Optional set of extension IDs to skip (for resume functionality)
+ * @param onSkip Optional callback when an extension is skipped
  */
-function get_single_extension(manifestPath: string, includes_mv3: boolean): Extension | null {
+function get_single_extension(
+    manifestPath: string,
+    includes_mv3: boolean,
+    skipIds?: Set<string>,
+    onSkip?: (id: string) => void
+): Extension | null {
     let manifestMMapFile: MMapFile | undefined;
     try {
         // Read manifest using memory mapping
@@ -198,15 +207,9 @@ function get_single_extension(manifestPath: string, includes_mv3: boolean): Exte
 
         if (json['manifest_version'] == 2 || includes_mv3) {
             const extensionDir = path.dirname(manifestPath);
-            let extensionName: string = json['name'];
 
-            // Handle __MSG_name__ pattern
-            if (extensionName && extensionName.includes('__MSG')) {
-                extensionName = getLocalizedMessage(extensionDir, 'name');
-            }
-
-            const files = discoverExtensionFiles(extensionDir);
-
+            // EARLY BAILOUT: Check if this extension should be skipped BEFORE expensive operations
+            // This is critical for memory efficiency when resuming large migrations
             const id = getExtensionID(extensionDir);
 
             if (!id) {
@@ -217,6 +220,22 @@ function get_single_extension(manifestPath: string, includes_mv3: boolean): Exte
                 });
                 return null;
             }
+
+            // Skip if ID is in skipIds set (already migrated)
+            if (skipIds?.has(id)) {
+                if (onSkip) onSkip(id);
+                return null;
+            }
+
+            // Now proceed with expensive operations (file discovery, CWS parsing)
+            let extensionName: string = json['name'];
+
+            // Handle __MSG_name__ pattern
+            if (extensionName && extensionName.includes('__MSG')) {
+                extensionName = getLocalizedMessage(extensionDir, 'name');
+            }
+
+            const files = discoverExtensionFiles(extensionDir);
 
             // Parse CWS information from HTML file if available
             const cwsInfo = findAndParseCWSInfo(extensionDir);
@@ -413,8 +432,17 @@ function getFileType(filePath: string): ExtFileType {
 
 /**
  * Iterator version that yields extensions one at a time instead of collecting them all
+ * @param dirPath Directory path to search
+ * @param includes_mv3 Whether to include MV3 extensions
+ * @param skipIds Optional set of extension IDs to skip (for resume functionality)
+ * @param onSkip Optional callback when an extension is skipped
  */
-function* findExtensionsRecursivelyIterator(dirPath: string, includes_mv3: boolean): Generator<Extension> {
+function* findExtensionsRecursivelyIterator(
+    dirPath: string,
+    includes_mv3: boolean,
+    skipIds?: Set<string>,
+    onSkip?: (id: string) => void
+): Generator<Extension> {
     try {
         const items = readdirSync(dirPath);
 
@@ -426,11 +454,11 @@ function* findExtensionsRecursivelyIterator(dirPath: string, includes_mv3: boole
 
                 if (existsSync(manifestPath)) {
                     // Found an unpacked extension directory - yield it directly
-                    const ext = get_single_extension(manifestPath, includes_mv3);
+                    const ext = get_single_extension(manifestPath, includes_mv3, skipIds, onSkip);
                     if (ext) yield ext;
                 } else {
                     // Recursively search subdirectories for more extension directories
-                    yield* findExtensionsRecursivelyIterator(itemPath, includes_mv3);
+                    yield* findExtensionsRecursivelyIterator(itemPath, includes_mv3, skipIds, onSkip);
                 }
             }
             // Note: Files are ignored - only looking for unpacked extension directories
