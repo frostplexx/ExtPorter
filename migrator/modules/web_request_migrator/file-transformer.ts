@@ -1,6 +1,6 @@
 import * as espree from 'espree';
 import { Extension } from '../../types/extension';
-import { LazyFile } from '../../types/abstract_file';
+import { AbstractFile, LazyFile } from '../../types/abstract_file';
 import { logger } from '../../utils/logger';
 import { WebRequestUsage } from './types';
 
@@ -10,9 +10,9 @@ import { WebRequestUsage } from './types';
 export function transformWebRequestFiles(
     extension: Extension,
     webRequestUsages: WebRequestUsage[]
-): LazyFile[] {
+): AbstractFile[] {
     // Group usages by file
-    const usagesByFile = new Map<LazyFile, WebRequestUsage[]>();
+    const usagesByFile = new Map<AbstractFile, WebRequestUsage[]>();
     for (const usage of webRequestUsages) {
         if (!usagesByFile.has(usage.file)) {
             usagesByFile.set(usage.file, []);
@@ -24,7 +24,7 @@ export function transformWebRequestFiles(
     // Transform files that have webRequest usages
     return extension.files.map((file) => {
 
-        if(!file){
+        if (!file) {
             logger.error(extension, "File is null")
             return;
         }

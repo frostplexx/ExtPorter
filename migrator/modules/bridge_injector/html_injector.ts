@@ -1,6 +1,5 @@
 import { Extension } from '../../types/extension';
-import { LazyFile } from '../../types/abstract_file';
-import { FileTransformer } from './file_transformer';
+import { AbstractFile, createTransformedFile } from '../../types/abstract_file';
 import { logger } from '../../utils/logger';
 import * as path from 'path';
 
@@ -13,7 +12,7 @@ export class HtmlInjector {
         extension: Extension,
         htmlPath: string,
         bridgeFilename: string
-    ): LazyFile | null {
+    ): AbstractFile | null {
         const htmlFile = extension.files.find((file) => file!.path === htmlPath);
 
         if (!htmlFile) {
@@ -57,7 +56,7 @@ export class HtmlInjector {
             logger.info(extension, `Bridge injected into HTML: ${htmlPath}`);
 
             // Create and return transformed file (in memory only)
-            return FileTransformer.createTransformedFile(htmlFile, newContent);
+            return createTransformedFile(htmlFile, newContent);
         } catch (error) {
             logger.error(
                 extension,
@@ -66,10 +65,10 @@ export class HtmlInjector {
                     error:
                         error instanceof Error
                             ? {
-                                  message: error.message,
-                                  stack: error.stack,
-                                  name: error.name,
-                              }
+                                message: error.message,
+                                stack: error.stack,
+                                name: error.name,
+                            }
                             : String(error),
                 }
             );

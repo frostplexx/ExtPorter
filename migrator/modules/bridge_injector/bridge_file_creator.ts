@@ -1,4 +1,4 @@
-import { LazyFile } from '../../types/abstract_file';
+import { AbstractFile, createNewFile } from '../../types/abstract_file';
 import { ExtFileType } from '../../types/ext_file_types';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -18,27 +18,9 @@ export function loadBridgeContent(): string {
 }
 
 /**
- * Creates a LazyFile instance for the bridge file.
+ * Creates an AbstractFile instance for the bridge file.
  */
-export function createBridgeFile(bridgeFilename: string): LazyFile {
+export function createBridgeFile(bridgeFilename: string): AbstractFile {
     const bridgeContent = loadBridgeContent();
-
-    // Create a LazyFile-like object for the bridge
-    const bridgeFile = Object.create(LazyFile.prototype);
-    bridgeFile.path = bridgeFilename;
-    bridgeFile.filetype = ExtFileType.JS;
-    bridgeFile._bridgeContent = bridgeContent;
-
-    // Override methods to work with bridge content
-    bridgeFile.getContent = () => bridgeContent;
-    bridgeFile.getSize = () => Buffer.byteLength(bridgeContent, 'utf8');
-    bridgeFile.close = () => {
-        /* No-op for in-memory content */
-    };
-    bridgeFile.getAST = () => {
-        // Bridge file doesn't need AST parsing
-        return undefined;
-    };
-
-    return bridgeFile;
+    return createNewFile(bridgeFilename, bridgeContent, ExtFileType.JS);
 }

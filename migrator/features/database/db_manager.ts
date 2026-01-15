@@ -1180,18 +1180,14 @@ export class Database {
             const mv3Ids = new Set<string>();
             const mv3ToSourceMap = new Map<string, string>();
 
-            // Use cursor-based streaming to avoid loading all documents into memory at once
-            // The cursor fetches documents in batches (default 101 documents per batch)
-            const cursor = this.database.collection(Collections.EXTENSIONS).find(
+            // Query for extensions with mv3_extension_id
+            const docs = await this.database.collection(Collections.EXTENSIONS).find(
                 { mv3_extension_id: { $exists: true, $ne: null } },
-                { 
-                    projection: { id: 1, mv3_extension_id: 1 },
-                    batchSize: 1000 // Process in batches of 1000 for efficiency
-                }
-            );
+                { projection: { id: 1, mv3_extension_id: 1 } }
+            ).toArray();
 
-            // Stream documents one at a time to minimize memory footprint
-            for await (const doc of cursor) {
+            // Process documents
+            for (const doc of docs) {
                 if (doc.id) {
                     sourceIds.add(doc.id);
                 }

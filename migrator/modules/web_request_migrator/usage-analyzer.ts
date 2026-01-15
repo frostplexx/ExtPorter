@@ -1,5 +1,5 @@
 import { WebRequestUsage, UsageAnalysis } from './types';
-import { traverseAST } from './ast-utils';
+import { traverseAST } from '../../utils/ast-utils';
 
 /**
  * Analyze a webRequest usage to determine if it contains dynamic logic

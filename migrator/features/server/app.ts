@@ -520,7 +520,7 @@ export class MigrationServer {
             // MEMORY FIX: Pass alreadyMigratedIds to skip extensions BEFORE creating Extension objects
             const extensionIterator = find_extensions_iterator(this.globals.extensionsPath, {
                 skipIds: alreadyMigratedIds,
-                onSkip: (id) => {
+                onSkip: () => {
                     skippedCount++;
                     processedCount++;
 

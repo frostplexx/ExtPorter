@@ -1,6 +1,5 @@
 import { Extension } from '../../types/extension';
-import { LazyFile } from '../../types/abstract_file';
-import { FileTransformer } from './file_transformer';
+import { AbstractFile, createTransformedFile } from '../../types/abstract_file';
 import { logger } from '../../utils/logger';
 
 export class ServiceWorkerInjector {
@@ -12,7 +11,7 @@ export class ServiceWorkerInjector {
         extension: Extension,
         serviceWorkerPath: string,
         bridgeFilename: string
-    ): LazyFile | null {
+    ): AbstractFile | null {
         // Find the service worker file in the extension
         const serviceWorkerFile = extension.files.find((file) => file!.path === serviceWorkerPath);
 
@@ -39,7 +38,7 @@ export class ServiceWorkerInjector {
             logger.info(extension, `Bridge injected into service worker: ${serviceWorkerPath}`);
 
             // Create and return transformed file (in memory only)
-            return FileTransformer.createTransformedFile(serviceWorkerFile, newContent);
+            return createTransformedFile(serviceWorkerFile, newContent);
         } catch (error) {
             logger.error(
                 extension,

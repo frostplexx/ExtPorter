@@ -28,12 +28,8 @@ export class InterestingnessScorer implements MigrationModule {
             await FeatureTagger.addFeatureTags(extension, score.breakdown);
 
 
-            extension.files.forEach(file => {
-                if (file) {
-                    file.releaseMemory();  // Clear cached content
-                    file.close();          // Close file descriptors
-                }
-            });
+            // NOTE: Do NOT call releaseMemory() or close() here!
+            // Files are written asynchronously by WriteQueue and closed by Writer.writeFiles()
 
             return extension;
         } catch (error) {

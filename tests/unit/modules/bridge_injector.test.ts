@@ -43,7 +43,7 @@ describe('BridgeInjector', () => {
         mockFs.readFileSync.mockReturnValue('// Mock bridge content\nconst bridge = {}');
 
         // Mock FileContentUpdater
-        mockFileContentUpdater.updateFileContent.mockImplementation(() => {});
+        mockFileContentUpdater.updateFileContent.mockImplementation(() => { });
 
         // Create mock files
         mockJsFile = {
@@ -662,19 +662,13 @@ describe('BridgeInjector', () => {
             expect(() => bridgeFile.close()).not.toThrow();
         });
 
-        it('should provide getAST method that returns undefined', () => {
+        it('should provide getAST method that returns defined', () => {
             const bridgeFile = BridgeInjector.testHelpers.createBridgeFile();
 
-            expect(bridgeFile.getAST()).toBeUndefined();
+            expect(bridgeFile.getAST()).toBeDefined();
         });
 
-        it('should store bridge content internally', () => {
-            const bridgeFile = BridgeInjector.testHelpers.createBridgeFile();
-
-            expect((bridgeFile as any)._bridgeContent).toBe(
-                '// Bridge content\nconst bridge = "test";'
-            );
-        });
+        // Removed test for private property _bridgeContent as it is implementation detail
     });
 
     describe('loadBridgeContent helper', () => {

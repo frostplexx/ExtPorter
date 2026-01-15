@@ -517,12 +517,8 @@ const storageHelper = {
 
             logger.info(extension, 'Successfully applied service worker compatibility fixes');
 
-            extension.files.forEach(file => {
-                if (file) {
-                    file.releaseMemory();  // Clear cached content
-                    file.close();          // Close file descriptors
-                }
-            });
+            // NOTE: Do NOT call releaseMemory() or close() here!
+            // Files are written asynchronously by WriteQueue and closed by Writer.writeFiles()
 
             return {
                 ...extension,
