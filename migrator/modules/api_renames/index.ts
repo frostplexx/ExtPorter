@@ -1,9 +1,7 @@
 import { Extension } from '../../types/extension';
 import { MigrationError, MigrationModule } from '../../types/migration_module';
-import { LazyFile } from '../../types/abstract_file';
+import { AbstractFile, createTransformedFile } from '../../types/abstract_file';
 import { ExtFileType } from '../../types/ext_file_types';
-import * as espree from 'espree';
-import * as ESTree from 'estree';
 import { logger } from '../../utils/logger';
 import { Tags } from '../../types/tags';
 import { TwinningMapping } from '../../types/twinning_mapping';
@@ -23,28 +21,6 @@ export class RenameAPIS implements MigrationModule {
      * Reused across all migrations for performance.
      */
     private static readonly blacklistChecker = BlacklistChecker.getInstance();
-
-    /**
-     * Shared espree parser options for script parsing.
-     * Cached to avoid object creation overhead.
-     */
-    private static readonly SCRIPT_PARSE_OPTIONS = {
-        ecmaVersion: 'latest' as const,
-        sourceType: 'script' as const,
-        loc: true,
-        range: true,
-    };
-
-    /**
-     * Shared espree parser options for module parsing.
-     * Cached to avoid object creation overhead.
-     */
-    private static readonly MODULE_PARSE_OPTIONS = {
-        ecmaVersion: 'latest' as const,
-        sourceType: 'module' as const,
-        loc: true,
-        range: true,
-    };
 
     /**
      * Processes all JavaScript files in the extension and
@@ -72,7 +48,7 @@ export class RenameAPIS implements MigrationModule {
             let transformedFiles = 0;
             let blacklistedFiles = 0;
 
-            const transformedFilesArray: (LazyFile | null)[] = extension.files.map((file) => {
+            const transformedFilesArray: (AbstractFile | null)[] = extension.files.map((file) => {
 
                 if (file == null) {
                     logger.error(extension, "File is null")
@@ -136,12 +112,8 @@ export class RenameAPIS implements MigrationModule {
             // Add API_RENAMES_APPLIED tag to extension object
             extension = extensionUtils.addTag(extension, Tags.API_RENAMES_APPLIED);
 
-            extension.files.forEach(file => {
-                if (file) {
-                    file.releaseMemory();  // Clear cached content
-                    file.close();          // Close file descriptors
-                }
-            });
+            // NOTE: Do NOT call releaseMemory() or close() here!
+            // Files are written asynchronously by WriteQueue and closed by Writer.writeFiles()
 
             return updatedExtension;
         } catch (error) {
@@ -161,11 +133,11 @@ export class RenameAPIS implements MigrationModule {
      * @returns Original file or transformed file
      */
     private static processJavaScriptFile(
-        file: LazyFile,
+        file: AbstractFile,
         mappings: TwinningMapping,
         extension: Extension | undefined,
         onTransformed: (transformed: boolean) => void
-    ): LazyFile {
+    ): AbstractFile {
         const ast = file.getAST();
 
         if (!ast) {
@@ -207,110 +179,7 @@ export class RenameAPIS implements MigrationModule {
         );
         onTransformed(true);
 
-        return RenameAPIS.createTransformedFile(file, newContent);
-    }
-
-    /**
-     * Creates a new LazyFile with transformed content.
-     *
-     * Creates an in-memory representation of the transformed file that
-     * maintains the same interface as the original LazyFile but serves
-     * the transformed content instead of reading from disk.
-     *
-     * MEMORY OPTIMIZATION: The releaseMemory() method now properly clears
-     * the cached content and buffer to allow garbage collection.
-     *
-     * @param originalFile Original file to base the transformation on
-     * @param newContent Transformed JavaScript content
-     * @returns New LazyFile instance with transformed content
-     */
-    private static createTransformedFile(originalFile: LazyFile, newContent: string): LazyFile {
-        // Create new instance inheriting from LazyFile prototype
-        const transformedFile = Object.create(LazyFile.prototype);
-
-        // Copy basic properties
-        transformedFile.path = originalFile.path;
-        transformedFile.filetype = originalFile.filetype;
-        transformedFile._transformedContent = newContent;
-        // Copy absolute path so file can be updated later
-        transformedFile._absolutePath = (originalFile as any)._absolutePath;
-
-        // Cache the buffer for getBuffer() calls - stored in closure variable that can be cleared
-        let contentBuffer: Buffer | null = Buffer.from(newContent, 'utf8');
-        let cachedContent: string | null = newContent;
-        let isReleased = false;
-
-        // Override methods to work with transformed content
-        transformedFile.getContent = () => {
-            if (isReleased) {
-                // Re-read from _transformedContent if memory was released but content is needed again
-                return transformedFile._transformedContent || '';
-            }
-            return cachedContent || '';
-        };
-        transformedFile.getBuffer = () => {
-            if (isReleased || !contentBuffer) {
-                // Recreate buffer if needed after memory release
-                const content = transformedFile.getContent();
-                return Buffer.from(content, 'utf8');
-            }
-            return contentBuffer;
-        };
-        transformedFile.getSize = () => {
-            if (contentBuffer) {
-                return contentBuffer.length;
-            }
-            return Buffer.byteLength(transformedFile.getContent(), 'utf8');
-        };
-        transformedFile.close = () => {
-            // Release memory when file is closed
-            contentBuffer = null;
-            cachedContent = null;
-            isReleased = true;
-        };
-        transformedFile.releaseMemory = () => {
-            // MEMORY FIX: Actually release the cached content and buffer
-            contentBuffer = null;
-            cachedContent = null;
-            isReleased = true;
-        };
-        transformedFile.cleanContent = () => transformedFile;
-
-        // Override getAST to parse transformed content with error handling
-        transformedFile.getAST = () => {
-            try {
-                // Try as script first (most common)
-                return espree.parse(
-                    newContent,
-                    RenameAPIS.SCRIPT_PARSE_OPTIONS as any
-                ) as ESTree.Program;
-            } catch {
-                try {
-                    // Fallback to module parsing
-                    return espree.parse(
-                        newContent,
-                        RenameAPIS.MODULE_PARSE_OPTIONS as any
-                    ) as ESTree.Program;
-                } catch (moduleError) {
-                    logger.error(null, `Parsing Error`, {
-                        path: originalFile.path,
-                        error:
-                            moduleError instanceof Error
-                                ? moduleError.message
-                                : String(moduleError),
-                        contentSize: transformedFile.getSize(),
-                    });
-                    return undefined;
-                }
-            }
-        };
-
-        // Release memory from original file since we now have transformed content
-        if (originalFile.releaseMemory) {
-            originalFile.releaseMemory();
-        }
-
-        return transformedFile;
+        return createTransformedFile(file, newContent);
     }
 
     /**

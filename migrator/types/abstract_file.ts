@@ -280,3 +280,121 @@ export function createTransformedFile(
 
     return transformedFile;
 }
+
+/**
+ * Create a new in-memory file from scratch.
+ * Used for generating new files that don't exist on disk (e.g., rules.json, bridge.js, offscreen.html).
+ *
+ * @param path - The relative path for the new file
+ * @param content - The file content
+ * @param filetype - The file type (ExtFileType)
+ * @returns A new AbstractFile with the content
+ */
+export function createNewFile(
+    path: string,
+    content: string,
+    filetype: ExtFileType
+): AbstractFile {
+    // Use a wrapper object so content can be released later
+    let contentRef: { content: string; buffer: Buffer | null } | null = {
+        content,
+        buffer: null, // Lazily create buffer only when needed
+    };
+    let cachedAST: ESTree.Node | undefined;
+    let astParsed = false;
+
+    const newFile: AbstractFile = {
+        path,
+        filetype,
+
+        getContent(): string {
+            if (!contentRef) {
+                throw new Error(`File content has been released: ${path}`);
+            }
+            return contentRef.content;
+        },
+
+        getBuffer(): Buffer {
+            if (!contentRef) {
+                throw new Error(`File content has been released: ${path}`);
+            }
+            // Lazily create buffer to avoid double memory usage
+            if (!contentRef.buffer) {
+                contentRef.buffer = Buffer.from(contentRef.content, 'utf8');
+            }
+            return contentRef.buffer;
+        },
+
+        getSize(): number {
+            if (!contentRef) {
+                return 0;
+            }
+            return contentRef.buffer ? contentRef.buffer.length : Buffer.byteLength(contentRef.content, 'utf8');
+        },
+
+        getAST(): ESTree.Node | undefined {
+            if (astParsed) {
+                return cachedAST;
+            }
+            astParsed = true;
+
+            if (filetype !== ExtFileType.JS) {
+                return undefined;
+            }
+
+            if (!contentRef) {
+                return undefined;
+            }
+
+            try {
+                cachedAST = espree.parse(contentRef.content, {
+                    ecmaVersion: 'latest',
+                    sourceType: 'script',
+                    loc: true,
+                    range: true,
+                } as any) as ESTree.Program;
+            } catch {
+                try {
+                    cachedAST = espree.parse(contentRef.content, {
+                        ecmaVersion: 'latest',
+                        sourceType: 'module',
+                        loc: true,
+                        range: true,
+                    } as any) as ESTree.Program;
+                } catch {
+                    // Parsing failed
+                }
+            }
+
+            return cachedAST;
+        },
+
+        close(): void {
+            // Release all memory
+            contentRef = null;
+            cachedAST = undefined;
+            astParsed = false;
+        },
+
+        releaseMemory(): void {
+            // Clear AST cache but keep content for potential re-use
+            cachedAST = undefined;
+            astParsed = false;
+            // Release buffer to save memory (can be recreated from content)
+            if (contentRef) {
+                contentRef.buffer = null;
+            }
+        },
+
+        cleanContent(): AbstractFile {
+            cachedAST = undefined;
+            astParsed = false;
+            if (contentRef) {
+                contentRef.buffer = null;
+            }
+            return newFile;
+        },
+    };
+
+    return newFile;
+}

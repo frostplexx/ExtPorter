@@ -21,12 +21,8 @@ export class ListenerAnalyzer implements MigrationModule {
                 listeners: listeners.slice(0, 10), // Log first 10 for debugging
             });
 
-            extension.files.forEach(file => {
-                if (file) {
-                    file.releaseMemory();  // Clear cached content
-                    file.close();          // Close file descriptors
-                }
-            });
+            // NOTE: Do NOT call releaseMemory() or close() here!
+            // Files are written asynchronously by WriteQueue and closed by Writer.writeFiles()
 
             return extension;
         } catch (error) {

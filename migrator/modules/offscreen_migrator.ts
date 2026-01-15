@@ -1,6 +1,6 @@
 import { Extension } from '../types/extension';
 import { MigrationError, MigrationModule } from '../types/migration_module';
-import { LazyFile } from '../types/abstract_file';
+import { AbstractFile, createNewFile, createTransformedFile } from '../types/abstract_file';
 import { ExtFileType } from '../types/ext_file_types';
 import { logger } from '../utils/logger';
 
@@ -12,93 +12,94 @@ import { logger } from '../utils/logger';
  * These calls must be moved to offscreen documents and communicated via message passing.
  */
 export class OffscreenMigrator implements MigrationModule {
-    private static readonly OFFSCREEN_HTML = 'offscreen.html';
-    private static readonly OFFSCREEN_JS = 'offscreen.js';
+  private static readonly OFFSCREEN_HTML = 'offscreen.html';
+  private static readonly OFFSCREEN_JS = 'offscreen.js';
 
-    /**
-     * Patterns that indicate DOM or window API usage that needs offscreen document
-     */
-    private static readonly DOM_WINDOW_PATTERNS = [
-        /\bwindow\./,
-        /\bdocument\./,
-        /\blocalStorage\./,
-        /\bsessionStorage\./,
-        /\bnavigator\.clipboard\./,
-        /\b(HTMLElement|HTMLDocument|DOMParser|Element|Node|NodeList|DocumentFragment|ShadowRoot|HTMLCollection|HTMLInputElement|HTMLCanvasElement|HTMLImageElement|HTMLFormElement|HTMLButtonElement|HTMLAnchorElement|HTMLTableElement|HTMLTableRowElement|HTMLTableCellElement)\b/,
-        /\b(querySelector|getElementById|createElement)\b/,
-        /\b(addEventListener|removeEventListener)\b/,
-        /\b(getComputedStyle|matchMedia)\b/,
-        /\bAudioContext\b/,
-        /\bCanvasRenderingContext\b/,
-    ];
+  // ... (DOM_WINDOW_PATTERNS and LOCALSTORAGE_PATTERNS remain unchanged)
+  /**
+   * Patterns that indicate DOM or window API usage that needs offscreen document
+   */
+  private static readonly DOM_WINDOW_PATTERNS = [
+    /\bwindow\./,
+    /\bdocument\./,
+    /\blocalStorage\./,
+    /\bsessionStorage\./,
+    /\bnavigator\.clipboard\./,
+    /\b(HTMLElement|HTMLDocument|DOMParser|Element|Node|NodeList|DocumentFragment|ShadowRoot|HTMLCollection|HTMLInputElement|HTMLCanvasElement|HTMLImageElement|HTMLFormElement|HTMLButtonElement|HTMLAnchorElement|HTMLTableElement|HTMLTableRowElement|HTMLTableCellElement)\b/,
+    /\b(querySelector|getElementById|createElement)\b/,
+    /\b(addEventListener|removeEventListener)\b/,
+    /\b(getComputedStyle|matchMedia)\b/,
+    /\bAudioContext\b/,
+    /\bCanvasRenderingContext\b/,
+  ];
 
-    /**
-     * localStorage patterns to migrate to chrome.storage
-     */
-    private static readonly LOCALSTORAGE_PATTERNS = [
-        /localStorage\.getItem\s*\(/,
-        /localStorage\.setItem\s*\(/,
-        /localStorage\.removeItem\s*\(/,
-        /localStorage\.clear\s*\(/,
-        /localStorage\[['"](\w+)['"]\]/,
-    ];
+  /**
+   * localStorage patterns to migrate to chrome.storage
+   */
+  private static readonly LOCALSTORAGE_PATTERNS = [
+    /localStorage\.getItem\s*\(/,
+    /localStorage\.setItem\s*\(/,
+    /localStorage\.removeItem\s*\(/,
+    /localStorage\.clear\s*\(/,
+    /localStorage\[['"](\w+)['"]\]/,
+  ];
 
-    /**
-     * Detect if service worker files use DOM/window APIs
-     */
-    private static needsOffscreenDocument(extension: Extension): {
-        needsOffscreen: boolean;
-        needsLocalStorageMigration: boolean;
-        affectedFiles: string[];
-    } {
-        const affectedFiles: string[] = [];
-        let needsOffscreen = false;
-        let needsLocalStorageMigration = false;
+  /**
+   * Detect if service worker files use DOM/window APIs
+   */
+  private static needsOffscreenDocument(extension: Extension): {
+    needsOffscreen: boolean;
+    needsLocalStorageMigration: boolean;
+    affectedFiles: string[];
+  } {
+    const affectedFiles: string[] = [];
+    let needsOffscreen = false;
+    let needsLocalStorageMigration = false;
 
-        // Check service worker file
-        const serviceWorker = extension.manifest.background?.service_worker;
-        if (serviceWorker) {
-            const swFile = extension.files.find((f) => f!.path === serviceWorker);
-            if (swFile && swFile.filetype === ExtFileType.JS) {
-                try {
-                    const content = swFile.getContent();
+    // Check service worker file
+    const serviceWorker = extension.manifest.background?.service_worker;
+    if (serviceWorker) {
+      const swFile = extension.files.find((f) => f!.path === serviceWorker);
+      if (swFile && swFile.filetype === ExtFileType.JS) {
+        try {
+          const content = swFile.getContent();
 
-                    // Check for DOM/window API usage
-                    for (const pattern of OffscreenMigrator.DOM_WINDOW_PATTERNS) {
-                        if (pattern.test(content)) {
-                            needsOffscreen = true;
-                            affectedFiles.push(swFile.path);
-                            break;
-                        }
-                    }
-
-                    // Check for localStorage usage
-                    for (const pattern of OffscreenMigrator.LOCALSTORAGE_PATTERNS) {
-                        if (pattern.test(content)) {
-                            needsLocalStorageMigration = true;
-                            if (!affectedFiles.includes(swFile.path)) {
-                                affectedFiles.push(swFile.path);
-                            }
-                        }
-                    }
-                } catch (error) {
-                    logger.warn(
-                        extension,
-                        `Failed to check service worker for DOM/window usage: ${swFile.path}`,
-                        error
-                    );
-                }
+          // Check for DOM/window API usage
+          for (const pattern of OffscreenMigrator.DOM_WINDOW_PATTERNS) {
+            if (pattern.test(content)) {
+              needsOffscreen = true;
+              affectedFiles.push(swFile.path);
+              break;
             }
-        }
+          }
 
-        return { needsOffscreen, needsLocalStorageMigration, affectedFiles };
+          // Check for localStorage usage
+          for (const pattern of OffscreenMigrator.LOCALSTORAGE_PATTERNS) {
+            if (pattern.test(content)) {
+              needsLocalStorageMigration = true;
+              if (!affectedFiles.includes(swFile.path)) {
+                affectedFiles.push(swFile.path);
+              }
+            }
+          }
+        } catch (error) {
+          logger.warn(
+            extension,
+            `Failed to check service worker for DOM/window usage: ${swFile.path}`,
+            error
+          );
+        }
+      }
     }
 
-    /**
-     * Create offscreen document HTML file
-     */
-    private static createOffscreenHTML(): LazyFile {
-        const content = `<!DOCTYPE html>
+    return { needsOffscreen, needsLocalStorageMigration, affectedFiles };
+  }
+
+  /**
+   * Create offscreen document HTML file
+   */
+  private static createOffscreenHTML(): AbstractFile {
+    const content = `<!DOCTYPE html>
 <html>
 <head>
     <meta charset="UTF-8">
@@ -109,22 +110,18 @@ export class OffscreenMigrator implements MigrationModule {
 </body>
 </html>`;
 
-        const file = Object.create(LazyFile.prototype);
-        file.path = OffscreenMigrator.OFFSCREEN_HTML;
-        file.filetype = ExtFileType.HTML;
-        file.getContent = () => content;
-        file.getSize = () => Buffer.byteLength(content, 'utf8');
-        file.close = () => {};
-        file.getAST = () => undefined;
+    return createNewFile(
+      OffscreenMigrator.OFFSCREEN_HTML,
+      content,
+      ExtFileType.HTML
+    );
+  }
 
-        return file;
-    }
-
-    /**
-     * Create offscreen document JavaScript file
-     */
-    private static createOffscreenJS(): LazyFile {
-        const content = `// Offscreen document for DOM and window API access
+  /**
+   * Create offscreen document JavaScript file
+   */
+  private static createOffscreenJS(): AbstractFile {
+    const content = `// Offscreen document for DOM and window API access
 // This file handles operations that cannot be performed in a service worker
 
 /**
@@ -293,35 +290,31 @@ async function handleLocalStorageClear() {
 console.log('Offscreen document loaded and ready');
 `;
 
-        const file = Object.create(LazyFile.prototype);
-        file.path = OffscreenMigrator.OFFSCREEN_JS;
-        file.filetype = ExtFileType.JS;
-        file.getContent = () => content;
-        file.getSize = () => Buffer.byteLength(content, 'utf8');
-        file.close = () => {};
-        file.getAST = () => undefined;
+    return createNewFile(
+      OffscreenMigrator.OFFSCREEN_JS,
+      content,
+      ExtFileType.JS
+    );
+  }
 
-        return file;
+  /**
+   * Transform service worker to use offscreen document
+   */
+  private static transformServiceWorker(
+    extension: Extension,
+    serviceWorkerPath: string,
+    needsLocalStorage: boolean
+  ): AbstractFile | null {
+    const swFile = extension.files.find((f) => f!.path === serviceWorkerPath);
+    if (!swFile) {
+      return null;
     }
 
-    /**
-     * Transform service worker to use offscreen document
-     */
-    private static transformServiceWorker(
-        extension: Extension,
-        serviceWorkerPath: string,
-        needsLocalStorage: boolean
-    ): LazyFile | null {
-        const swFile = extension.files.find((f) => f!.path === serviceWorkerPath);
-        if (!swFile) {
-            return null;
-        }
+    try {
+      let content = swFile.getContent();
 
-        try {
-            let content = swFile.getContent();
-
-            // Add offscreen document management code at the top
-            const offscreenSetup = `
+      // Add offscreen document management code at the top
+      const offscreenSetup = `
 // Offscreen document management
 let offscreenCreated = false;
 
@@ -376,13 +369,13 @@ async function sendToOffscreen(type, data = {}) {
 
 `;
 
-            // Add setup at the beginning
-            content = offscreenSetup + '\n' + content;
+      // Add setup at the beginning
+      content = offscreenSetup + '\n' + content;
 
-            // Transform localStorage calls to use storageHelper wrapper
-            if (needsLocalStorage) {
-                // Inject storageHelper definition at the top if not already present
-                const storageHelperDef = `
+      // Transform localStorage calls to use storageHelper wrapper
+      if (needsLocalStorage) {
+        // Inject storageHelper definition at the top if not already present
+        const storageHelperDef = `
 // storageHelper wrapper for chrome.storage.local
 const storageHelper = {
     async getItem(key) {
@@ -400,182 +393,168 @@ const storageHelper = {
     }
 };
 `;
-                content = storageHelperDef + '\n' + content;
+        content = storageHelperDef + '\n' + content;
 
-                // localStorage.getItem(key) -> await storageHelper.getItem(key)
-                content = content.replace(
-                    /localStorage\.getItem\s*\(\s*(['"`])([^'"`]+)\1\s*\)/g,
-                    'await storageHelper.getItem("$2")'
-                );
+        // localStorage.getItem(key) -> await storageHelper.getItem(key)
+        content = content.replace(
+          /localStorage\.getItem\s*\(\s*(['"`])([^'"`]+)\1\s*\)/g,
+          'await storageHelper.getItem("$2")'
+        );
 
-                // localStorage.setItem(key, value) -> await storageHelper.setItem(key, value)
-                content = content.replace(
-                    /localStorage\.setItem\s*\(\s*(['"`])([^'"`]+)\1\s*,\s*([^)]+)\)/g,
-                    'await storageHelper.setItem("$2", $3)'
-                );
+        // localStorage.setItem(key, value) -> await storageHelper.setItem(key, value)
+        content = content.replace(
+          /localStorage\.setItem\s*\(\s*(['"`])([^'"`]+)\1\s*,\s*([^)]+)\)/g,
+          'await storageHelper.setItem("$2", $3)'
+        );
 
-                // localStorage.removeItem(key) -> await storageHelper.removeItem(key)
-                content = content.replace(
-                    /localStorage\.removeItem\s*\(\s*(['"`])([^'"`]+)\1\s*\)/g,
-                    'await storageHelper.removeItem("$2")'
-                );
+        // localStorage.removeItem(key) -> await storageHelper.removeItem(key)
+        content = content.replace(
+          /localStorage\.removeItem\s*\(\s*(['"`])([^'"`]+)\1\s*\)/g,
+          'await storageHelper.removeItem("$2")'
+        );
 
-                // localStorage.clear() -> await storageHelper.clear()
-                content = content.replace(
-                    /localStorage\.clear\s*\(\s*\)/g,
-                    'await storageHelper.clear()'
-                );
+        // localStorage.clear() -> await storageHelper.clear()
+        content = content.replace(
+          /localStorage\.clear\s*\(\s*\)/g,
+          'await storageHelper.clear()'
+        );
 
-                logger.info(extension, 'Migrated localStorage calls to storageHelper');
-            }
+        logger.info(extension, 'Migrated localStorage calls to storageHelper');
+      }
 
-            // Create transformed file
-            const transformedFile = Object.create(LazyFile.prototype);
-            transformedFile.path = swFile.path;
-            transformedFile.filetype = swFile.filetype;
-            transformedFile.getContent = () => content;
-            transformedFile.getSize = () => Buffer.byteLength(content, 'utf8');
-            transformedFile.close = swFile.close;
-            transformedFile.getAST = () => undefined;
+      return createTransformedFile(swFile, content);
+    } catch (error) {
+      logger.error(
+        extension,
+        `Failed to transform service worker for offscreen document: ${error}`,
+        error
+      );
+      return null;
+    }
+  }
 
-            return transformedFile;
-        } catch (error) {
-            logger.error(
-                extension,
-                `Failed to transform service worker for offscreen document: ${error}`,
-                error
-            );
-            return null;
-        }
+  /**
+   * Update manifest to declare offscreen permission
+   */
+  private static updateManifest(manifest: any): any {
+    const updatedManifest = JSON.parse(JSON.stringify(manifest));
+
+    // Add offscreen permission
+    if (!updatedManifest.permissions) {
+      updatedManifest.permissions = [];
     }
 
-    /**
-     * Update manifest to declare offscreen permission
-     */
-    private static updateManifest(manifest: any): any {
-        const updatedManifest = JSON.parse(JSON.stringify(manifest));
-
-        // Add offscreen permission
-        if (!updatedManifest.permissions) {
-            updatedManifest.permissions = [];
-        }
-
-        if (!updatedManifest.permissions.includes('offscreen')) {
-            updatedManifest.permissions.push('offscreen');
-            logger.debug(null, 'Added offscreen permission to manifest');
-        }
-
-        // Add storage permission if not present (for localStorage migration)
-        if (!updatedManifest.permissions.includes('storage')) {
-            updatedManifest.permissions.push('storage');
-            logger.debug(null, 'Added storage permission to manifest');
-        }
-
-        return updatedManifest;
+    if (!updatedManifest.permissions.includes('offscreen')) {
+      updatedManifest.permissions.push('offscreen');
+      logger.debug(null, 'Added offscreen permission to manifest');
     }
 
-    /**
-     * Main migration method
-     */
-    public static async migrate(extension: Extension): Promise<Extension | MigrationError> {
-        try {
-            // Only apply to MV3 extensions with service workers
-            if (extension.manifest.manifest_version !== 3) {
-                return extension;
-            }
-
-            if (!extension.manifest.background?.service_worker) {
-                return extension;
-            }
-
-            // Check if offscreen document is needed
-            const { needsOffscreen, needsLocalStorageMigration, affectedFiles } =
-                OffscreenMigrator.needsOffscreenDocument(extension);
-
-            if (!needsOffscreen && !needsLocalStorageMigration) {
-                logger.debug(extension, 'No offscreen document migration needed');
-                return extension;
-            }
-
-            logger.info(
-                extension,
-                `Migrating to offscreen document (localStorage: ${needsLocalStorageMigration})`,
-                { affectedFiles }
-            );
-
-            // Check if offscreen files already exist
-            const hasOffscreenHTML = extension.files.some(
-                (f) => f!.path === OffscreenMigrator.OFFSCREEN_HTML
-            );
-            const hasOffscreenJS = extension.files.some(
-                (f) => f!.path === OffscreenMigrator.OFFSCREEN_JS
-            );
-
-            if (hasOffscreenHTML && hasOffscreenJS) {
-                logger.debug(extension, 'Offscreen documents already exist');
-                return extension;
-            }
-
-            // Create offscreen document files
-            const offscreenHTML = OffscreenMigrator.createOffscreenHTML();
-            const offscreenJS = OffscreenMigrator.createOffscreenJS();
-
-            // Transform service worker
-            const transformedSW = OffscreenMigrator.transformServiceWorker(
-                extension,
-                extension.manifest.background.service_worker,
-                needsLocalStorageMigration
-            );
-
-            // Update files
-            let updatedFiles = [...extension.files];
-            if (transformedSW) {
-                updatedFiles = updatedFiles.map((f) =>
-                    f!.path === transformedSW.path ? transformedSW : f
-                );
-            }
-
-            // Add offscreen files
-            if (!hasOffscreenHTML) {
-                updatedFiles.push(offscreenHTML);
-            }
-            if (!hasOffscreenJS) {
-                updatedFiles.push(offscreenJS);
-            }
-
-            // Update manifest
-            const updatedManifest = OffscreenMigrator.updateManifest(extension.manifest);
-
-            logger.info(extension, 'Successfully migrated to use offscreen document');
-
-            extension.files.forEach(file => {
-                if (file) {
-                    file.releaseMemory();  // Clear cached content
-                    file.close();          // Close file descriptors
-                }
-            });
-
-            return {
-                ...extension,
-                manifest: updatedManifest,
-                files: updatedFiles,
-            };
-        } catch (error) {
-            const errorMessage =
-                error instanceof Error ? error.message : 'Unknown error during migration';
-            logger.error(extension, `Offscreen document migration failed: ${errorMessage}`, error);
-            return new MigrationError(extension, new Error(errorMessage));
-        }
+    // Add storage permission if not present (for localStorage migration)
+    if (!updatedManifest.permissions.includes('storage')) {
+      updatedManifest.permissions.push('storage');
+      logger.debug(null, 'Added storage permission to manifest');
     }
 
-    // Test helpers for unit tests
-    public static testHelpers = {
-        OFFSCREEN_HTML: OffscreenMigrator.OFFSCREEN_HTML,
-        OFFSCREEN_JS: OffscreenMigrator.OFFSCREEN_JS,
-        needsOffscreenDocument: OffscreenMigrator.needsOffscreenDocument,
-        createOffscreenHTML: OffscreenMigrator.createOffscreenHTML,
-        createOffscreenJS: OffscreenMigrator.createOffscreenJS,
-        transformServiceWorker: OffscreenMigrator.transformServiceWorker,
-        updateManifest: OffscreenMigrator.updateManifest,
-    };
+    return updatedManifest;
+  }
+
+  /**
+   * Main migration method
+   */
+  public static async migrate(extension: Extension): Promise<Extension | MigrationError> {
+    try {
+      // Only apply to MV3 extensions with service workers
+      if (extension.manifest.manifest_version !== 3) {
+        return extension;
+      }
+
+      if (!extension.manifest.background?.service_worker) {
+        return extension;
+      }
+
+      // Check if offscreen document is needed
+      const { needsOffscreen, needsLocalStorageMigration, affectedFiles } =
+        OffscreenMigrator.needsOffscreenDocument(extension);
+
+      if (!needsOffscreen && !needsLocalStorageMigration) {
+        logger.debug(extension, 'No offscreen document migration needed');
+        return extension;
+      }
+
+      logger.info(
+        extension,
+        `Migrating to offscreen document (localStorage: ${needsLocalStorageMigration})`,
+        { affectedFiles }
+      );
+
+      // Check if offscreen files already exist
+      const hasOffscreenHTML = extension.files.some(
+        (f) => f!.path === OffscreenMigrator.OFFSCREEN_HTML
+      );
+      const hasOffscreenJS = extension.files.some(
+        (f) => f!.path === OffscreenMigrator.OFFSCREEN_JS
+      );
+
+      if (hasOffscreenHTML && hasOffscreenJS) {
+        logger.debug(extension, 'Offscreen documents already exist');
+        return extension;
+      }
+
+      // Create offscreen document files
+      const offscreenHTML = OffscreenMigrator.createOffscreenHTML();
+      const offscreenJS = OffscreenMigrator.createOffscreenJS();
+
+      // Transform service worker
+      const transformedSW = OffscreenMigrator.transformServiceWorker(
+        extension,
+        extension.manifest.background.service_worker,
+        needsLocalStorageMigration
+      );
+
+      // Update files
+      let updatedFiles = [...extension.files];
+      if (transformedSW) {
+        updatedFiles = updatedFiles.map((f) =>
+          f!.path === transformedSW.path ? transformedSW : f
+        );
+      }
+
+      // Add offscreen files
+      if (!hasOffscreenHTML) {
+        updatedFiles.push(offscreenHTML);
+      }
+      if (!hasOffscreenJS) {
+        updatedFiles.push(offscreenJS);
+      }
+
+      // Update manifest
+      const updatedManifest = OffscreenMigrator.updateManifest(extension.manifest);
+
+      logger.info(extension, 'Successfully migrated to use offscreen document');
+
+
+
+      return {
+        ...extension,
+        manifest: updatedManifest,
+        files: updatedFiles,
+      };
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error during migration';
+      logger.error(extension, `Offscreen document migration failed: ${errorMessage}`, error);
+      return new MigrationError(extension, new Error(errorMessage));
+    }
+  }
+
+  // Test helpers for unit tests
+  public static testHelpers = {
+    OFFSCREEN_HTML: OffscreenMigrator.OFFSCREEN_HTML,
+    OFFSCREEN_JS: OffscreenMigrator.OFFSCREEN_JS,
+    needsOffscreenDocument: OffscreenMigrator.needsOffscreenDocument,
+    createOffscreenHTML: OffscreenMigrator.createOffscreenHTML,
+    createOffscreenJS: OffscreenMigrator.createOffscreenJS,
+    transformServiceWorker: OffscreenMigrator.transformServiceWorker,
+    updateManifest: OffscreenMigrator.updateManifest,
+  };
 }

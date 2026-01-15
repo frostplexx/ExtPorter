@@ -1,5 +1,5 @@
 import { CWSData } from '../utils/cws_parser';
-import { LazyFile } from './abstract_file';
+import { AbstractFile } from './abstract_file';
 
 export interface EventListener {
     api: string; // e.g., "chrome.runtime.onMessage"
@@ -16,7 +16,7 @@ export interface Extension {
     manifest: any;
     // Files may be set to null to allow releasing large in-memory objects to the GC.
     // Consumers MUST handle null entries (filter or guard before accessing).
-    files: (LazyFile | null)[];
+    files: (AbstractFile | null)[];
     isNewTabExtension?: boolean;
     mv3_extension_id?: string;
     manifest_v3_path?: string;

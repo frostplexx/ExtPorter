@@ -34,11 +34,10 @@ async function initialize() {
  */
 async function main() {
     await initialize();
-    print_info()
+    print_info();
     const server = new MigrationServer(globals);
 
     await server.start();
-
 
     // Keep the server running and handle graceful shutdown
     process.on('SIGINT', async () => {
@@ -58,7 +57,7 @@ async function main() {
     console.log('Migration server started. Press Ctrl+C to stop.');
 
     // Keep the process alive
-    return new Promise(() => { });
+    return new Promise(() => {});
 }
 
 /**
@@ -72,7 +71,7 @@ async function teardown() {
     // Close database connection
     await Database.shared.close();
 
-    releaseApiMappings()
+    releaseApiMappings();
 }
 
 // Handle uncaught exceptions to prevent crashes
@@ -93,7 +92,6 @@ if (process.env.NODE_ENV !== 'test' && require.main === module) {
         process.exit(1);
     });
 }
-
 
 /**
  * Print info about server and environment,
@@ -149,7 +147,8 @@ function print_info() {
         if (!nodeMaxBytes) {
             try {
                 const v8 = require('v8');
-                const stats = (typeof v8.getHeapStatistics === 'function') ? v8.getHeapStatistics() : null;
+                const stats =
+                    typeof v8.getHeapStatistics === 'function' ? v8.getHeapStatistics() : null;
                 if (stats && typeof stats.heap_size_limit === 'number') {
                     nodeMaxBytes = stats.heap_size_limit;
                     nodeMaxSource = 'v8.getHeapStatistics().heap_size_limit';
@@ -160,7 +159,9 @@ function print_info() {
         }
 
         if (nodeMaxBytes !== null) {
-            console.log(`Node Max Memory (max heap): ${toMB(nodeMaxBytes)}${nodeMaxSource ? ` (${nodeMaxSource})` : ''}`);
+            console.log(
+                `Node Max Memory (max heap): ${toMB(nodeMaxBytes)}${nodeMaxSource ? ` (${nodeMaxSource})` : ''}`
+            );
         } else {
             console.log('Node Max Memory (max heap): not available');
         }
@@ -174,7 +175,9 @@ function print_info() {
 
         console.log(`Working Directory: ${process.cwd()}`);
 
-        console.log(`Extensions Path: ${globals.extensionsPath || process.env.INPUT_DIR || 'not set'}`);
+        console.log(
+            `Extensions Path: ${globals.extensionsPath || process.env.INPUT_DIR || 'not set'}`
+        );
         console.log(`Output Dir: ${globals.outputDir || process.env.OUTPUT_DIR || 'not set'}`);
 
         const llmModel = process.env.LLM_MODEL || 'not set';

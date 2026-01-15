@@ -1,5 +1,5 @@
 import { Extension } from '../../migrator/types/extension';
-import { LazyFile } from '../../migrator/types/abstract_file';
+import { AbstractFile, LazyFile } from '../../migrator/types/abstract_file';
 import { ExtFileType } from '../../migrator/types/ext_file_types';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -18,14 +18,14 @@ export interface MockExtensionOptions {
     id?: string;
     name?: string;
     manifest?: any;
-    files?: LazyFile[];
+    files?: AbstractFile[];
     isNewTabExtension?: boolean;
 }
 
 /**
- * Creates a mock LazyFile for testing
+ * Creates a mock AbstractFile for testing
  */
-export function createMockFile(options: MockFileOptions): LazyFile {
+export function createMockFile(options: MockFileOptions): AbstractFile {
     const mockFile = Object.create(LazyFile.prototype);
     mockFile.path = options.path;
     mockFile.filetype = options.filetype || ExtFileType.JS;
@@ -68,7 +68,7 @@ export function loadSampleExtension(extensionName: string): Extension {
     const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
 
     // Load all files
-    const files: LazyFile[] = [];
+    const files: AbstractFile[] = [];
     const loadFiles = (dir: string, relativePath = '') => {
         const items = fs.readdirSync(dir);
 

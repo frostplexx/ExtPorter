@@ -1,4 +1,4 @@
-import { LazyFile } from '../../types/abstract_file';
+import { AbstractFile, createNewFile } from '../../types/abstract_file';
 import { ExtFileType } from '../../types/ext_file_types';
 
 /**
@@ -12,7 +12,7 @@ export class OffscreenFileCreator {
     /**
      * Creates the offscreen HTML file.
      */
-    public static createOffscreenHTML(): LazyFile {
+    public static createOffscreenHTML(): AbstractFile {
         const htmlContent = `<!DOCTYPE html>
 <html>
 <head>
@@ -24,26 +24,17 @@ export class OffscreenFileCreator {
 </body>
 </html>`;
 
-        const htmlFile = Object.create(LazyFile.prototype);
-        htmlFile.path = OffscreenFileCreator.OFFSCREEN_HTML_FILENAME;
-        htmlFile.filetype = ExtFileType.HTML;
-        htmlFile._offscreenContent = htmlContent;
-
-        htmlFile.getContent = () => htmlContent;
-        htmlFile.getSize = () => Buffer.byteLength(htmlContent, 'utf8');
-        htmlFile.close = () => {
-            /* No-op for in-memory content */
-        };
-        htmlFile.getAST = () => undefined;
-        htmlFile.getBuffer = () => Buffer.from(htmlContent, 'utf8');
-
-        return htmlFile;
+        return createNewFile(
+            OffscreenFileCreator.OFFSCREEN_HTML_FILENAME,
+            htmlContent,
+            ExtFileType.HTML
+        );
     }
 
     /**
      * Creates the offscreen JavaScript file with comprehensive DOM operation handlers.
      */
-    public static createOffscreenJS(): LazyFile {
+    public static createOffscreenJS(): AbstractFile {
         const jsContent = `// Offscreen document script for DOM operations
 // This script handles DOM operations that cannot be performed in the service worker
 
@@ -264,19 +255,10 @@ async function handleLocalStorageClear() {
 console.log('Offscreen document loaded and ready');
 `;
 
-        const jsFile = Object.create(LazyFile.prototype);
-        jsFile.path = OffscreenFileCreator.OFFSCREEN_JS_FILENAME;
-        jsFile.filetype = ExtFileType.JS;
-        jsFile._offscreenContent = jsContent;
-
-        jsFile.getContent = () => jsContent;
-        jsFile.getSize = () => Buffer.byteLength(jsContent, 'utf8');
-        jsFile.close = () => {
-            /* No-op for in-memory content */
-        };
-        jsFile.getAST = () => undefined;
-        jsFile.getBuffer = () => Buffer.from(jsContent, 'utf8');
-
-        return jsFile;
+        return createNewFile(
+            OffscreenFileCreator.OFFSCREEN_JS_FILENAME,
+            jsContent,
+            ExtFileType.JS
+        );
     }
 }

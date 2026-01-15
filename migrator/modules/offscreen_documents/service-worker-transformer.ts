@@ -1,5 +1,5 @@
 import { Extension } from '../../types/extension';
-import { LazyFile } from '../../types/abstract_file';
+import { AbstractFile, createTransformedFile } from '../../types/abstract_file';
 import { logger } from '../../utils/logger';
 import { OffscreenFileCreator } from './offscreen-files';
 
@@ -14,7 +14,7 @@ export class ServiceWorkerTransformer {
     public static injectOffscreenHelpers(
         extension: Extension,
         serviceWorkerPath: string
-    ): LazyFile | null {
+    ): AbstractFile | null {
         const serviceWorkerFile = extension.files.find((file) => file!.path === serviceWorkerPath);
 
         if (!serviceWorkerFile) {
@@ -100,7 +100,7 @@ async function sendToOffscreen(type, data) {
                 `Injected offscreen helpers into service worker: ${serviceWorkerPath}`
             );
 
-            return ServiceWorkerTransformer.createTransformedFile(serviceWorkerFile, newContent);
+            return createTransformedFile(serviceWorkerFile, newContent);
         } catch (error) {
             logger.error(
                 extension,
@@ -115,6 +115,7 @@ async function sendToOffscreen(type, data) {
      * Replace window.onload with service worker initialization
      */
     public static replaceWindowOnload(content: string): string {
+        // Replace window.onload = function() { ... } with IIFE and ensure it's called
         // Replace window.onload = function() { ... } with IIFE and ensure it's called
         let result = content.replace(
             /window\.onload\s*=\s*function\s*\([^)]*\)\s*\{/g,
@@ -366,7 +367,7 @@ const storageHelper = {
             needsLocalStorage: boolean;
             needsDOMDownload: boolean;
         }
-    ): LazyFile | null {
+    ): AbstractFile | null {
         const swFile = extension.files.find((f) => f!.path === serviceWorkerPath);
         if (!swFile) {
             return null;
@@ -405,7 +406,7 @@ const storageHelper = {
                 return null;
             }
 
-            return ServiceWorkerTransformer.createTransformedFile(swFile, content);
+            return createTransformedFile(swFile, content);
         } catch (error) {
             logger.error(
                 extension,
@@ -414,39 +415,5 @@ const storageHelper = {
             );
             return null;
         }
-    }
-
-    /**
-     * Creates a transformed file with modified content stored in memory.
-     */
-    private static createTransformedFile(originalFile: LazyFile, newContent: string): LazyFile {
-        const transformedFile = Object.create(LazyFile.prototype);
-
-        transformedFile.path = originalFile.path;
-        transformedFile.filetype = originalFile.filetype;
-        transformedFile._transformedContent = newContent;
-        transformedFile._absolutePath = (originalFile as any)._absolutePath;
-
-        // Cache buffer for efficient access
-        const contentBuffer = Buffer.from(newContent, 'utf8');
-
-        transformedFile.getContent = () => newContent;
-        transformedFile.getBuffer = () => contentBuffer;
-        transformedFile.getSize = () => contentBuffer.length;
-        transformedFile.close = () => {
-            /* No-op for in-memory content */
-        };
-        transformedFile.releaseMemory = () => {
-            /* No-op for in-memory content */
-        };
-        transformedFile.cleanContent = () => transformedFile;
-        transformedFile.getAST = () => undefined;
-
-        // Release memory from original file
-        if (originalFile.releaseMemory) {
-            originalFile.releaseMemory();
-        }
-
-        return transformedFile;
     }
 }

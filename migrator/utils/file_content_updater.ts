@@ -1,4 +1,4 @@
-import { LazyFile } from '../types/abstract_file';
+import { AbstractFile, LazyFile } from '../types/abstract_file';
 import { ExtFileType } from '../types/ext_file_types';
 import * as fs from 'fs-extra';
 import * as path from 'path';
@@ -6,14 +6,14 @@ import { logger } from './logger';
 
 export class FileContentUpdater {
     /**
-     * Updates the content of a LazyFile by writing new content to its absolute path
+     * Updates the content of a AbstractFile by writing new content to its absolute path
      *
-     * @param file The LazyFile to update
+     * @param file The AbstractFile to update
      * @param newContent The new content to write
      * @throws Error if update fails
      */
-    static updateFileContent(file: LazyFile, newContent: string): void {
-        // Get the absolute path from the LazyFile
+    static updateFileContent(file: AbstractFile, newContent: string): void {
+        // Get the absolute path from the AbstractFile (cast to any to access internal property)
         const absolutePath = (file as any)._absolutePath;
 
         if (!absolutePath) {
@@ -27,7 +27,7 @@ export class FileContentUpdater {
             // Write the new content
             fs.writeFileSync(absolutePath, newContent, 'utf8');
 
-            // Clear any cached content in the LazyFile
+            // Clear any cached content in the file
             if (file.cleanContent) {
                 file.cleanContent();
             }
@@ -43,7 +43,7 @@ export class FileContentUpdater {
      *
      * @param absolutePath The absolute path where the file should be created
      * @param content The content to write
-     * @param relativePath The relative path for the LazyFile
+     * @param relativePath The relative path for the file
      * @param fileType The file type
      * @returns A new LazyFile instance or null if creation failed
      */
@@ -52,7 +52,7 @@ export class FileContentUpdater {
         content: string,
         relativePath: string,
         fileType: ExtFileType
-    ): LazyFile | null {
+    ): AbstractFile | null {
         try {
             // Ensure the directory exists
             fs.ensureDirSync(path.dirname(absolutePath));

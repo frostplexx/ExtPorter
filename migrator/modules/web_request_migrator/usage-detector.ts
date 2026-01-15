@@ -1,8 +1,8 @@
 import { Extension } from '../../types/extension';
-import { LazyFile } from '../../types/abstract_file';
+import { AbstractFile } from '../../types/abstract_file';
 import { ExtFileType } from '../../types/ext_file_types';
 import { WebRequestUsage } from './types';
-import { traverseAST, isWebRequestEventListener } from './ast-utils';
+import { traverseAST, isWebRequestEventListener } from '../../utils/ast-utils';
 import { logger } from '../../utils/logger';
 
 /**
@@ -13,8 +13,8 @@ export function findWebRequestUsages(extension: Extension): WebRequestUsage[] {
     const usages: WebRequestUsage[] = [];
 
     for (const file of extension.files) {
-        
-        if(!file){
+
+        if (!file) {
             logger.error(extension, "File is null")
             break;
         }
@@ -50,7 +50,7 @@ export function findWebRequestUsages(extension: Extension): WebRequestUsage[] {
 /**
  * Extract webRequest usage information from an AST node
  */
-function extractWebRequestUsage(node: any, file: LazyFile): WebRequestUsage | null {
+function extractWebRequestUsage(node: any, file: AbstractFile): WebRequestUsage | null {
     const eventObj = node.callee.object;
     const eventType = eventObj.property?.name;
 
