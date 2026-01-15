@@ -107,7 +107,7 @@ export class MigrationServer {
         // eslint-disable-next-line @typescript-eslint/no-this-alias
         const self = this;
 
-        console.log = function(...args: any[]) {
+        console.log = function (...args: any[]) {
             const message = args
                 .map((arg) =>
                     typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)
@@ -118,7 +118,7 @@ export class MigrationServer {
             self.originalConsoleLog.apply(console, args);
         };
 
-        console.info = function(...args: any[]) {
+        console.info = function (...args: any[]) {
             const message = args
                 .map((arg) =>
                     typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)
@@ -129,7 +129,7 @@ export class MigrationServer {
             self.originalConsoleInfo.apply(console, args);
         };
 
-        console.debug = function(...args: any[]) {
+        console.debug = function (...args: any[]) {
             const message = args
                 .map((arg) =>
                     typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)
@@ -140,7 +140,7 @@ export class MigrationServer {
             self.originalConsoleDebug.apply(console, args);
         };
 
-        console.error = function(...args: any[]) {
+        console.error = function (...args: any[]) {
             const message = args
                 .map((arg) =>
                     typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)
@@ -151,7 +151,7 @@ export class MigrationServer {
             self.originalConsoleError.apply(console, args);
         };
 
-        console.warn = function(...args: any[]) {
+        console.warn = function (...args: any[]) {
             const message = args
                 .map((arg) =>
                     typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)
@@ -261,7 +261,7 @@ export class MigrationServer {
             ws.on('message', (message: Buffer) => {
                 // Reset connection timeout on any activity
                 this.resetConnectionTimeout(ws);
-                
+
                 // Update last activity timestamp
                 const metadata = this.connectionMetadata.get(ws);
                 if (metadata) {
@@ -447,7 +447,7 @@ export class MigrationServer {
             MemoryProfiler.takeHeapSnapshot('start');
 
             this.broadcastToClients(`Starting extension search in: ${this.globals.extensionsPath}`);
-            
+
             // Count extensions first (low memory operation) for progress tracking
             const totalExtensions = count_extensions(this.globals.extensionsPath);
             this.broadcastToClients(`Found ${totalExtensions} extensions`);
@@ -455,22 +455,22 @@ export class MigrationServer {
             // ========== RESUME FUNCTIONALITY ==========
             // Get already-migrated extension IDs from database and output folder
             this.broadcastToClients('Checking for previously migrated extensions (resume support)...');
-            
+
             // 1. Get IDs from database (extensions that were successfully migrated and recorded)
             const dbMigrated = await Database.shared.getMigratedExtensionIds();
             this.broadcastToClients(`Found ${dbMigrated.sourceIds.size} extensions in database`);
-            
+
             // 2. Get IDs from output folder (extensions that were written to disk)
             // These are mv3_extension_id values (folder names), we need to convert them to source IDs
             const diskMv3Ids = await this.getAlreadyMigratedFromDisk(this.globals.outputDir);
             this.broadcastToClients(`Found ${diskMv3Ids.size} extension folders on disk`);
-            
+
             // 3. Combine both sets - an extension is considered migrated if:
             //    - Its source ID is in the database, OR
             //    - Its mv3_extension_id (folder name) is found on disk
             // We track by SOURCE ID since that's what we'll check against rawExtension.id
             const alreadyMigratedIds = new Set<string>([...dbMigrated.sourceIds]);
-            
+
             // For disk-based extensions, use the mapping to convert mv3_extension_id -> source ID
             // If no mapping exists, the folder might be from a previous run, so we also check
             // if the folder name itself matches the source ID pattern (fallback)
@@ -484,7 +484,7 @@ export class MigrationServer {
                     alreadyMigratedIds.add(mv3Id);
                 }
             }
-            
+
             this.broadcastToClients(`Total already migrated: ${alreadyMigratedIds.size} extensions (will be skipped)`);
             // ==========================================
 
@@ -517,18 +517,34 @@ export class MigrationServer {
             );
 
             // Use iterator to process extensions one at a time - never hold all in memory
-            const extensionIterator = find_extensions_iterator(this.globals.extensionsPath);
-            
+            // MEMORY FIX: Pass alreadyMigratedIds to skip extensions BEFORE creating Extension objects
+            const extensionIterator = find_extensions_iterator(this.globals.extensionsPath, {
+                skipIds: alreadyMigratedIds,
+                onSkip: (id) => {
+                    skippedCount++;
+                    processedCount++;
+
+                    // Log progress periodically for skipped extensions
+                    if (skippedCount % 500 === 0) {
+                        this.broadcastToClients(`Skipped ${skippedCount} already-migrated extensions...`);
+                        if (global.gc) global.gc();
+                    }
+
+                    // Update progress to reflect total processed (including skipped)
+                    this.migrationState.progress.current = writeIndex + skippedCount;
+                }
+            });
+
             // Import memory utilities once outside the loop for memory pressure checks
             const memUtils = await import('../../utils/garbage.js');
-            
+
             for (const rawExtension of extensionIterator) {
                 // Check if migration was stopped
                 if (!this.migrationState.isRunning) {
                     this.broadcastToClients('Migration stopped by user');
                     break;
                 }
-                
+
                 // ========== MEMORY PRESSURE CHECK ==========
                 // Check memory before processing each extension to prevent OOM
                 const memInfo = memUtils.getMemoryInfo();
@@ -536,7 +552,7 @@ export class MigrationServer {
                     // Memory pressure: force GC and wait a bit
                     memUtils.forceGarbageCollection();
                     await new Promise(resolve => setTimeout(resolve, 100));
-                    
+
                     // Re-check after GC
                     const afterGC = memUtils.getMemoryInfo();
                     if (afterGC.heapUsedGB > 14) {
@@ -556,30 +572,9 @@ export class MigrationServer {
                     continue;
                 }
 
-                // ========== RESUME: Skip already-migrated extensions ==========
-                if (alreadyMigratedIds.has(rawExtension.id)) {
-                    skippedCount++;
-                    processedCount++;
-                    
-                    // MEMORY FIX: Clean up skipped extension before continuing
-                    // This is critical - previously skipped extensions were never cleaned up!
-                    memUtils.clearExtensionMemory(rawExtension);
-                    
-                    // Log progress periodically for skipped extensions
-                    if (skippedCount % 100 === 0) {
-                        this.broadcastToClients(`Skipped ${skippedCount} already-migrated extensions...`);
-                    }
-                    
-                    // Trigger GC periodically even for skipped extensions
-                    if (skippedCount % 500 === 0 && global.gc) {
-                        global.gc();
-                    }
-                    
-                    // Update progress to reflect total processed (including skipped)
-                    this.migrationState.progress.current = writeIndex + skippedCount;
-                    continue;
-                }
-                // ==============================================================
+                // NOTE: Skip logic for already-migrated extensions has been moved to the iterator
+                // Extensions in alreadyMigratedIds are now skipped BEFORE creating the Extension object
+                // This prevents OOM by avoiding expensive file discovery and CWS parsing for skipped extensions
 
                 let extension = rawExtension;
                 let migrationSuccessful = true;
@@ -672,7 +667,7 @@ export class MigrationServer {
 
             // Final flush
             await WriteQueue.shared.flush();
-            
+
             if (filteredCount > 0) {
                 this.broadcastToClients(`Filtered out ${filteredCount} new-tab extensions`);
             }
@@ -710,7 +705,7 @@ export class MigrationServer {
      */
     private async getAlreadyMigratedFromDisk(outputDir: string): Promise<Set<string>> {
         const migratedIds = new Set<string>();
-        
+
         try {
             // Check if output directory exists
             if (!fs.existsSync(outputDir)) {
@@ -718,12 +713,12 @@ export class MigrationServer {
             }
 
             const entries = fs.readdirSync(outputDir, { withFileTypes: true });
-            
+
             for (const entry of entries) {
                 if (!entry.isDirectory()) continue;
-                
+
                 const dirPath = path.join(outputDir, entry.name);
-                
+
                 // Handle new_tab_extensions subfolder
                 if (entry.name === 'new_tab_extensions') {
                     const subEntries = fs.readdirSync(dirPath, { withFileTypes: true });
@@ -745,7 +740,7 @@ export class MigrationServer {
         } catch (error) {
             console.error('Error scanning output directory for migrated extensions:', error);
         }
-        
+
         return migratedIds;
     }
 
@@ -1927,7 +1922,7 @@ export class MigrationServer {
 
                     const chunks: Buffer[] = [];
                     let totalSize = 0;
-                    
+
                     response.on('data', (chunk) => {
                         totalSize += chunk.length;
                         // MEMORY FIX: Check size during download
@@ -2051,7 +2046,7 @@ export class MigrationServer {
                 if (metadata) {
                     const connectionAge = now - metadata.connectedAt;
                     const inactiveTime = now - metadata.lastActivityAt;
-                    
+
                     if (connectionAge > this.maxConnectionAge) {
                         shouldRemove = true;
                         reason = 'max age exceeded';
