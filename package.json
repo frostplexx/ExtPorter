@@ -8,9 +8,8 @@
     "main": "dist/index.js",
     "scripts": {
         "_build": "tsc",
-        "server": "NODE_OPTIONS=\"$NODE_OPTIONS\" tsx migrator/index.ts",
-        "server:auto": "./scripts/start-server.sh",
-        "server:watch": "NODE_OPTIONS=\"$NODE_OPTIONS\" tsx watch migrator/index.ts",
+        "server": "NODE_OPTIONS=\"--max-old-space-size=32768 --max-semi-space-size=512 --expose-gc $NODE_OPTIONS\" tsx migrator/index.ts",
+        "server:watch": "NODE_OPTIONS=\"--max-old-space-size=32768 --max-semi-space-size=512 --expose-gc $NODE_OPTIONS\" tsx watch migrator/index.ts",
         "client": "cargo run --manifest-path ext_analyzer/Cargo.toml",
         "client:watch": "cargo watch -x 'run --manifest-path ext_analyzer/Cargo.toml'",
         "dev": "./scripts/dev.sh",
