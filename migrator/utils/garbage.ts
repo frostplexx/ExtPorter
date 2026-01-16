@@ -15,12 +15,12 @@ function getEffectiveMemoryLimitGB(): number {
     // Check if max-old-space-size is set in NODE_OPTIONS
     const nodeOptions = process.env.NODE_OPTIONS || '';
     const maxOldSpaceMatch = nodeOptions.match(/--max-old-space-size=(\d+)/);
-    
+
     if (maxOldSpaceMatch) {
         const maxOldSpaceMB = parseInt(maxOldSpaceMatch[1], 10);
         return maxOldSpaceMB / 1024;
     }
-    
+
     // Fall back to 80% of system memory
     const totalMemoryGB = os.totalmem() / 1024 / 1024 / 1024;
     return totalMemoryGB * 0.8;
@@ -30,12 +30,12 @@ function getEffectiveMemoryLimitGB(): number {
 const EFFECTIVE_MEMORY_LIMIT_GB = getEffectiveMemoryLimitGB();
 
 // Default memory thresholds as percentages of effective limit
-// Use lower percentages for very large memory limits to prevent runaway growth
-const DEFAULT_MEMORY_WARN_LIMIT_GB = Math.min(EFFECTIVE_MEMORY_LIMIT_GB * 0.6, 48);
-const DEFAULT_MEMORY_CRIT_LIMIT_GB = Math.min(EFFECTIVE_MEMORY_LIMIT_GB * 0.75, 64);
+// Use lower percentages to trigger warnings/GC earlier and prevent OOM
+const DEFAULT_MEMORY_WARN_LIMIT_GB = Math.min(EFFECTIVE_MEMORY_LIMIT_GB * 0.5, 14);
+const DEFAULT_MEMORY_CRIT_LIMIT_GB = Math.min(EFFECTIVE_MEMORY_LIMIT_GB * 0.65, 20);
 
-// Threshold for triggering automatic GC - more aggressive for large heaps
-const DEFAULT_GC_TRIGGER_THRESHOLD_GB = Math.min(EFFECTIVE_MEMORY_LIMIT_GB * 0.4, 12);
+// Threshold for triggering automatic GC - more aggressive to prevent runaway growth
+const DEFAULT_GC_TRIGGER_THRESHOLD_GB = Math.min(EFFECTIVE_MEMORY_LIMIT_GB * 0.3, 8);
 
 /**
  * Structured memory information
@@ -243,12 +243,12 @@ export function clearExtensionMemory(extension: Extension): void {
         };
         extension.cws_info = minimalCws as any;
     }
-    
+
     // Clear tags array if it exists and is large
     if ((extension as any).tags && Array.isArray((extension as any).tags)) {
         (extension as any).tags.length = 0;
     }
-    
+
     // Clear any migration metadata that might be holding references
     if ((extension as any)._migrationData) {
         (extension as any)._migrationData = null;
@@ -291,8 +291,8 @@ export function calculateExtensionMemoryUsage(extension: Extension): number {
     let totalBytes = 0;
 
     for (const file of extension.files) {
-        if(!file){
-            console.error(extension, "File is null")
+        if (!file) {
+            console.error(extension, 'File is null');
             return -1;
         }
         // Check if file has getMemoryUsage method (LazyFile)
@@ -326,9 +326,8 @@ export function getExtensionsMemorySummary(extensions: Extension[]): {
         if (!ext || !ext.files) continue;
 
         for (const file of ext.files) {
-
-            if(!file){
-                console.error(ext, "File is null")
+            if (!file) {
+                console.error(ext, 'File is null');
                 continue;
             }
 
