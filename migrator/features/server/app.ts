@@ -421,7 +421,9 @@ export class MigrationServer {
         try {
             // Import migration dependencies dynamically to avoid circular dependencies
             // Use iterator pattern to avoid loading all extensions into memory at once
-            const { find_extensions_iterator, count_extensions } = await import('../../utils/find_extensions.js');
+            const { find_extensions_iterator, count_extensions } = await import(
+                '../../utils/find_extensions.js'
+            );
             // logger is imported but not used in this scope - it's used elsewhere in the codebase
             const { logger } = await import('../../utils/logger.js');
             const { RenameAPIS } = await import('../../modules/api_renames/index.js');
@@ -451,7 +453,9 @@ export class MigrationServer {
 
             // ========== RESUME FUNCTIONALITY ==========
             // Get already-migrated extension IDs from database and output folder
-            this.broadcastToClients('Checking for previously migrated extensions (resume support)...');
+            this.broadcastToClients(
+                'Checking for previously migrated extensions (resume support)...'
+            );
 
             // 1. Get IDs from database (extensions that were successfully migrated and recorded)
             const dbMigrated = await Database.shared.getMigratedExtensionIds();
@@ -482,7 +486,9 @@ export class MigrationServer {
                 }
             }
 
-            this.broadcastToClients(`Total already migrated: ${alreadyMigratedIds.size} extensions (will be skipped)`);
+            this.broadcastToClients(
+                `Total already migrated: ${alreadyMigratedIds.size} extensions (will be skipped)`
+            );
             // ==========================================
 
             // Filter setting for new-tab extensions
@@ -523,13 +529,15 @@ export class MigrationServer {
 
                     // Log progress periodically for skipped extensions
                     if (skippedCount % 500 === 0) {
-                        this.broadcastToClients(`Skipped ${skippedCount} already-migrated extensions...`);
+                        this.broadcastToClients(
+                            `Skipped ${skippedCount} already-migrated extensions...`
+                        );
                         if (global.gc) global.gc();
                     }
 
                     // Update progress to reflect total processed (including skipped)
                     this.migrationState.progress.current = writeIndex + skippedCount;
-                }
+                },
             });
 
             // Import memory utilities once outside the loop for memory pressure checks
@@ -548,15 +556,17 @@ export class MigrationServer {
                 if (memInfo.heapUsedGB > 12) {
                     // Memory pressure: force GC and wait a bit
                     memUtils.forceGarbageCollection();
-                    await new Promise(resolve => setTimeout(resolve, 100));
+                    await new Promise((resolve) => setTimeout(resolve, 100));
 
                     // Re-check after GC
                     const afterGC = memUtils.getMemoryInfo();
                     if (afterGC.heapUsedGB > 14) {
                         // Still high - warn and potentially pause
-                        this.broadcastToClients(`Warning: High memory usage (${afterGC.heapUsedGB.toFixed(1)}GB). Processing continues but may be slower.`);
+                        this.broadcastToClients(
+                            `Warning: High memory usage (${afterGC.heapUsedGB.toFixed(1)}GB). Processing continues but may be slower.`
+                        );
                         // Give more time for async operations to complete
-                        await new Promise(resolve => setTimeout(resolve, 500));
+                        await new Promise((resolve) => setTimeout(resolve, 500));
                     }
                 }
                 // ==========================================
@@ -593,7 +603,10 @@ export class MigrationServer {
                     global.gc(); // Force GC every 10 extensions
 
                     const used = process.memoryUsage();
-                    logger.info(null, `GC after ${processedCount} extensions: ${Math.round(used.heapUsed / 1024 / 1024)}MB`);
+                    logger.info(
+                        null,
+                        `GC after ${processedCount} extensions: ${Math.round(used.heapUsed / 1024 / 1024)}MB`
+                    );
                 }
 
                 // Write the migrated extension to disk
@@ -640,20 +653,20 @@ export class MigrationServer {
                     }
                 }
 
-                // Clear extension from memory thoroughly
-                const { clearExtensionMemory, forceGarbageCollection, shouldTriggerGC } =
-                    await import('../../utils/garbage.js');
-                clearExtensionMemory(extension);
+                // Clear extension from memory thoroughly (memUtils imported once outside loop)
+                memUtils.clearExtensionMemory(extension);
 
                 // Trigger GC periodically during migration
-                if (processedCount % 10 === 0 && shouldTriggerGC(16)) {
-                    forceGarbageCollection();
+                if (processedCount % 10 === 0 && memUtils.shouldTriggerGC(16)) {
+                    memUtils.forceGarbageCollection();
                 }
 
                 // Flush write queue periodically
                 if (processedCount % BATCH_SIZE === 0) {
                     await WriteQueue.shared.flush();
-                    this.broadcastToClients(`Processed ${processedCount}/${totalExtensions} extensions`);
+                    this.broadcastToClients(
+                        `Processed ${processedCount}/${totalExtensions} extensions`
+                    );
                 }
             }
 
@@ -687,10 +700,10 @@ export class MigrationServer {
     /**
      * Scans the output directory to find extension IDs that have already been written to disk.
      * This supports resume functionality by identifying extensions that don't need re-migration.
-     * 
+     *
      * An extension folder is considered valid if it contains a manifest.json file.
      * This handles both regular extensions and new_tab_extensions subfolder structure.
-     * 
+     *
      * @param outputDir The output directory path
      * @returns Set of extension IDs found on disk
      */
@@ -1907,7 +1920,11 @@ export class MigrationServer {
                     const contentLength = parseInt(response.headers['content-length'] || '0', 10);
                     if (contentLength > MAX_IMAGE_SIZE) {
                         request.destroy();
-                        reject(new Error(`Image too large: ${contentLength} bytes (max: ${MAX_IMAGE_SIZE})`));
+                        reject(
+                            new Error(
+                                `Image too large: ${contentLength} bytes (max: ${MAX_IMAGE_SIZE})`
+                            )
+                        );
                         return;
                     }
 
@@ -1919,7 +1936,11 @@ export class MigrationServer {
                         // MEMORY FIX: Check size during download
                         if (totalSize > MAX_IMAGE_SIZE) {
                             request.destroy();
-                            reject(new Error(`Image too large: exceeded ${MAX_IMAGE_SIZE} bytes during download`));
+                            reject(
+                                new Error(
+                                    `Image too large: exceeded ${MAX_IMAGE_SIZE} bytes during download`
+                                )
+                            );
                             return;
                         }
                         chunks.push(chunk);
@@ -2072,7 +2093,7 @@ export class MigrationServer {
             if (migrator.process && migrator.process.killed) {
                 shouldRemove = true;
                 staleMigrators++;
-            } else if (migrator.createdAt && (now - migrator.createdAt) > this.maxMigratorAge) {
+            } else if (migrator.createdAt && now - migrator.createdAt > this.maxMigratorAge) {
                 // Migrator exceeded max age - kill it and cleanup listeners
                 if (migrator.process && !migrator.process.killed) {
                     try {
@@ -2119,12 +2140,13 @@ export class MigrationServer {
         }
 
         // Log cleanup stats if anything was cleaned
-        const totalCleaned = deadConnections + agedOutConnections + staleMigrators + agedOutMigrators;
+        const totalCleaned =
+            deadConnections + agedOutConnections + staleMigrators + agedOutMigrators;
         if (totalCleaned > 0) {
             console.log(
                 `[Cleanup] Removed: ${deadConnections} dead connections, ${agedOutConnections} aged connections, ` +
-                `${staleMigrators} stale migrators, ${agedOutMigrators} aged migrators. ` +
-                `Active: ${this.connectedClients.size} clients, ${this.activeMigrators.size} migrators`
+                    `${staleMigrators} stale migrators, ${agedOutMigrators} aged migrators. ` +
+                    `Active: ${this.connectedClients.size} clients, ${this.activeMigrators.size} migrators`
             );
         }
 
@@ -2190,6 +2212,6 @@ export class MigrationServer {
         console.error = this.originalConsoleError;
         console.warn = this.originalConsoleWarn;
 
-        this.server.close(() => { });
+        this.server.close(() => {});
     }
 }

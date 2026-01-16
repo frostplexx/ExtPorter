@@ -17,6 +17,14 @@ services:
             - INPUT_DIR=/app/extensions
             - OUTPUT_DIR=/app/output
             - CWS_DIR=/app/cws
+            # Memory settings for Node.js - must match deploy.resources.limits.memory
+            - NODE_OPTIONS=--max-old-space-size=28672 --max-semi-space-size=512 --expose-gc
+        deploy:
+            resources:
+                limits:
+                    memory: 32G
+                reservations:
+                    memory: 8G
         volumes:
             - ./logs:/app/logs
             - ${INPUT_DIR:-./extensions}:/app/extensions:ro
