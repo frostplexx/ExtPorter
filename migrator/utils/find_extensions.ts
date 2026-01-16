@@ -43,9 +43,10 @@ export function* find_extensions_iterator(
     optionsOrIncludesMv3: boolean | FindExtensionsOptions = false
 ): Generator<Extension> {
     // Support legacy boolean argument
-    const options: FindExtensionsOptions = typeof optionsOrIncludesMv3 === 'boolean'
-        ? { includes_mv3: optionsOrIncludesMv3 }
-        : optionsOrIncludesMv3;
+    const options: FindExtensionsOptions =
+        typeof optionsOrIncludesMv3 === 'boolean'
+            ? { includes_mv3: optionsOrIncludesMv3 }
+            : optionsOrIncludesMv3;
 
     const includes_mv3 = options.includes_mv3 ?? false;
 
@@ -65,11 +66,21 @@ export function* find_extensions_iterator(
 
         if (existsSync(manifestPath)) {
             // Single unpacked extension directory
-            const ext = get_single_extension(manifestPath, includes_mv3, options.skipIds, options.onSkip);
+            const ext = get_single_extension(
+                manifestPath,
+                includes_mv3,
+                options.skipIds,
+                options.onSkip
+            );
             if (ext) yield ext;
         } else {
             // Directory containing multiple extension directories - search recursively
-            yield* findExtensionsRecursivelyIterator(pth, includes_mv3, options.skipIds, options.onSkip);
+            yield* findExtensionsRecursivelyIterator(
+                pth,
+                includes_mv3,
+                options.skipIds,
+                options.onSkip
+            );
         }
     } else if (lstatSync(pth).isFile()) {
         logger.error(
@@ -177,6 +188,19 @@ function get_single_extension(
     skipIds?: Set<string>,
     onSkip?: (id: string) => void
 ): Extension | null {
+    const extensionDir = path.dirname(manifestPath);
+
+    // EARLY BAILOUT: Check if this extension should be skipped BEFORE any file I/O
+    // This is CRITICAL for memory efficiency - we must not read/parse manifest for skipped extensions
+    // The ID is derived from the path hash, so we can compute it without reading any files
+    if (skipIds && skipIds.size > 0) {
+        const id = getExtensionID(extensionDir);
+        if (id && skipIds.has(id)) {
+            if (onSkip) onSkip(id);
+            return null;
+        }
+    }
+
     let manifestMMapFile: MMapFile | undefined;
     try {
         // Read manifest using memory mapping
@@ -187,13 +211,9 @@ function get_single_extension(
 
         // Skip Chrome Apps - they are deprecated and cannot be migrated
         if (isChromeApp(json)) {
-            logger.debug(
-                null,
-                `Skipping Chrome App (deprecated): ${json['name'] || 'Unknown'}`,
-                {
-                    manifest_path: manifestPath,
-                }
-            );
+            logger.debug(null, `Skipping Chrome App (deprecated): ${json['name'] || 'Unknown'}`, {
+                manifest_path: manifestPath,
+            });
             return null;
         }
 
@@ -206,10 +226,7 @@ function get_single_extension(
         }
 
         if (json['manifest_version'] == 2 || includes_mv3) {
-            const extensionDir = path.dirname(manifestPath);
-
-            // EARLY BAILOUT: Check if this extension should be skipped BEFORE expensive operations
-            // This is critical for memory efficiency when resuming large migrations
+            // Get extension ID (already computed above if skipIds was provided, but we need it here too)
             const id = getExtensionID(extensionDir);
 
             if (!id) {
@@ -218,12 +235,6 @@ function get_single_extension(
                     manifest_content: manifestContent,
                     extension_dir: extensionDir,
                 });
-                return null;
-            }
-
-            // Skip if ID is in skipIds set (already migrated)
-            if (skipIds?.has(id)) {
-                if (onSkip) onSkip(id);
                 return null;
             }
 
@@ -458,7 +469,12 @@ function* findExtensionsRecursivelyIterator(
                     if (ext) yield ext;
                 } else {
                     // Recursively search subdirectories for more extension directories
-                    yield* findExtensionsRecursivelyIterator(itemPath, includes_mv3, skipIds, onSkip);
+                    yield* findExtensionsRecursivelyIterator(
+                        itemPath,
+                        includes_mv3,
+                        skipIds,
+                        onSkip
+                    );
                 }
             }
             // Note: Files are ignored - only looking for unpacked extension directories
