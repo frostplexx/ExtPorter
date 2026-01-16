@@ -17,6 +17,7 @@ services:
             - INPUT_DIR=/app/extensions
             - OUTPUT_DIR=/app/output
             - CWS_DIR=/app/cws
+            - LOG_LEVEL=error
         volumes:
             - ./logs:/app/logs
             - ${INPUT_DIR:-./extensions}:/app/extensions:ro
