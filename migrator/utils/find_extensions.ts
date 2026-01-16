@@ -1,4 +1,4 @@
-import { lstatSync, existsSync, readdirSync } from 'fs';
+import { lstatSync, existsSync, readdirSync, statSync } from 'fs';
 import path from 'path';
 import { Extension } from '../types/extension';
 import { ExtFileType } from '../types/ext_file_types';
@@ -9,6 +9,11 @@ import JSON5 from 'json5';
 import crypto from 'crypto';
 import { extensionUtils } from './extension_utils';
 import { findAndParseCWSInfo } from './cws_parser';
+
+// Size limits to prevent memory issues with large extensions
+const MAX_EXTENSION_SIZE = 100 * 1024 * 1024; // 100MB max total extension size
+const MAX_SINGLE_FILE_SIZE = 50 * 1024 * 1024; // 50MB max for any single file
+const MAX_MANIFEST_SIZE = 1 * 1024 * 1024; // 1MB max for manifest.json
 
 /**
  * Options for extension discovery
@@ -176,6 +181,41 @@ function isThemeExtension(manifest: any): boolean {
 }
 
 /**
+ * Calculates the total size of a directory recursively
+ * @param dirPath The directory path to calculate size for
+ * @returns Total size in bytes
+ */
+function calculateDirectorySize(dirPath: string): number {
+    let totalSize = 0;
+
+    try {
+        const items = readdirSync(dirPath);
+
+        for (const item of items) {
+            const itemPath = path.join(dirPath, item);
+            const stats = lstatSync(itemPath);
+
+            if (stats.isDirectory()) {
+                totalSize += calculateDirectorySize(itemPath);
+            } else if (stats.isFile()) {
+                totalSize += stats.size;
+            }
+
+            // Early exit if we've already exceeded the limit
+            if (totalSize > MAX_EXTENSION_SIZE) {
+                return totalSize;
+            }
+        }
+    } catch (error) {
+        logger.debug(null, `Failed to calculate size for directory: ${dirPath}`, {
+            error: (error as any).message,
+        });
+    }
+
+    return totalSize;
+}
+
+/**
  * Parses a single manifest and returns the extension, or null if invalid
  * @param manifestPath Path to the manifest.json file
  * @param includes_mv3 Whether to include MV3 extensions
@@ -199,6 +239,45 @@ function get_single_extension(
             if (onSkip) onSkip(id);
             return null;
         }
+    }
+
+    // SIZE CHECK: Verify manifest file size before attempting to load
+    // This prevents memory issues with corrupted or malformed extensions
+    try {
+        const manifestStats = statSync(manifestPath);
+        if (manifestStats.size > MAX_MANIFEST_SIZE) {
+            logger.warn(
+                null,
+                `Skipping extension with oversized manifest (${(manifestStats.size / 1024 / 1024).toFixed(2)}MB > ${MAX_MANIFEST_SIZE / 1024 / 1024}MB limit)`,
+                {
+                    manifest_path: manifestPath,
+                    manifest_size: manifestStats.size,
+                    max_size: MAX_MANIFEST_SIZE,
+                }
+            );
+            return null;
+        }
+    } catch (statError) {
+        logger.error(null, `Failed to stat manifest file: ${manifestPath}`, {
+            error: (statError as any).message,
+        });
+        return null;
+    }
+
+    // SIZE CHECK: Calculate total extension directory size before loading
+    // This prevents memory exhaustion when processing very large extensions
+    const extensionSize = calculateDirectorySize(extensionDir);
+    if (extensionSize > MAX_EXTENSION_SIZE) {
+        logger.warn(
+            null,
+            `Skipping oversized extension (${(extensionSize / 1024 / 1024).toFixed(2)}MB > ${MAX_EXTENSION_SIZE / 1024 / 1024}MB limit)`,
+            {
+                extension_dir: extensionDir,
+                extension_size: extensionSize,
+                max_size: MAX_EXTENSION_SIZE,
+            }
+        );
+        return null;
     }
 
     let manifestMMapFile: MMapFile | undefined;
@@ -381,6 +460,20 @@ function discoverExtensionFiles(extensionDir: string): LazyFile[] {
                 } else if (stats.isFile()) {
                     // Skip very small files that are unlikely to contain meaningful code
                     if (stats.size < 10) {
+                        continue;
+                    }
+
+                    // Skip files that are too large to prevent memory issues
+                    if (stats.size > MAX_SINGLE_FILE_SIZE) {
+                        logger.warn(
+                            null,
+                            `Skipping oversized file (${(stats.size / 1024 / 1024).toFixed(2)}MB > ${MAX_SINGLE_FILE_SIZE / 1024 / 1024}MB limit)`,
+                            {
+                                file_path: itemPath,
+                                file_size: stats.size,
+                                max_size: MAX_SINGLE_FILE_SIZE,
+                            }
+                        );
                         continue;
                     }
 
