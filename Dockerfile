@@ -35,17 +35,15 @@ COPY prettier.config.js ./
 
 # Copy all source code
 COPY migrator/ ./migrator/
-COPY scripts/ ./scripts/
 
 # Create directories that the application expects
 RUN mkdir -p logs output cws
 
-# Make bootstrap script executable
-USER root
-RUN chmod +x /app/scripts/start-server.sh
+# Switch back to migrator_user
+USER migrator_user
 
 # Expose WebSocket server port
 EXPOSE 8080
 
-# Default command - use bootstrap script that auto-detects RAM and sets NODE_OPTIONS
-CMD ["/app/scripts/start-server.sh"]
+# Default command
+CMD ["yarn", "server"]

@@ -49,6 +49,15 @@ function getColoredLabel(level: LogLevel): string {
 }
 
 /**
+ * Check if stdout logging is enabled
+ */
+function isStdoutEnabled(): boolean {
+    const envValue = process.env.LOG_STDOUT;
+    // Default to true if not set, only disable if explicitly set to 'false'
+    return envValue?.toLowerCase() !== 'false';
+}
+
+/**
  * Check if a log level should be logged based on current environment setting
  */
 function shouldLog(level: LogLevel): boolean {
@@ -393,7 +402,9 @@ export const logger = {
             return;
         }
         if (shouldLog(LogLevel.INFO)) {
-            console.info(`${getColoredLabel(LogLevel.INFO)} ${message}`, meta || '');
+            if (isStdoutEnabled()) {
+                console.info(`${getColoredLabel(LogLevel.INFO)} ${message}`, meta || '');
+            }
             addLogToBatch(LogLevel.INFO, extension, message, meta);
         }
     },
@@ -407,7 +418,9 @@ export const logger = {
             return;
         }
         if (shouldLog(LogLevel.WARN)) {
-            console.warn(`${getColoredLabel(LogLevel.WARN)} ${message}`, meta || '');
+            if (isStdoutEnabled()) {
+                console.warn(`${getColoredLabel(LogLevel.WARN)} ${message}`, meta || '');
+            }
             addLogToBatch(LogLevel.WARN, extension, message, meta);
         }
     },
@@ -421,7 +434,9 @@ export const logger = {
             return;
         }
         if (shouldLog(LogLevel.ERROR)) {
-            console.error(`${getColoredLabel(LogLevel.ERROR)} ${message}`, meta || '');
+            if (isStdoutEnabled()) {
+                console.error(`${getColoredLabel(LogLevel.ERROR)} ${message}`, meta || '');
+            }
             addLogToBatch(LogLevel.ERROR, extension, message, meta);
         }
     },
@@ -435,7 +450,9 @@ export const logger = {
             return;
         }
         if (shouldLog(LogLevel.DEBUG)) {
-            console.debug(`${getColoredLabel(LogLevel.DEBUG)} ${message}`, meta || '');
+            if (isStdoutEnabled()) {
+                console.debug(`${getColoredLabel(LogLevel.DEBUG)} ${message}`, meta || '');
+            }
             addLogToBatch(LogLevel.DEBUG, extension, message, meta);
         }
     },
