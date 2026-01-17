@@ -236,7 +236,9 @@ export class Database {
                 null,
                 `Database waiter queue full (${this.queueWaiters.length}/${this.maxQueueWaiters}), rejecting operation`
             );
-            return Promise.reject(new Error(`Database waiter queue full (${this.maxQueueWaiters} waiters)`));
+            return Promise.reject(
+                new Error(`Database waiter queue full (${this.maxQueueWaiters} waiters)`)
+            );
         }
 
         // Wait for space up to configured timeout. If timeout expires, reject to prevent indefinite blocking.
@@ -245,48 +247,50 @@ export class Database {
                 reject(new Error('Database is shutting down'));
                 return;
             }
-            
-                        let timeoutId: NodeJS.Timeout | undefined;
-                        let resolved = false;
-            
-                        const waiter = () => {
-                            if (resolved) return;
-                            if (timeoutId) {
-                                clearTimeout(timeoutId);
-                                timeoutId = undefined;
-                            }
-            
-                            if (this.isShuttingDown) {
-                                resolved = true;
-                                reject(new Error('Database is shutting down'));
-                                return;
-                            }
-            
-                            if (this.operationQueue.length < this.maxQueueSize) {
-                                this.operationQueue.push({ operation, resolve, reject });
-                                resolved = true;
-                                return;
-                            }
-            
-                            // Still full; leave waiter registered for next notification
-                        };
-            
-                        // Register waiter
-                        this.queueWaiters.push(waiter);
-            
-                        // Setup timeout to reject the enqueue after waiting too long
-                        timeoutId = setTimeout(() => {
-                            if (resolved) return;
-                            // Remove waiter from queueWaiters
-                            const idx = this.queueWaiters.indexOf(waiter);
-                            if (idx >= 0) this.queueWaiters.splice(idx, 1);
-                            resolved = true;
-                            logger.error(
-                                null,
-                                `Timed out waiting for database queue to drain (${this.queueWaitTimeoutMs}ms)`
-                            );
-                            reject(new Error(`Database queue full after waiting ${this.queueWaitTimeoutMs} ms`));
-                        }, this.queueWaitTimeoutMs);
+
+            let timeoutId: NodeJS.Timeout | undefined;
+            let resolved = false;
+
+            const waiter = () => {
+                if (resolved) return;
+                if (timeoutId) {
+                    clearTimeout(timeoutId);
+                    timeoutId = undefined;
+                }
+
+                if (this.isShuttingDown) {
+                    resolved = true;
+                    reject(new Error('Database is shutting down'));
+                    return;
+                }
+
+                if (this.operationQueue.length < this.maxQueueSize) {
+                    this.operationQueue.push({ operation, resolve, reject });
+                    resolved = true;
+                    return;
+                }
+
+                // Still full; leave waiter registered for next notification
+            };
+
+            // Register waiter
+            this.queueWaiters.push(waiter);
+
+            // Setup timeout to reject the enqueue after waiting too long
+            timeoutId = setTimeout(() => {
+                if (resolved) return;
+                // Remove waiter from queueWaiters
+                const idx = this.queueWaiters.indexOf(waiter);
+                if (idx >= 0) this.queueWaiters.splice(idx, 1);
+                resolved = true;
+                logger.error(
+                    null,
+                    `Timed out waiting for database queue to drain (${this.queueWaitTimeoutMs}ms)`
+                );
+                reject(
+                    new Error(`Database queue full after waiting ${this.queueWaitTimeoutMs} ms`)
+                );
+            }, this.queueWaitTimeoutMs);
         });
     }
 
@@ -353,7 +357,8 @@ export class Database {
                     } else if (file.getContent && typeof file.getContent === 'function') {
                         try {
                             const c = file.getContent();
-                            if (typeof c === 'string') estimatedSize += Buffer.byteLength(c, 'utf8');
+                            if (typeof c === 'string')
+                                estimatedSize += Buffer.byteLength(c, 'utf8');
                             else if (Buffer.isBuffer(c)) estimatedSize += c.length;
                         } catch {
                             // ignore
@@ -463,7 +468,7 @@ export class Database {
                 const newSize = Buffer.byteLength(JSON.stringify(truncatedDoc), 'utf8');
                 logger.debug(
                     null,
-                    `Document truncated from ${(truncatedDoc._originalSize ? (truncatedDoc._originalSize / 1024 / 1024).toFixed(2) : 'unknown')}MB to ${(newSize / 1024 / 1024).toFixed(2)}MB`
+                    `Document truncated from ${truncatedDoc._originalSize ? (truncatedDoc._originalSize / 1024 / 1024).toFixed(2) : 'unknown'}MB to ${(newSize / 1024 / 1024).toFixed(2)}MB`
                 );
 
                 if (newSize > MAX_BSON_SIZE) {
@@ -878,7 +883,8 @@ export class Database {
                     .toArray();
             }
 
-            // Sanitize extensions for transmission: remove heavy fields like `files` and `manifest`,
+            // Sanitize extensions for transmission: remove heavy fields like `files`,
+            // keep only minimal manifest info for form display (popup/options/newtab detection),
             // truncate long CWS descriptions, and strip large code snippets from event listeners.
             const sanitizedExtensions = extensionsPage.map((ext: any) => {
                 const copy: any = { ...ext };
@@ -897,9 +903,39 @@ export class Database {
                     }));
                 }
 
-                // Remove manifest object (too large)
+                // Keep only minimal manifest info needed for form display (popup, options, newtab)
+                // instead of the full manifest which can be very large
                 if (copy.manifest) {
-                    delete copy.manifest;
+                    const m = copy.manifest;
+                    copy.manifest = {};
+
+                    // Popup detection (MV2 and MV3)
+                    if (m.action?.default_popup) {
+                        copy.manifest.action = { default_popup: m.action.default_popup };
+                    }
+                    if (m.browser_action?.default_popup) {
+                        copy.manifest.browser_action = {
+                            default_popup: m.browser_action.default_popup,
+                        };
+                    }
+                    if (m.page_action?.default_popup) {
+                        copy.manifest.page_action = { default_popup: m.page_action.default_popup };
+                    }
+
+                    // Options page detection
+                    if (m.options_page) {
+                        copy.manifest.options_page = m.options_page;
+                    }
+                    if (m.options_ui?.page) {
+                        copy.manifest.options_ui = { page: m.options_ui.page };
+                    }
+
+                    // New tab extension detection
+                    if (m.chrome_url_overrides?.newtab) {
+                        copy.manifest.chrome_url_overrides = {
+                            newtab: m.chrome_url_overrides.newtab,
+                        };
+                    }
                 }
 
                 // Truncate long CWS descriptions
@@ -1181,10 +1217,13 @@ export class Database {
             const mv3ToSourceMap = new Map<string, string>();
 
             // Query for extensions with mv3_extension_id
-            const docs = await this.database.collection(Collections.EXTENSIONS).find(
-                { mv3_extension_id: { $exists: true, $ne: null } },
-                { projection: { id: 1, mv3_extension_id: 1 } }
-            ).toArray();
+            const docs = await this.database
+                .collection(Collections.EXTENSIONS)
+                .find(
+                    { mv3_extension_id: { $exists: true, $ne: null } },
+                    { projection: { id: 1, mv3_extension_id: 1 } }
+                )
+                .toArray();
 
             // Process documents
             for (const doc of docs) {
