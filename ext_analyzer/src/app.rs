@@ -525,8 +525,9 @@ impl App {
                                 timestamp: chrono::Utc::now(),
                             });
 
-                            // Auto-load next untested extension
-                            let _ = self.tx.send(AppEvent::LoadNextUntestedExtension);
+                            // NOTE: We do NOT trigger LoadNextUntestedExtension here because
+                            // it's already triggered in submit_report() immediately after submission.
+                            // Triggering it again here would cause a double navigation (skip bug).
 
                             return;
                         }
