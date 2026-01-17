@@ -456,8 +456,27 @@ impl App {
                     if id == "get_reports" {
                         if let Some(result) = json_msg.get("result") {
                             match serde_json::from_value::<Vec<Report>>(result.clone()) {
-                                Ok(reports) => {
-                                    self.state.reports = reports;
+                                Ok(server_reports) => {
+                                    // Merge server reports with local reports
+                                    // Keep local reports (with "local_" prefix) that aren't yet on server
+                                    // This prevents race conditions where server sync overwrites
+                                    // optimistic local updates before they're persisted
+                                    let local_only: Vec<Report> = self
+                                        .state
+                                        .reports
+                                        .iter()
+                                        .filter(|r| {
+                                            r.id.starts_with("local_")
+                                                && !server_reports
+                                                    .iter()
+                                                    .any(|sr| sr.extension_id == r.extension_id)
+                                        })
+                                        .cloned()
+                                        .collect();
+
+                                    // Start with server reports, then add local-only ones
+                                    self.state.reports = server_reports;
+                                    self.state.reports.extend(local_only);
 
                                     if self.state.message_scroll_offset > 0 {
                                         self.state.message_scroll_offset += 1;

@@ -413,18 +413,22 @@ fn submit_report(
         .retain(|r| r.extension_id != form.extension_id);
     state.reports.push(local_report);
 
-    // Fetch updated reports list (will sync with server state)
-    let get_reports_msg =
-        r#"{"type":"db_query","id":"get_reports","method":"getAllReports","params":{}}"#;
-    let _ = tx.send(AppEvent::SendWebSocketMessage(get_reports_msg.to_string()));
-
     // Close browsers
     let _ = tx.send(AppEvent::CloseBrowsersCmd);
 
     // Load next untested extension (only if creating new report, not editing)
+    // NOTE: We do this BEFORE requesting a server sync to avoid race conditions
+    // where the server response replaces our local state before navigation happens
     if !form.is_editing {
         let _ = tx.send(AppEvent::LoadNextUntestedExtension);
     }
+
+    // Request updated reports list from server (will sync with server state eventually)
+    // This happens AFTER navigation to avoid the server response overwriting our local
+    // optimistic update before we've had a chance to navigate
+    let get_reports_msg =
+        r#"{"type":"db_query","id":"get_reports","method":"getAllReports","params":{}}"#;
+    let _ = tx.send(AppEvent::SendWebSocketMessage(get_reports_msg.to_string()));
 
     // Add system message
     if state.message_scroll_offset > 0 {
