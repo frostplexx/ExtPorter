@@ -118,11 +118,11 @@ pub struct CwsDetails {
     pub size: Option<String>,
     #[serde(default)]
     pub languages: Vec<String>,
-    #[serde(default)]
+    #[serde(default, rename = "userCount")]
     pub user_count: Option<String>,
     #[serde(default)]
     pub rating: Option<String>,
-    #[serde(default)]
+    #[serde(default, rename = "ratingCount")]
     pub rating_count: Option<String>,
     #[serde(default)]
     pub website: Option<String>,
@@ -136,9 +136,9 @@ pub struct CwsImages {
     pub logo: Option<String>,
     #[serde(default)]
     pub screenshots: Vec<String>,
-    #[serde(default)]
+    #[serde(default, rename = "videoThumbnails")]
     pub video_thumbnails: Vec<String>,
-    #[serde(default)]
+    #[serde(default, rename = "videoEmbeds")]
     pub video_embeds: Vec<String>,
 }
 
