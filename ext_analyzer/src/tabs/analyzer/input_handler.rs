@@ -4,7 +4,7 @@ use tokio::sync::mpsc;
 
 use crate::{
     app::AppState,
-    types::{AppEvent, Extension},
+    types::{AppEvent, Extension, ListenerTestResult, Report},
 };
 
 use super::report_form::{FormField, ReportForm};
@@ -351,7 +351,69 @@ fn submit_report(
     };
     let _ = tx.send(AppEvent::SendWebSocketMessage(message));
 
-    // Fetch updated reports list
+    // Create local report to update state immediately (optimistic update)
+    // This ensures the extension is marked as tested without waiting for server sync
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs_f64())
+        .unwrap_or(0.0);
+
+    let local_report = Report {
+        id: form
+            .report_id
+            .clone()
+            .unwrap_or_else(|| format!("local_{}", form.extension_id)),
+        extension_id: form.extension_id.clone(),
+        tested: true,
+        created_at: form.created_at.unwrap_or(now),
+        updated_at: now,
+        verification_duration_secs: form.get_verification_duration(),
+        installs: Some(form.installs),
+        works_in_mv2: Some(form.works_in_mv2),
+        overall_working: Some(form.overall_working.as_str().to_string()),
+        has_errors: None,
+        seems_slower: None,
+        needs_login: Some(form.needs_login),
+        is_popup_working: if form.has_popup {
+            Some(form.is_popup_working)
+        } else {
+            None
+        },
+        is_settings_working: if form.has_settings {
+            Some(form.is_settings_working)
+        } else {
+            None
+        },
+        is_new_tab_working: if form.is_new_tab_extension {
+            Some(form.is_new_tab_working)
+        } else {
+            None
+        },
+        is_interesting: Some(form.is_interesting),
+        notes: if form.notes.is_empty() {
+            None
+        } else {
+            Some(form.notes.clone())
+        },
+        listeners: form
+            .listeners
+            .iter()
+            .map(|l| ListenerTestResult {
+                api: l.api.clone(),
+                file: l.file.clone(),
+                line: l.line,
+                status: l.status.as_str().to_string(),
+            })
+            .collect(),
+    };
+
+    // Update local state: remove old report for this extension (if any) and add new one
+    state
+        .reports
+        .retain(|r| r.extension_id != form.extension_id);
+    state.reports.push(local_report);
+
+    // Fetch updated reports list (will sync with server state)
     let get_reports_msg =
         r#"{"type":"db_query","id":"get_reports","method":"getAllReports","params":{}}"#;
     let _ = tx.send(AppEvent::SendWebSocketMessage(get_reports_msg.to_string()));
