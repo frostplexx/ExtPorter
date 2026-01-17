@@ -1545,10 +1545,15 @@ export class MigrationServer {
         dirHash: string
     ): Promise<void> {
         const totalSize = 8 + mv2Size + mv3Size; // header + two files
-        const totalChunks = Math.ceil(totalSize / CHUNK_SIZE);
 
-        // Prepare MD5 of concatenated files by streaming them (do not load into memory)
+        // Build the 8-byte header: [4B mv2_size][4B mv3_size] in big-endian
+        const sizeHeader = Buffer.alloc(8);
+        sizeHeader.writeUInt32BE(mv2Size, 0);
+        sizeHeader.writeUInt32BE(mv3Size, 4);
+
+        // Prepare MD5 of the full payload (header + files) by streaming
         const md5 = crypto.createHash('md5');
+        md5.update(sizeHeader); // Include header in hash
         await new Promise<void>((resolve, reject) => {
             const stream1 = fs.createReadStream(mv2Path);
             stream1.on('data', (chunk: any) => md5.update(chunk));
@@ -1563,6 +1568,17 @@ export class MigrationServer {
 
         const payloadHash = md5.digest('hex');
 
+        // Count chunks: we'll send the header prepended to the first chunk of mv2,
+        // then continue with remaining mv2 chunks, then all mv3 chunks.
+        // Since we prepend 8 bytes to the first chunk, we need to calculate based on actual data sent.
+        // Each file is read with highWaterMark: CHUNK_SIZE, so:
+        // - mv2 produces ceil(mv2Size / CHUNK_SIZE) chunks
+        // - mv3 produces ceil(mv3Size / CHUNK_SIZE) chunks
+        // The header is prepended to the first mv2 chunk, so total chunk count stays the same.
+        const mv2Chunks = Math.ceil(mv2Size / CHUNK_SIZE) || 1; // At least 1 chunk even if empty
+        const mv3Chunks = Math.ceil(mv3Size / CHUNK_SIZE) || 1;
+        const totalChunks = mv2Chunks + mv3Chunks;
+
         console.log(
             `[Download] Starting streamed chunked transfer: ${totalChunks} chunks, ${totalSize} bytes, hash: ${payloadHash}`
         );
@@ -1573,27 +1589,32 @@ export class MigrationServer {
         );
         ws.send(startMessage, { binary: true });
 
-        // We'll send files in sequence as chunk messages (no separate header chunk needed)
-
         let chunkIndex = 0;
+        let isFirstChunk = true;
 
         // Helper to stream a file in chunks
-        const streamFileAsChunks = (filePath: string) =>
+        const streamFileAsChunks = (filePath: string, prependData?: Buffer) =>
             new Promise<void>((resolve, reject) => {
                 const stream = fs.createReadStream(filePath, { highWaterMark: CHUNK_SIZE });
                 stream.on('data', (chunk: any) => {
+                    let dataToSend = chunk;
+                    // Prepend header to the very first chunk
+                    if (prependData && isFirstChunk) {
+                        dataToSend = Buffer.concat([prependData, chunk]);
+                        isFirstChunk = false;
+                    }
                     const chunkHeader = Buffer.from(
-                        `DOWNLOAD_EXTENSION_CHUNK:${extensionId}:${chunkIndex}:${chunk.length}\n`
+                        `DOWNLOAD_EXTENSION_CHUNK:${extensionId}:${chunkIndex}:${dataToSend.length}\n`
                     );
-                    ws.send(Buffer.concat([chunkHeader, chunk]), { binary: true });
+                    ws.send(Buffer.concat([chunkHeader, dataToSend]), { binary: true });
                     chunkIndex++;
                 });
                 stream.on('end', resolve);
                 stream.on('error', reject);
             });
 
-        // Stream mv2 file
-        await streamFileAsChunks(mv2Path);
+        // Stream mv2 file with header prepended to first chunk
+        await streamFileAsChunks(mv2Path, sizeHeader);
         // Stream mv3 file
         await streamFileAsChunks(mv3Path);
 
