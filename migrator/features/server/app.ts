@@ -1408,9 +1408,11 @@ export class MigrationServer {
 
             console.log(`[Download] Creating tar.gz archives (streaming to temp files)...`);
 
-            // Create tar.gz archives for both directories and write to temp files
-            const mv2TempPath = await this.createTarGzToFile(mv2Dir);
-            const mv3TempPath = await this.createTarGzToFile(mv3Dir);
+            // Create tar.gz archives for both directories in parallel
+            const [mv2TempPath, mv3TempPath] = await Promise.all([
+                this.createTarGzToFile(mv2Dir),
+                this.createTarGzToFile(mv3Dir),
+            ]);
 
             const mv2Stat = await fs.promises.stat(mv2TempPath);
             const mv3Stat = await fs.promises.stat(mv3TempPath);
@@ -1520,11 +1522,6 @@ export class MigrationServer {
             if (i % 5 === 0 || i === totalChunks - 1) {
                 console.log(`[Download] Sent chunk ${i + 1}/${totalChunks}`);
             }
-
-            // Small delay to avoid overwhelming the connection
-            if (i < totalChunks - 1) {
-                await new Promise((resolve) => setTimeout(resolve, 10));
-            }
         }
 
         // Send end message as binary (so it goes to binary handler on client)
@@ -1629,20 +1626,33 @@ export class MigrationServer {
     private async calculateExtensionHash(mv2Dir: string, mv3Dir: string): Promise<string> {
         const hash = crypto.createHash('md5');
 
-        const addDirToHash = async (dir: string, prefix: string) => {
+        const getDirHashData = async (dir: string, prefix: string): Promise<string[]> => {
             const files = await this.listFilesRecursive(dir);
+            const results: string[] = [];
             for (const file of files.sort()) {
                 try {
                     const stat = await fs.promises.stat(path.join(dir, file));
-                    hash.update(`${prefix}:${file}:${stat.size}:${Math.floor(stat.mtimeMs)}\n`);
+                    results.push(`${prefix}:${file}:${stat.size}:${Math.floor(stat.mtimeMs)}\n`);
                 } catch {
                     // Skip files that can't be stat'd
                 }
             }
+            return results;
         };
 
-        await addDirToHash(mv2Dir, 'mv2');
-        await addDirToHash(mv3Dir, 'mv3');
+        // Run both directory scans in parallel
+        const [mv2Data, mv3Data] = await Promise.all([
+            getDirHashData(mv2Dir, 'mv2'),
+            getDirHashData(mv3Dir, 'mv3'),
+        ]);
+
+        // Update hash with results (order matters for consistency)
+        for (const line of mv2Data) {
+            hash.update(line);
+        }
+        for (const line of mv3Data) {
+            hash.update(line);
+        }
 
         return hash.digest('hex');
     }
