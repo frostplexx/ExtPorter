@@ -57,6 +57,19 @@ def connect_to_db(uri: str) -> MongoClient:
         sys.exit(1)
 
 
+def get_cws_extension_id(extension: Dict) -> Optional[str]:
+    """
+    Extract the Chrome Web Store extension ID from the extension.
+
+    The CWS ID is the folder name, which is the basename of manifest_v2_path.
+    For example: /path/to/extensions/ppppahbmgjnmiioildpbclepjmfcbggo -> ppppahbmgjnmiioildpbclepjmfcbggo
+    """
+    manifest_v2_path = extension.get("manifest_v2_path")
+    if manifest_v2_path:
+        return os.path.basename(manifest_v2_path)
+    return None
+
+
 def extract_user_count(html_path: Path) -> Optional[str]:
     """Extract user count from a CWS HTML file."""
     try:
@@ -95,8 +108,10 @@ def backfill_user_counts(
     db = client[db_name]
     collection = db[EXTENSIONS_COLLECTION]
 
-    # Get all extensions
-    extensions = list(collection.find({}, {"id": 1, "cws_info": 1}))
+    # Get all extensions with manifest_v2_path for CWS ID extraction
+    extensions = list(
+        collection.find({}, {"id": 1, "manifest_v2_path": 1, "cws_info": 1})
+    )
     print(f"Found {len(extensions)} extensions in database")
 
     stats = {
@@ -105,12 +120,19 @@ def backfill_user_counts(
         "already_has_value": 0,
         "no_html_file": 0,
         "no_user_count_found": 0,
+        "no_cws_id": 0,
         "errors": 0,
     }
 
     for i, ext in enumerate(extensions, 1):
         ext_id = ext.get("id")
         if not ext_id:
+            continue
+
+        # Get the CWS extension ID from manifest_v2_path
+        cws_ext_id = get_cws_extension_id(ext)
+        if not cws_ext_id:
+            stats["no_cws_id"] += 1
             continue
 
         # Check if already has user count
@@ -122,8 +144,8 @@ def backfill_user_counts(
             stats["already_has_value"] += 1
             continue
 
-        # Find CWS HTML file
-        html_path = find_cws_html(cws_dir, ext_id)
+        # Find CWS HTML file using the CWS extension ID (folder name)
+        html_path = find_cws_html(cws_dir, cws_ext_id)
         if not html_path:
             stats["no_html_file"] += 1
             continue
@@ -136,7 +158,9 @@ def backfill_user_counts(
 
         # Update the database
         if dry_run:
-            print(f"  [DRY-RUN] Would update {ext_id}: userCount = {user_count}")
+            print(
+                f"  [DRY-RUN] Would update {ext_id} (CWS: {cws_ext_id}): userCount = {user_count}"
+            )
             stats["updated"] += 1
         else:
             try:
@@ -147,7 +171,9 @@ def backfill_user_counts(
                 if result.modified_count > 0:
                     stats["updated"] += 1
                     if stats["updated"] <= 10 or stats["updated"] % 100 == 0:
-                        print(f"  Updated {ext_id}: userCount = {user_count}")
+                        print(
+                            f"  Updated {ext_id} (CWS: {cws_ext_id}): userCount = {user_count}"
+                        )
             except Exception as e:
                 print(f"  Error updating {ext_id}: {e}")
                 stats["errors"] += 1
@@ -214,6 +240,7 @@ def main():
         print(f"Total extensions:        {stats['total']}")
         print(f"Updated:                 {stats['updated']}")
         print(f"Already had value:       {stats['already_has_value']}")
+        print(f"No CWS ID (no path):     {stats['no_cws_id']}")
         print(f"No HTML file found:      {stats['no_html_file']}")
         print(f"No user count in HTML:   {stats['no_user_count_found']}")
         print(f"Errors:                  {stats['errors']}")
