@@ -79,9 +79,22 @@ def extract_user_count(html_path: Path) -> Optional[str]:
         soup = BeautifulSoup(html, "lxml")
 
         # User count is in div with class F9iKBc (e.g., "2,000 users" or "5,000,000+ users")
-        user_count_el = soup.select_one(".F9iKBc")
-        if user_count_el:
-            return user_count_el.get_text(strip=True)
+        # There may be multiple elements with this class, so we need to find the one
+        # that contains the user count pattern
+        user_count_els = soup.select(".F9iKBc")
+        for el in user_count_els:
+            text = el.get_text(strip=True)
+            # Match patterns like "2,000 users", "5,000,000+ users", "10 users"
+            if re.match(r"^[\d,]+\+?\s*users?$", text, re.IGNORECASE):
+                return text
+
+        # Fallback: try to find any text matching the user count pattern in F9iKBc elements
+        for el in user_count_els:
+            text = el.get_text(strip=True)
+            # Extract just the user count part if it's embedded in other text
+            match = re.search(r"([\d,]+\+?\s*users?)", text, re.IGNORECASE)
+            if match:
+                return match.group(1)
 
         return None
     except Exception as e:
