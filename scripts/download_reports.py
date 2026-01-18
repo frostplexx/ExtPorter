@@ -21,6 +21,7 @@ Requirements:
 import argparse
 import csv
 import json
+import re
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -54,7 +55,7 @@ EXPORT_FIELDS = [
     "cws_rating",
     "cws_rating_count",
     "cws_developer",
-    "cws_size",
+    "cws_size_bytes",
     "cws_updated",
     "cws_description",
     # Report status
@@ -77,6 +78,15 @@ EXPORT_FIELDS = [
     "event_listeners_count",
     "interestingness_breakdown",
 ]
+
+# Headers with units for CSV export
+FIELD_HEADERS = {
+    "cws_user_count": "cws_user_count (users)",
+    "cws_rating": "cws_rating (out of 5)",
+    "cws_rating_count": "cws_rating_count (ratings)",
+    "cws_size_bytes": "cws_size (bytes)",
+    "verification_duration_secs": "verification_duration (seconds)",
+}
 
 
 def connect_to_db(uri: str) -> MongoClient:
@@ -111,6 +121,84 @@ def format_value(value: Any) -> str:
     if isinstance(value, (list, dict)):
         return json.dumps(value)
     return str(value)
+
+
+def parse_user_count(user_count_str: Optional[str]) -> Optional[int]:
+    """
+    Parse user count string to integer.
+    Examples: "2,000 users" -> 2000, "5,000,000+ users" -> 5000000
+    """
+    if not user_count_str:
+        return None
+    # Remove "users", "+", commas, and whitespace
+    cleaned = re.sub(
+        r"[,\s+]", "", user_count_str.lower().replace("users", "").replace("user", "")
+    )
+    try:
+        return int(cleaned)
+    except ValueError:
+        return None
+
+
+def parse_rating(rating_str: Optional[str]) -> Optional[float]:
+    """
+    Parse rating string to float.
+    Examples: "4.5" -> 4.5
+    """
+    if not rating_str:
+        return None
+    try:
+        return float(rating_str)
+    except ValueError:
+        return None
+
+
+def parse_rating_count(rating_count_str: Optional[str]) -> Optional[int]:
+    """
+    Parse rating count string to integer.
+    Examples: "250" -> 250, "1,234" -> 1234
+    """
+    if not rating_count_str:
+        return None
+    cleaned = re.sub(r"[,\s]", "", rating_count_str)
+    try:
+        return int(cleaned)
+    except ValueError:
+        return None
+
+
+def parse_size_to_bytes(size_str: Optional[str]) -> Optional[int]:
+    """
+    Parse size string to bytes.
+    Examples: "37.66KiB" -> 38563, "1.5MiB" -> 1572864, "500B" -> 500
+    """
+    if not size_str:
+        return None
+
+    size_str = size_str.strip().upper()
+
+    # Match patterns like "37.66KIB", "1.5MIB", "500B"
+    match = re.match(r"^([\d.]+)\s*(B|KB|KIB|MB|MIB|GB|GIB)?$", size_str)
+    if not match:
+        return None
+
+    try:
+        value = float(match.group(1))
+        unit = match.group(2) or "B"
+
+        multipliers = {
+            "B": 1,
+            "KB": 1000,
+            "KIB": 1024,
+            "MB": 1000 * 1000,
+            "MIB": 1024 * 1024,
+            "GB": 1000 * 1000 * 1000,
+            "GIB": 1024 * 1024 * 1024,
+        }
+
+        return int(value * multipliers.get(unit, 1))
+    except (ValueError, TypeError):
+        return None
 
 
 def get_extensions_map(client: MongoClient, db_name: str) -> Dict[str, Dict]:
@@ -198,15 +286,17 @@ def combine_report_with_extension(report: Dict, extension: Optional[Dict]) -> Di
         if event_listeners:
             combined["event_listeners_count"] = len(event_listeners)
 
-        # CWS info
+        # CWS info - parse to dimensionless values
         cws_info = extension.get("cws_info")
         if cws_info:
             details = cws_info.get("details", {})
-            combined["cws_user_count"] = details.get("userCount")
-            combined["cws_rating"] = details.get("rating")
-            combined["cws_rating_count"] = details.get("ratingCount")
+            combined["cws_user_count"] = parse_user_count(details.get("userCount"))
+            combined["cws_rating"] = parse_rating(details.get("rating"))
+            combined["cws_rating_count"] = parse_rating_count(
+                details.get("ratingCount")
+            )
             combined["cws_developer"] = details.get("developer")
-            combined["cws_size"] = details.get("size")
+            combined["cws_size_bytes"] = parse_size_to_bytes(details.get("size"))
             combined["cws_updated"] = details.get("updated")
             combined["cws_description"] = cws_info.get("description")
 
@@ -236,11 +326,14 @@ def export_to_csv(
     # Add extra fields sorted alphabetically
     fields.extend(sorted(extra_fields))
 
+    # Create headers with units where applicable
+    headers = [FIELD_HEADERS.get(field, field) for field in fields]
+
     with open(output_path, "w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
 
-        # Write header
-        writer.writerow(fields)
+        # Write header with units
+        writer.writerow(headers)
 
         # Write data rows
         for record in combined_data:
