@@ -93,6 +93,7 @@ def count_from_database(client: MongoClient, db_name: str) -> Dict[str, int]:
         "manifest_v2": 0,
         "manifest_v2_proper": 0,
         "manifest_v3": 0,
+        "manifest_v3_proper": 0,
         "chrome_apps": 0,
         "themes": 0,
         "regular_extensions": 0,
@@ -110,6 +111,8 @@ def count_from_database(client: MongoClient, db_name: str) -> Dict[str, int]:
 
         if is_v3:
             stats["manifest_v3"] += 1
+            if not is_app and not is_theme_flag:
+                stats["manifest_v3_proper"] += 1
         else:
             stats["manifest_v2"] += 1
             if not is_app and not is_theme_flag:
@@ -132,13 +135,14 @@ def count_from_input_dir(input_dir: Path) -> Dict[str, int]:
     - Handles UTF-8 BOM by decoding with `utf-8-sig` when needed
     - Falls back to a heuristic regex to extract `manifest_version` when JSON is malformed
     - Always increments `total` so filesystem totals aren't lost on parse errors
-    - Tracks `manifest_v2_proper`: manifest v2 extensions that are not themes or apps
+    - Tracks `manifest_v2_proper` and `manifest_v3_proper`: manifest v2/v3 extensions that are not themes or apps
     """
     stats = {
         "total": 0,
         "manifest_v2": 0,
         "manifest_v2_proper": 0,
         "manifest_v3": 0,
+        "manifest_v3_proper": 0,
         "chrome_apps": 0,
         "themes": 0,
         "regular_extensions": 0,
@@ -147,6 +151,80 @@ def count_from_input_dir(input_dir: Path) -> Dict[str, int]:
     if not input_dir.exists():
         print(f"Warning: INPUT_DIR does not exist: {input_dir}")
         return stats
+
+    # Find all manifest.json files
+    for ext_dir in input_dir.iterdir():
+        if not ext_dir.is_dir():
+            continue
+
+        manifest_path = ext_dir / "manifest.json"
+        if not manifest_path.exists():
+            continue
+
+        manifest = None
+        raw = None
+
+        # 1) Try normal json.load with UTF-8
+        try:
+            with open(manifest_path, "r", encoding="utf-8") as f:
+                manifest = json.load(f)
+        except Exception:
+            # 2) Try reading bytes and decoding with utf-8-sig to handle BOM
+            try:
+                raw = manifest_path.read_bytes()
+                text = raw.decode("utf-8-sig")
+                manifest = json.loads(text)
+            except Exception:
+                # 3) Fallback: decode with replace and try to heuristically extract manifest_version
+                try:
+                    if raw is None:
+                        raw = manifest_path.read_bytes()
+                    text = raw.decode("utf-8", errors="replace")
+                    m = re.search(r'"manifest_version"\s*:\s*(\d+)', text)
+                    if m:
+                        mv = int(m.group(1))
+                        manifest = {"manifest_version": mv}
+                    else:
+                        # give up on parsing JSON content but keep counting
+                        manifest = None
+                        print(
+                            f"Warning: Could not parse {manifest_path} (falling back to minimal classification)"
+                        )
+                except Exception as e:
+                    manifest = None
+                    print(f"Warning: Could not parse {manifest_path}: {e}")
+
+        # Always count as total even if manifest couldn't be parsed
+        stats["total"] += 1
+
+        # Common derived flags
+        is_v3 = is_manifest_v3(manifest)
+        is_app = is_chrome_app(manifest)
+        is_theme_flag = is_theme(manifest)
+
+        # If we found at least manifest_version, classify by manifest_version
+        if manifest:
+            if is_v3:
+                stats["manifest_v3"] += 1
+                if not is_app and not is_theme_flag:
+                    stats["manifest_v3_proper"] += 1
+            else:
+                stats["manifest_v2"] += 1
+                if not is_app and not is_theme_flag:
+                    stats["manifest_v2_proper"] += 1
+
+            if is_app:
+                stats["chrome_apps"] += 1
+            elif is_theme_flag:
+                stats["themes"] += 1
+            else:
+                stats["regular_extensions"] += 1
+        else:
+            # Unknown manifest — count as a regular extension so totals are preserved
+            stats["regular_extensions"] += 1
+            # can't determine manifest_version so we don't increment manifest_v2/proper
+
+    return stats
 
     # Find all manifest.json files
     for ext_dir in input_dir.iterdir():
@@ -306,6 +384,7 @@ def export_to_csv(
             "manifest_v2",
             "manifest_v2_proper",
             "manifest_v3",
+            "manifest_v3_proper",
             "chrome_apps",
             "themes",
             "regular_extensions",
