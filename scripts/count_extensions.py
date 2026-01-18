@@ -20,6 +20,7 @@ Requirements:
 import argparse
 import csv
 import json
+import re
 import os
 import sys
 from pathlib import Path
@@ -112,7 +113,13 @@ def count_from_database(client: MongoClient, db_name: str) -> Dict[str, int]:
 
 
 def count_from_input_dir(input_dir: Path) -> Dict[str, int]:
-    """Count extensions by type from INPUT_DIR."""
+    """Count extensions by type from INPUT_DIR.
+
+    This implementation is robust to common issues:
+    - Handles UTF-8 BOM by decoding with `utf-8-sig` when needed
+    - Falls back to a heuristic regex to extract `manifest_version` when JSON is malformed
+    - Always increments `total` so filesystem totals aren't lost on parse errors
+    """
     stats = {
         "total": 0,
         "manifest_v2": 0,
@@ -135,25 +142,57 @@ def count_from_input_dir(input_dir: Path) -> Dict[str, int]:
         if not manifest_path.exists():
             continue
 
-        try:
-            with open(manifest_path, "r", encoding="utf-8", errors="ignore") as f:
-                manifest = json.load(f)
-        except (json.JSONDecodeError, IOError) as e:
-            print(f"Warning: Could not parse {manifest_path}: {e}")
-            continue
+        manifest = None
+        raw = None
 
+        # 1) Try normal json.load with UTF-8
+        try:
+            with open(manifest_path, "r", encoding="utf-8") as f:
+                manifest = json.load(f)
+        except Exception:
+            # 2) Try reading bytes and decoding with utf-8-sig to handle BOM
+            try:
+                raw = manifest_path.read_bytes()
+                text = raw.decode("utf-8-sig")
+                manifest = json.loads(text)
+            except Exception:
+                # 3) Fallback: decode with replace and try to heuristically extract manifest_version
+                try:
+                    if raw is None:
+                        raw = manifest_path.read_bytes()
+                    text = raw.decode("utf-8", errors="replace")
+                    m = re.search(r'"manifest_version"\s*:\s*(\d+)', text)
+                    if m:
+                        mv = int(m.group(1))
+                        manifest = {"manifest_version": mv}
+                    else:
+                        # give up on parsing JSON content but keep counting
+                        manifest = None
+                        print(
+                            f"Warning: Could not parse {manifest_path} (falling back to minimal classification)"
+                        )
+                except Exception as e:
+                    manifest = None
+                    print(f"Warning: Could not parse {manifest_path}: {e}")
+
+        # Always count as total even if manifest couldn't be parsed
         stats["total"] += 1
 
-        if is_manifest_v3(manifest):
-            stats["manifest_v3"] += 1
-        else:
-            stats["manifest_v2"] += 1
+        # If we found at least manifest_version, classify by manifest_version
+        if manifest:
+            if is_manifest_v3(manifest):
+                stats["manifest_v3"] += 1
+            else:
+                stats["manifest_v2"] += 1
 
-        if is_chrome_app(manifest):
-            stats["chrome_apps"] += 1
-        elif is_theme(manifest):
-            stats["themes"] += 1
+            if is_chrome_app(manifest):
+                stats["chrome_apps"] += 1
+            elif is_theme(manifest):
+                stats["themes"] += 1
+            else:
+                stats["regular_extensions"] += 1
         else:
+            # Unknown manifest — count as a regular extension so totals are preserved
             stats["regular_extensions"] += 1
 
     return stats
