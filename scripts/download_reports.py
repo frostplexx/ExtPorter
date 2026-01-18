@@ -2,6 +2,9 @@
 """
 Download extension reports from MongoDB and export to CSV.
 
+Combines report data with extension information (name, interestingness score,
+CWS metadata, tags, etc.) for a complete view.
+
 Usage:
     python download_reports.py [output_csv] [--uri URI] [--tested-only] [--include-listeners]
 
@@ -33,15 +36,33 @@ except ImportError:
 DEFAULT_URI = "mongodb://admin:password@localhost:27017/migrator?authSource=admin"
 DEFAULT_DB = "migrator"
 REPORTS_COLLECTION = "reports"
+EXTENSIONS_COLLECTION = "extensions"
 
-# Fields to export (in order)
-REPORT_FIELDS = [
-    "id",
+# Fields to export (in order) - combining report and extension data
+# Extension fields are prefixed for clarity
+EXPORT_FIELDS = [
+    # Report identification
+    "report_id",
     "extension_id",
+    # Extension info
+    "extension_name",
+    "extension_version",
+    "interestingness_score",
+    "tags",
+    # CWS info
+    "cws_user_count",
+    "cws_rating",
+    "cws_rating_count",
+    "cws_developer",
+    "cws_size",
+    "cws_updated",
+    "cws_description",
+    # Report status
     "tested",
     "created_at",
     "updated_at",
     "verification_duration_secs",
+    # Report assessment
     "overall_working",
     "has_errors",
     "seems_slower",
@@ -50,6 +71,10 @@ REPORT_FIELDS = [
     "is_settings_broken",
     "is_interesting",
     "notes",
+    # Extension details
+    "is_new_tab_extension",
+    "event_listeners_count",
+    "interestingness_breakdown",
 ]
 
 
@@ -59,7 +84,7 @@ def connect_to_db(uri: str) -> MongoClient:
         client = MongoClient(uri, serverSelectionTimeoutMS=5000)
         # Test the connection
         client.admin.command("ping")
-        print(f"Connected to MongoDB")
+        print("Connected to MongoDB")
         return client
     except Exception as e:
         print(f"Error connecting to MongoDB: {e}")
@@ -87,6 +112,37 @@ def format_value(value: Any) -> str:
     return str(value)
 
 
+def get_extensions_map(client: MongoClient, db_name: str) -> Dict[str, Dict]:
+    """Fetch all extensions and return a map by ID."""
+    db = client[db_name]
+    collection = db[EXTENSIONS_COLLECTION]
+
+    # Project only the fields we need to reduce memory usage
+    projection = {
+        "id": 1,
+        "name": 1,
+        "version": 1,
+        "interestingness_score": 1,
+        "interestingness_breakdown": 1,
+        "tags": 1,
+        "isNewTabExtension": 1,
+        "event_listeners": 1,
+        "cws_info": 1,
+    }
+
+    extensions = list(collection.find({}, projection))
+    print(f"Found {len(extensions)} extensions")
+
+    # Build a map by extension ID
+    ext_map = {}
+    for ext in extensions:
+        ext_id = ext.get("id")
+        if ext_id:
+            ext_map[ext_id] = ext
+
+    return ext_map
+
+
 def get_reports(
     client: MongoClient, db_name: str, tested_only: bool = False
 ) -> List[Dict]:
@@ -103,24 +159,76 @@ def get_reports(
     return reports
 
 
+def combine_report_with_extension(report: Dict, extension: Optional[Dict]) -> Dict:
+    """Combine report data with extension data into a single record."""
+    combined = {}
+
+    # Report fields
+    combined["report_id"] = report.get("id")
+    combined["extension_id"] = report.get("extension_id")
+    combined["tested"] = report.get("tested")
+    combined["created_at"] = report.get("created_at")
+    combined["updated_at"] = report.get("updated_at")
+    combined["verification_duration_secs"] = report.get("verification_duration_secs")
+    combined["overall_working"] = report.get("overall_working")
+    combined["has_errors"] = report.get("has_errors")
+    combined["seems_slower"] = report.get("seems_slower")
+    combined["needs_login"] = report.get("needs_login")
+    combined["is_popup_broken"] = report.get("is_popup_broken")
+    combined["is_settings_broken"] = report.get("is_settings_broken")
+    combined["is_interesting"] = report.get("is_interesting")
+    combined["notes"] = report.get("notes")
+    combined["listeners"] = report.get("listeners")
+
+    # Extension fields
+    if extension:
+        combined["extension_name"] = extension.get("name")
+        combined["extension_version"] = extension.get("version")
+        combined["interestingness_score"] = extension.get("interestingness_score")
+        combined["interestingness_breakdown"] = extension.get(
+            "interestingness_breakdown"
+        )
+        combined["tags"] = extension.get("tags")
+        combined["is_new_tab_extension"] = extension.get("isNewTabExtension")
+
+        # Count event listeners
+        event_listeners = extension.get("event_listeners")
+        if event_listeners:
+            combined["event_listeners_count"] = len(event_listeners)
+
+        # CWS info
+        cws_info = extension.get("cws_info")
+        if cws_info:
+            details = cws_info.get("details", {})
+            combined["cws_user_count"] = details.get("userCount")
+            combined["cws_rating"] = details.get("rating")
+            combined["cws_rating_count"] = details.get("ratingCount")
+            combined["cws_developer"] = details.get("developer")
+            combined["cws_size"] = details.get("size")
+            combined["cws_updated"] = details.get("updated")
+            combined["cws_description"] = cws_info.get("description")
+
+    return combined
+
+
 def export_to_csv(
-    reports: List[Dict], output_path: Path, include_listeners: bool = False
+    combined_data: List[Dict], output_path: Path, include_listeners: bool = False
 ) -> None:
-    """Export reports to CSV file."""
-    if not reports:
-        print("No reports to export.")
+    """Export combined report/extension data to CSV file."""
+    if not combined_data:
+        print("No data to export.")
         return
 
-    # Determine all fields present in reports
-    fields = REPORT_FIELDS.copy()
+    # Determine all fields present
+    fields = EXPORT_FIELDS.copy()
     if include_listeners:
         fields.append("listeners")
 
     # Collect any additional fields not in the standard list
     extra_fields = set()
-    for report in reports:
-        for key in report.keys():
-            if key not in fields and key != "_id":
+    for record in combined_data:
+        for key in record.keys():
+            if key not in fields and key != "_id" and key != "listeners":
                 extra_fields.add(key)
 
     # Add extra fields sorted alphabetically
@@ -133,10 +241,10 @@ def export_to_csv(
         writer.writerow(fields)
 
         # Write data rows
-        for report in reports:
+        for record in combined_data:
             row = []
             for field in fields:
-                value = report.get(field)
+                value = record.get(field)
 
                 # Format timestamps
                 if field in ("created_at", "updated_at"):
@@ -146,32 +254,44 @@ def export_to_csv(
 
             writer.writerow(row)
 
-    print(f"Exported {len(reports)} reports to: {output_path}")
+    print(f"Exported {len(combined_data)} records to: {output_path}")
 
 
-def print_summary(reports: List[Dict]) -> None:
-    """Print a summary of the reports."""
-    if not reports:
+def print_summary(combined_data: List[Dict]) -> None:
+    """Print a summary of the data."""
+    if not combined_data:
         return
 
-    tested_count = sum(1 for r in reports if r.get("tested"))
-    working_count = sum(1 for r in reports if r.get("overall_working") is True)
-    has_errors_count = sum(1 for r in reports if r.get("has_errors") is True)
-    interesting_count = sum(1 for r in reports if r.get("is_interesting") is True)
+    total = len(combined_data)
+    tested_count = sum(1 for r in combined_data if r.get("tested"))
+    working_count = sum(1 for r in combined_data if r.get("overall_working") is True)
+    has_errors_count = sum(1 for r in combined_data if r.get("has_errors") is True)
+    interesting_count = sum(1 for r in combined_data if r.get("is_interesting") is True)
+    with_cws_count = sum(1 for r in combined_data if r.get("cws_user_count"))
 
-    print(f"\n{'=' * 50}")
+    # Calculate average interestingness score
+    scores = [
+        r["interestingness_score"]
+        for r in combined_data
+        if r.get("interestingness_score") is not None
+    ]
+    avg_score = sum(scores) / len(scores) if scores else 0.0
+
+    print(f"\n{'=' * 55}")
     print("Summary")
-    print(f"{'=' * 50}")
-    print(f"Total reports:    {len(reports)}")
-    print(f"Tested:           {tested_count}")
-    print(f"Overall working:  {working_count}")
-    print(f"Has errors:       {has_errors_count}")
-    print(f"Interesting:      {interesting_count}")
+    print(f"{'=' * 55}")
+    print(f"Total reports:           {total}")
+    print(f"Tested:                  {tested_count}")
+    print(f"Overall working:         {working_count}")
+    print(f"Has errors:              {has_errors_count}")
+    print(f"Marked interesting:      {interesting_count}")
+    print(f"With CWS metadata:       {with_cws_count}")
+    print(f"Avg interestingness:     {avg_score:.2f}")
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Download extension reports from MongoDB and export to CSV."
+        description="Download extension reports from MongoDB and export to CSV (with extension info)."
     )
     parser.add_argument(
         "output_csv",
@@ -206,18 +326,43 @@ def main():
     args = parser.parse_args()
     output_path = Path(args.output_csv)
 
-    print(f"Connecting to MongoDB...")
+    print("Connecting to MongoDB...")
     client = connect_to_db(args.uri)
 
     try:
+        # Fetch extensions first to build lookup map
+        print(f"Fetching extensions from '{args.db}.{EXTENSIONS_COLLECTION}'...")
+        extensions_map = get_extensions_map(client, args.db)
+
+        # Fetch reports
         print(f"Fetching reports from '{args.db}.{REPORTS_COLLECTION}'...")
         reports = get_reports(client, args.db, tested_only=args.tested_only)
 
         if reports:
-            print_summary(reports)
-            print(f"\nExporting to CSV...")
+            # Combine reports with extension data
+            print("Combining report and extension data...")
+            combined_data = []
+            missing_extensions = 0
+
+            for report in reports:
+                ext_id = report.get("extension_id", "")
+                extension = extensions_map.get(ext_id) if ext_id else None
+
+                if not extension:
+                    missing_extensions += 1
+
+                combined = combine_report_with_extension(report, extension)
+                combined_data.append(combined)
+
+            if missing_extensions > 0:
+                print(
+                    f"Warning: {missing_extensions} reports have no matching extension"
+                )
+
+            print_summary(combined_data)
+            print("\nExporting to CSV...")
             export_to_csv(
-                reports, output_path, include_listeners=args.include_listeners
+                combined_data, output_path, include_listeners=args.include_listeners
             )
         else:
             print("No reports found in the database.")
