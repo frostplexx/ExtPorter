@@ -67,8 +67,9 @@ EXPORT_FIELDS = [
     "has_errors",
     "seems_slower",
     "needs_login",
-    "is_popup_broken",
-    "is_settings_broken",
+    "is_popup_working",
+    "is_settings_working",
+    "is_new_tab_working",
     "is_interesting",
     "notes",
     # Extension details
@@ -174,8 +175,9 @@ def combine_report_with_extension(report: Dict, extension: Optional[Dict]) -> Di
     combined["has_errors"] = report.get("has_errors")
     combined["seems_slower"] = report.get("seems_slower")
     combined["needs_login"] = report.get("needs_login")
-    combined["is_popup_broken"] = report.get("is_popup_broken")
-    combined["is_settings_broken"] = report.get("is_settings_broken")
+    combined["is_popup_working"] = report.get("is_popup_working")
+    combined["is_settings_working"] = report.get("is_settings_working")
+    combined["is_new_tab_working"] = report.get("is_new_tab_working")
     combined["is_interesting"] = report.get("is_interesting")
     combined["notes"] = report.get("notes")
     combined["listeners"] = report.get("listeners")
