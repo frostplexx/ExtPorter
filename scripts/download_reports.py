@@ -64,6 +64,8 @@ EXPORT_FIELDS = [
     "updated_at",
     "verification_duration_secs",
     # Report assessment
+    "installs",
+    "works_in_mv2",
     "overall_working",
     "has_errors",
     "seems_slower",
@@ -259,6 +261,8 @@ def combine_report_with_extension(report: Dict, extension: Optional[Dict]) -> Di
     combined["created_at"] = report.get("created_at")
     combined["updated_at"] = report.get("updated_at")
     combined["verification_duration_secs"] = report.get("verification_duration_secs")
+    combined["installs"] = report.get("installs")
+    combined["works_in_mv2"] = report.get("works_in_mv2")
     combined["overall_working"] = report.get("overall_working")
     combined["has_errors"] = report.get("has_errors")
     combined["seems_slower"] = report.get("seems_slower")
