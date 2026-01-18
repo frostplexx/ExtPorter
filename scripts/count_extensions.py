@@ -304,6 +304,7 @@ def export_to_csv(
         categories = [
             "total",
             "manifest_v2",
+            "manifest_v2_proper",
             "manifest_v3",
             "chrome_apps",
             "themes",
