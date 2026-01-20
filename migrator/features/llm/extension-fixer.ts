@@ -95,6 +95,7 @@ export class ExtensionFixer {
             const result = await this.interactiveFixLoop(initialMessages);
 
             // Build the complete fix attempt record
+            // IMPORTANT: Create copies of arrays since cleanup() will clear the originals
             const completedAt = Date.now();
             const fixAttempt: LLMFixAttempt = {
                 id: crypto.randomUUID(),
@@ -107,10 +108,10 @@ export class ExtensionFixer {
                 success: result.success,
                 message: result.message,
                 error: result.error,
-                files_modified: result.filesModified,
-                conversation: this.conversationHistory,
-                tool_calls: this.toolCallHistory,
-                file_diffs: this.fileDiffs,
+                files_modified: [...result.filesModified],
+                conversation: [...this.conversationHistory],
+                tool_calls: [...this.toolCallHistory],
+                file_diffs: [...this.fileDiffs],
                 iterations: this.iterations,
                 metadata: {
                     max_iterations: this.maxIterations,
@@ -139,6 +140,7 @@ export class ExtensionFixer {
             }
 
             // Build fix attempt even for errors
+            // IMPORTANT: Create copies of arrays since cleanup() will clear the originals
             const completedAt = Date.now();
             const fixAttempt: LLMFixAttempt = {
                 id: crypto.randomUUID(),
@@ -152,9 +154,9 @@ export class ExtensionFixer {
                 message: 'Failed to fix extension',
                 error: errorMessage,
                 files_modified: [],
-                conversation: this.conversationHistory,
-                tool_calls: this.toolCallHistory,
-                file_diffs: this.fileDiffs,
+                conversation: [...this.conversationHistory],
+                tool_calls: [...this.toolCallHistory],
+                file_diffs: [...this.fileDiffs],
                 iterations: this.iterations,
                 metadata: {
                     max_iterations: this.maxIterations,
