@@ -510,13 +510,13 @@ Please analyze the issues and fix them. Start by listing the files you need to e
         this.conversationHistory.length = 0;
         this.toolCallHistory.length = 0;
         this.fileDiffs.length = 0;
-        
+
         // Clear the file content cache
         this.fileContentCache.clear();
-        
+
         // Reset iteration counter
         this.iterations = 0;
-        
+
         logger.debug(null, 'ExtensionFixer cleanup completed');
     }
 
@@ -535,7 +535,7 @@ Please analyze the issues and fix them. Start by listing the files you need to e
                 this.fileDiffs.shift();
                 logger.debug(null, `Evicted oldest file diff (limit: ${this.maxFileDiffs})`);
             }
-            
+
             this.fileDiffs.push({
                 filePath,
                 before: beforeContent,
@@ -689,29 +689,98 @@ Please analyze the issues and fix them. Start by listing the files you need to e
     private parseToolCalls(response: string): Array<{ name: string; params: any }> {
         const toolCalls: Array<{ name: string; params: any }> = [];
 
-        // Match TOOL_CALL: <name> and PARAMS: <json>
-        // Updated regex to handle newlines and complex JSON
-        const toolCallRegex =
-            /TOOL_CALL:\s*(\w+)\s*\n?\s*PARAMS:\s*(\{[\s\S]*?\}(?=\s*(?:TOOL_CALL:|DONE|$)))/gi;
-        let match;
+        // First, find all TOOL_CALL markers and their positions
+        const toolCallMarkerRegex = /TOOL_CALL:\s*(\w+)\s*\n?\s*PARAMS:\s*/gi;
+        const markers: Array<{ name: string; startIndex: number }> = [];
+        let markerMatch;
 
-        while ((match = toolCallRegex.exec(response)) !== null) {
-            const name = match[1];
-            const paramsJson = match[2].trim();
+        while ((markerMatch = toolCallMarkerRegex.exec(response)) !== null) {
+            markers.push({
+                name: markerMatch[1],
+                startIndex: markerMatch.index + markerMatch[0].length,
+            });
+        }
 
-            logger.info(null, `Parsing tool call: ${name}, params: ${paramsJson}`);
+        // For each marker, extract the JSON by properly matching braces
+        for (const marker of markers) {
+            const jsonStr = this.extractJsonObject(response, marker.startIndex);
+            if (jsonStr) {
+                logger.info(
+                    null,
+                    `Parsing tool call: ${marker.name}, params length: ${jsonStr.length}`
+                );
 
-            try {
-                const params = JSON.parse(paramsJson);
-                toolCalls.push({ name, params });
-            } catch (error) {
-                logger.error(null, `Failed to parse tool params: ${paramsJson}`, error);
+                try {
+                    const params = JSON.parse(jsonStr);
+                    toolCalls.push({ name: marker.name, params });
+                } catch (error) {
+                    logger.error(
+                        null,
+                        `Failed to parse tool params for ${marker.name}: ${jsonStr.substring(0, 200)}...`,
+                        error
+                    );
+                }
+            } else {
+                logger.warn(null, `Could not extract JSON for tool call: ${marker.name}`);
             }
         }
 
         logger.info(null, `Parsed ${toolCalls.length} tool call(s)`);
 
         return toolCalls;
+    }
+
+    /**
+     * Extract a complete JSON object from a string starting at the given index.
+     * Handles nested braces and strings properly.
+     */
+    private extractJsonObject(str: string, startIndex: number): string | null {
+        if (str[startIndex] !== '{') {
+            return null;
+        }
+
+        let depth = 0;
+        let inString = false;
+        let escapeNext = false;
+        let endIndex = startIndex;
+
+        for (let i = startIndex; i < str.length; i++) {
+            const char = str[i];
+
+            if (escapeNext) {
+                escapeNext = false;
+                continue;
+            }
+
+            if (char === '\\' && inString) {
+                escapeNext = true;
+                continue;
+            }
+
+            if (char === '"' && !escapeNext) {
+                inString = !inString;
+                continue;
+            }
+
+            if (!inString) {
+                if (char === '{') {
+                    depth++;
+                } else if (char === '}') {
+                    depth--;
+                    if (depth === 0) {
+                        endIndex = i;
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (depth !== 0) {
+            // Unbalanced braces
+            return null;
+        }
+
+        return str.substring(startIndex, endIndex + 1);
     }
 
     /**

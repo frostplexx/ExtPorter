@@ -254,6 +254,98 @@ PARAMS: {invalid json}
             // Should return empty array since JSON parsing failed
             expect(toolCalls).toHaveLength(0);
         });
+
+        it('should parse write_file with code containing nested braces', async () => {
+            const context: ExtensionFixContext = {
+                extensionId: 'test-123',
+                extensionName: 'Test Extension',
+                extensionDir: tempDir,
+                manifestPath: path.join(tempDir, 'manifest.json'),
+                manifest: { name: 'Test Extension' },
+                report: {},
+            };
+
+            const fixer = new ExtensionFixer(mockLlmService, context);
+            const parseToolCalls = (fixer as any).parseToolCalls.bind(fixer);
+
+            // This simulates the real LLM output with nested braces in code
+            const response = `
+I'll fix the background script.
+
+TOOL_CALL: write_file
+PARAMS: {"file_path": "background.js", "content": "function test() {\\n  if (true) {\\n    console.log('nested');\\n  }\\n}"}
+
+TOOL_CALL: read_file
+PARAMS: {"file_path": "manifest.json"}
+`;
+
+            const toolCalls = parseToolCalls(response);
+
+            expect(toolCalls).toHaveLength(2);
+            expect(toolCalls[0].name).toBe('write_file');
+            expect(toolCalls[0].params.file_path).toBe('background.js');
+            expect(toolCalls[0].params.content).toContain('function test()');
+            expect(toolCalls[0].params.content).toContain('nested');
+            expect(toolCalls[1].name).toBe('read_file');
+            expect(toolCalls[1].params.file_path).toBe('manifest.json');
+        });
+
+        it('should parse multiple write_file calls with complex code', async () => {
+            const context: ExtensionFixContext = {
+                extensionId: 'test-123',
+                extensionName: 'Test Extension',
+                extensionDir: tempDir,
+                manifestPath: path.join(tempDir, 'manifest.json'),
+                manifest: { name: 'Test Extension' },
+                report: {},
+            };
+
+            const fixer = new ExtensionFixer(mockLlmService, context);
+            const parseToolCalls = (fixer as any).parseToolCalls.bind(fixer);
+
+            const response = `
+TOOL_CALL: write_file
+PARAMS: {"file_path": "a.js", "content": "const obj = { a: { b: 1 } };"}
+
+TOOL_CALL: write_file
+PARAMS: {"file_path": "b.js", "content": "function f() { return { x: 1 }; }"}
+
+DONE
+SUMMARY: Fixed both files.
+`;
+
+            const toolCalls = parseToolCalls(response);
+
+            expect(toolCalls).toHaveLength(2);
+            expect(toolCalls[0].params.file_path).toBe('a.js');
+            expect(toolCalls[0].params.content).toContain('const obj');
+            expect(toolCalls[1].params.file_path).toBe('b.js');
+            expect(toolCalls[1].params.content).toContain('function f()');
+        });
+
+        it('should handle JSON with escaped quotes in content', async () => {
+            const context: ExtensionFixContext = {
+                extensionId: 'test-123',
+                extensionName: 'Test Extension',
+                extensionDir: tempDir,
+                manifestPath: path.join(tempDir, 'manifest.json'),
+                manifest: { name: 'Test Extension' },
+                report: {},
+            };
+
+            const fixer = new ExtensionFixer(mockLlmService, context);
+            const parseToolCalls = (fixer as any).parseToolCalls.bind(fixer);
+
+            const response = `
+TOOL_CALL: write_file
+PARAMS: {"file_path": "test.js", "content": "console.log(\\"Hello, World!\\");"}
+`;
+
+            const toolCalls = parseToolCalls(response);
+
+            expect(toolCalls).toHaveLength(1);
+            expect(toolCalls[0].params.content).toBe('console.log("Hello, World!");');
+        });
     });
 
     describe('extractSummary', () => {
