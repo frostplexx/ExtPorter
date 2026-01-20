@@ -276,10 +276,23 @@ async fn run_app(
                         app.handle_llm_fix_started(ext_id);
                     }
                     AppEvent::LLMFixSuccess(ext_id, modified_files) => {
-                        app.handle_llm_fix_success(ext_id, modified_files);
+                        app.handle_llm_fix_success(ext_id.clone(), modified_files);
+                        // Invalidate cache and trigger re-download so the fixed extension is used
+                        let _ = app.tx.send(AppEvent::InvalidateExtensionCache(ext_id));
                     }
                     AppEvent::LLMFixError(ext_id, error) => {
                         app.handle_llm_fix_error(ext_id, error);
+                    }
+                    AppEvent::InvalidateExtensionCache(ext_id) => {
+                        // Invalidate the cached extension so it gets re-downloaded with the fixes
+                        let mut downloader = extension_downloader.lock().await;
+                        downloader.invalidate_cache(&ext_id);
+                        drop(downloader);
+                        
+                        // Trigger a fresh download if this is the currently selected extension
+                        if app.get_selected_extension_id() == Some(&ext_id) {
+                            let _ = app.tx.send(AppEvent::DownloadExtension(ext_id));
+                        }
                     }
 
                     // Extension download events

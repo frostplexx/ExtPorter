@@ -254,6 +254,21 @@ impl ExtensionDownloader {
         self.cache.iter().any(|(id, _, _, _)| id == ext_id)
     }
 
+    /// Invalidate cache entry for an extension.
+    /// This should be called when the extension files on the server have changed
+    /// (e.g., after an LLM fix) to force a fresh download.
+    pub fn invalidate_cache(&mut self, ext_id: &str) {
+        if let Some(pos) = self.cache.iter().position(|(id, _, _, _)| id == ext_id) {
+            if let Some((_, old_mv2, _, _)) = self.cache.remove(pos) {
+                // Delete the directory for invalidated extension
+                if let Some(parent) = old_mv2.parent() {
+                    let _ = std::fs::remove_dir_all(parent);
+                }
+                tracing::debug!("Invalidated cache for extension {}", ext_id);
+            }
+        }
+    }
+
     /// Get temp directory path (for debug)
     #[allow(dead_code)]
     pub fn temp_path(&self) -> &Path {
@@ -286,5 +301,133 @@ mod tests {
         let mut downloader = ExtensionDownloader::new().unwrap();
         let result = downloader.extract_extension("test", &[0, 1, 2], "hash");
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_invalidate_cache_removes_entry() {
+        let mut downloader = ExtensionDownloader::new().unwrap();
+
+        // Manually add an entry to the cache for testing
+        let ext_dir = downloader.temp_dir.path().join("test-ext");
+        let mv2_dir = ext_dir.join("mv2");
+        let mv3_dir = ext_dir.join("mv3");
+        std::fs::create_dir_all(&mv2_dir).unwrap();
+        std::fs::create_dir_all(&mv3_dir).unwrap();
+
+        // Add to cache using the internal method through add_to_cache behavior
+        downloader.cache.push_front((
+            "test-ext".to_string(),
+            mv2_dir.clone(),
+            mv3_dir.clone(),
+            "hash123".to_string(),
+        ));
+
+        assert!(downloader.is_cached("test-ext"));
+        assert_eq!(downloader.cache_size(), 1);
+
+        // Invalidate the cache
+        downloader.invalidate_cache("test-ext");
+
+        assert!(!downloader.is_cached("test-ext"));
+        assert_eq!(downloader.cache_size(), 0);
+    }
+
+    #[test]
+    fn test_invalidate_cache_deletes_directory() {
+        let mut downloader = ExtensionDownloader::new().unwrap();
+
+        // Create a directory structure
+        let ext_dir = downloader.temp_dir.path().join("test-ext-2");
+        let mv2_dir = ext_dir.join("mv2");
+        let mv3_dir = ext_dir.join("mv3");
+        std::fs::create_dir_all(&mv2_dir).unwrap();
+        std::fs::create_dir_all(&mv3_dir).unwrap();
+
+        // Create a test file in the directory
+        std::fs::write(mv2_dir.join("test.txt"), "test content").unwrap();
+
+        // Add to cache
+        downloader.cache.push_front((
+            "test-ext-2".to_string(),
+            mv2_dir.clone(),
+            mv3_dir.clone(),
+            "hash456".to_string(),
+        ));
+
+        assert!(ext_dir.exists());
+
+        // Invalidate the cache
+        downloader.invalidate_cache("test-ext-2");
+
+        // Directory should be deleted
+        assert!(!ext_dir.exists());
+    }
+
+    #[test]
+    fn test_invalidate_cache_nonexistent_entry() {
+        let mut downloader = ExtensionDownloader::new().unwrap();
+
+        // Should not panic when invalidating a non-existent entry
+        downloader.invalidate_cache("nonexistent");
+
+        assert_eq!(downloader.cache_size(), 0);
+    }
+
+    #[test]
+    fn test_get_cached_hash() {
+        let mut downloader = ExtensionDownloader::new().unwrap();
+
+        let ext_dir = downloader.temp_dir.path().join("test-hash-ext");
+        let mv2_dir = ext_dir.join("mv2");
+        let mv3_dir = ext_dir.join("mv3");
+        std::fs::create_dir_all(&mv2_dir).unwrap();
+        std::fs::create_dir_all(&mv3_dir).unwrap();
+
+        downloader.cache.push_front((
+            "test-hash-ext".to_string(),
+            mv2_dir,
+            mv3_dir,
+            "my-hash-123".to_string(),
+        ));
+
+        assert_eq!(
+            downloader.get_cached_hash("test-hash-ext"),
+            Some("my-hash-123".to_string())
+        );
+        assert_eq!(downloader.get_cached_hash("nonexistent"), None);
+    }
+
+    #[test]
+    fn test_touch_cached_moves_to_front() {
+        let mut downloader = ExtensionDownloader::new().unwrap();
+
+        // Add two entries
+        let ext1_dir = downloader.temp_dir.path().join("ext1");
+        let ext2_dir = downloader.temp_dir.path().join("ext2");
+        std::fs::create_dir_all(ext1_dir.join("mv2")).unwrap();
+        std::fs::create_dir_all(ext1_dir.join("mv3")).unwrap();
+        std::fs::create_dir_all(ext2_dir.join("mv2")).unwrap();
+        std::fs::create_dir_all(ext2_dir.join("mv3")).unwrap();
+
+        downloader.cache.push_front((
+            "ext1".to_string(),
+            ext1_dir.join("mv2"),
+            ext1_dir.join("mv3"),
+            "hash1".to_string(),
+        ));
+        downloader.cache.push_front((
+            "ext2".to_string(),
+            ext2_dir.join("mv2"),
+            ext2_dir.join("mv3"),
+            "hash2".to_string(),
+        ));
+
+        // ext2 is at front, ext1 is at back
+        assert_eq!(downloader.cache.front().unwrap().0, "ext2");
+
+        // Touch ext1 to move it to front
+        downloader.touch_cached("ext1");
+
+        assert_eq!(downloader.cache.front().unwrap().0, "ext1");
     }
 }

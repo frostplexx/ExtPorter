@@ -1366,4 +1366,9 @@ impl App {
     pub fn get_current_extension_paths(&self) -> Option<(PathBuf, PathBuf)> {
         self.state.current_extension_paths.clone()
     }
+
+    /// Get currently selected extension ID
+    pub fn get_selected_extension_id(&self) -> Option<&String> {
+        self.state.selected_extension_id.as_ref()
+    }
 }
