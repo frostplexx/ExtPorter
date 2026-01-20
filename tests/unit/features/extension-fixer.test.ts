@@ -669,5 +669,48 @@ PARAMS: {"directory": ""}
             expect(result.fixAttempt).toBeDefined();
             expect(result.fixAttempt?.success).toBe(false);
         });
+
+        it('should preserve fix attempt data after cleanup', async () => {
+            const context: ExtensionFixContext = {
+                extensionId: 'test-123',
+                extensionName: 'Test Extension',
+                extensionDir: tempDir,
+                manifestPath: path.join(tempDir, 'manifest.json'),
+                manifest: { name: 'Test Extension' },
+                report: { overall_working: 'no' },
+            };
+
+            const fixer = new ExtensionFixer(mockLlmService, context);
+
+            let callCount = 0;
+            jest.spyOn(mockLlmService, 'generateChatCompletion').mockImplementation(async () => {
+                callCount++;
+                if (callCount === 1) {
+                    return `
+TOOL_CALL: write_file
+PARAMS: {"file_path": "test.js", "content": "console.log('test');"}
+`;
+                } else {
+                    return `
+DONE
+SUMMARY: Fixed the file.
+`;
+                }
+            });
+
+            const result = await fixer.fixExtension();
+
+            // After fixExtension returns, cleanup() has been called
+            // but the fixAttempt should still have the data
+            expect(result.success).toBe(true);
+            expect(result.fixAttempt).toBeDefined();
+
+            // These arrays should NOT be empty after cleanup
+            expect(result.fixAttempt?.conversation.length).toBeGreaterThan(0);
+            expect(result.fixAttempt?.tool_calls.length).toBeGreaterThan(0);
+            expect(result.fixAttempt?.files_modified).toContain('test.js');
+            expect(result.fixAttempt?.file_diffs.length).toBeGreaterThan(0);
+            expect(result.fixAttempt?.iterations).toBe(2);
+        });
     });
 });
