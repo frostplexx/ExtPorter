@@ -204,9 +204,9 @@ impl ExtensionDownloader {
     fn add_to_cache(&mut self, ext_id: String, mv2: PathBuf, mv3: PathBuf, hash: String) {
         // Check if already in cache
         if let Some(pos) = self.cache.iter().position(|(id, _, _, _)| id == &ext_id) {
-            // Move to front (most recently used)
-            let entry = self.cache.remove(pos).unwrap();
-            self.cache.push_front(entry);
+            // Remove old entry and add updated one with new hash
+            self.cache.remove(pos);
+            self.cache.push_front((ext_id, mv2, mv3, hash));
             return;
         }
 
