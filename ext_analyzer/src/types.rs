@@ -26,6 +26,7 @@ pub enum AppEvent {
     LLMFixStarted(String),                  // extension_id
     LLMFixSuccess(String, String),          // (extension_id, modified_files_json)
     LLMFixError(String, String),            // (extension_id, error)
+    InvalidateExtensionCache(String),       // extension_id - invalidate cache after LLM fix
 
     // Extension download events
     DownloadExtension(String),        // extension_id - request download
