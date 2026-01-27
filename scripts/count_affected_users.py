@@ -74,8 +74,36 @@ def main():
     db = client[args.db]
     col = db["extensions"]
 
+    # Debug: check what manifest_version values exist
+    sample = col.find_one({}, {"manifest.manifest_version": 1})
+    if sample:
+        mv = (sample.get("manifest") or {}).get("manifest_version")
+        print(f"Sample manifest_version: {mv!r} (type={type(mv).__name__})")
+
+    # Count by manifest version to understand the data
+    total_docs = col.count_documents({})
+    mv2_dot = col.count_documents({"manifest.manifest_version": 2})
+    mv3_dot = col.count_documents({"manifest.manifest_version": 3})
+    mv2_str = col.count_documents({"manifest.manifest_version": "2"})
+    has_mv3_id = col.count_documents({"mv3_extension_id": {"$ne": None}})
+    print(
+        f"Total docs: {total_docs}, mv==2: {mv2_dot}, mv==3: {mv3_dot}, mv=='2': {mv2_str}, has_mv3_id: {has_mv3_id}"
+    )
+
+    # Extensions are MV2 sources if they were the original input.
+    # After migration, the same document gets mv3_extension_id set but the
+    # manifest field may have been updated to v3. So we query all extensions
+    # that have an mv3_extension_id (meaning they were migrated from MV2),
+    # or whose manifest_version is still 2.
+    # Try both: original MV2 (manifest_version=2) and migrated (has mv3_extension_id).
     cursor = col.find(
-        {"manifest.manifest_version": 2},
+        {
+            "$or": [
+                {"manifest.manifest_version": 2},
+                {"manifest.manifest_version": "2"},
+                {"mv3_extension_id": {"$ne": None}},
+            ]
+        },
         {"name": 1, "id": 1, "cws_info.details.userCount": 1},
     )
 
