@@ -55,24 +55,70 @@ def analyze_failures(client: MongoClient, db_name: str) -> Dict[str, Any]:
     extensions_col = db["extensions"]
     logs_col = db["logs"]
 
-    # --- 1. Find failed extensions from reports ---
-    failed_reports = list(
-        reports_col.find(
-            {
-                "$or": [
-                    {"overall_working": False},
-                    {"has_errors": True},
-                ]
-            }
+    # --- 0. Debug: sample a report to see actual field names/values ---
+    sample = reports_col.find_one({"tested": True})
+    if sample:
+        print(
+            f"\nSample report fields: {sorted(k for k in sample.keys() if k != '_id')}"
         )
-    )
-    all_reports = list(reports_col.find({"tested": True}))
+        for field in [
+            "overall_working",
+            "has_errors",
+            "is_popup_working",
+            "is_settings_working",
+            "is_new_tab_working",
+            "works_in_mv2",
+        ]:
+            val = sample.get(field, "<MISSING>")
+            print(f"  {field}: {val!r} (type={type(val).__name__})")
 
-    print(f"Total tested reports: {len(all_reports)}")
+    # --- 1. Find failed extensions from reports ---
+    # Try multiple definitions of "failed": overall_working is explicitly false,
+    # has_errors is true, or popup/settings/new_tab not working
+    all_reports = list(reports_col.find({"tested": True}))
+    print(f"\nTotal tested reports: {len(all_reports)}")
+
+    # Classify failures broadly: anything not fully working
+    failed_reports = []
+    for r in all_reports:
+        is_failed = False
+        if r.get("overall_working") is False:
+            is_failed = True
+        if r.get("has_errors") is True:
+            is_failed = True
+        if r.get("is_popup_working") is False:
+            is_failed = True
+        if r.get("is_settings_working") is False:
+            is_failed = True
+        if r.get("is_new_tab_working") is False:
+            is_failed = True
+        # Also check string values like "false" or "no"
+        for field in [
+            "overall_working",
+            "has_errors",
+            "is_popup_working",
+            "is_settings_working",
+            "is_new_tab_working",
+        ]:
+            val = r.get(field)
+            if isinstance(val, str):
+                if field == "has_errors" and val.lower() in ("true", "yes"):
+                    is_failed = True
+                elif field != "has_errors" and val.lower() in ("false", "no"):
+                    is_failed = True
+        if is_failed:
+            failed_reports.append(r)
+
     print(f"Failed/errored reports: {len(failed_reports)}")
 
+    # Show distribution of overall_working values for debugging
+    working_vals = Counter()
+    for r in all_reports:
+        working_vals[repr(r.get("overall_working", "<MISSING>"))] += 1
+    print(f"overall_working distribution: {dict(working_vals)}")
+
     if not failed_reports:
-        print("No failed reports found.")
+        print("No failed reports found. Check field names/values above.")
         return {}
 
     failed_ext_ids = [r["extension_id"] for r in failed_reports]
@@ -80,14 +126,31 @@ def analyze_failures(client: MongoClient, db_name: str) -> Dict[str, Any]:
     # --- 2. Symptom breakdown from reports ---
     symptoms = Counter()
     for r in failed_reports:
-        if r.get("overall_working") is False:
+        if r.get("overall_working") is False or (
+            isinstance(r.get("overall_working"), str)
+            and r["overall_working"].lower() in ("false", "no")
+        ):
             symptoms["not_working"] += 1
-        if r.get("has_errors"):
+        if r.get("has_errors") is True or (
+            isinstance(r.get("has_errors"), str)
+            and r["has_errors"].lower() in ("true", "yes")
+        ):
             symptoms["has_errors"] += 1
-        if r.get("is_popup_broken"):
+        if r.get("is_popup_working") is False or (
+            isinstance(r.get("is_popup_working"), str)
+            and r["is_popup_working"].lower() in ("false", "no")
+        ):
             symptoms["popup_broken"] += 1
-        if r.get("is_settings_broken"):
+        if r.get("is_settings_working") is False or (
+            isinstance(r.get("is_settings_working"), str)
+            and r["is_settings_working"].lower() in ("false", "no")
+        ):
             symptoms["settings_broken"] += 1
+        if r.get("is_new_tab_working") is False or (
+            isinstance(r.get("is_new_tab_working"), str)
+            and r["is_new_tab_working"].lower() in ("false", "no")
+        ):
+            symptoms["new_tab_broken"] += 1
         if r.get("seems_slower"):
             symptoms["seems_slower"] += 1
 
