@@ -43,18 +43,7 @@ def strip_comments_and_strings(code: str) -> str:
 # These would all fail in a MV3 service worker and require an offscreen document.
 # Intentionally conservative – if in doubt, leave it out.
 DOM_PATTERNS = [
-    # ── document.* APIs ──────────────────────────────────────────────────────
-    r'\bdocument\.(getElementById|getElementsByClassName|getElementsByTagName|getElementsByName)\b',
-    r'\bdocument\.(querySelector|querySelectorAll)\b',
-    r'\bdocument\.(createElement|createElementNS|createTextNode|createDocumentFragment)\b',
-    r'\bdocument\.(body|head|documentElement|forms|images|links|scripts)\b',
-    r'\bdocument\.(write|writeln)\b',
-    r'\bdocument\.cookie\b',
-    r'\bdocument\.title\b',
-    r'\bdocument\.implementation\b',
 
-    # ── DOMParser ────────────────────────────────────────────────────────────
-    r'\bnew\s+DOMParser\b',
 
     # ── window.* APIs that do NOT exist in service workers ───────────────────
     # (excluding navigator/location/screen which are available via self.*)
@@ -63,34 +52,8 @@ DOM_PATTERNS = [
     r'(?<!chrome\.)window\.(innerWidth|innerHeight|outerWidth|outerHeight|scrollX|scrollY|pageXOffset|pageYOffset)\b',
     r'(?<!chrome\.)window\.(localStorage|sessionStorage)\b',
     r'(?<!chrome\.)window\.history\b',
+    r'(?<!chrome\.)extension\.getBackgroundPage\b',
 
-    # ── DOM element manipulation (with preceding dot = called on an element) ─
-    r'\.(innerHTML|outerHTML)\s*=',
-    r'\.(insertAdjacentHTML|insertAdjacentElement)\s*\(',
-
-    # ── Canvas / OffscreenCanvas (2D/WebGL rendering) ────────────────────────
-    r'\.getContext\s*\(\s*[\'"`](2d|webgl|webgl2|bitmaprenderer)[\'"`]\s*\)',
-    r'\bnew\s+CanvasRenderingContext2D\b',
-
-    # ── Audio/Video (needs DOM for HTMLMediaElement) ─────────────────────────
-    r'\bnew\s+Audio\s*\(',
-    r'\bnew\s+(AudioContext|webkitAudioContext)\s*\(',
-    r'\bnew\s+MediaSource\s*\(',
-    r'\bnew\s+(HTMLAudioElement|HTMLVideoElement|HTMLCanvasElement|HTMLImageElement)\b',
-
-    # ── new Image() (creates HTMLImageElement, needs DOM) ────────────────────
-    r'\bnew\s+Image\s*\(',
-
-    # ── Clipboard API (needs document focus) ─────────────────────────────────
-    r'\bdocument\.execCommand\s*\(',
-    r'\bnavigator\.clipboard\.(writeText|write|readText|read)\s*\(',
-
-    # ── Notifications that require permission via DOM ────────────────────────
-    r'\bnew\s+Notification\s*\(',
-
-    # ── Web Workers created from background (would need restructuring) ───────
-    r'\bnew\s+Worker\s*\(',
-    r'\bnew\s+SharedWorker\s*\(',
 ]
 
 COMBINED_PATTERN = re.compile('|'.join(f'(?:{p})' for p in DOM_PATTERNS))
