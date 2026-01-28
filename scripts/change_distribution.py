@@ -120,19 +120,19 @@ def classify_extension(ext: dict) -> Dict[str, Any]:
     if tags & NON_TRIVIAL_TAGS and non_trivial_changes == 0:
         non_trivial_changes = 1
 
-    # Tier presence: true if tag OR breakdown indicates changes at this tier
-    has_trivial = bool(tags & TRIVIAL_TAGS) or trivial_changes > 0
-    has_semi_trivial = bool(tags & SEMI_TRIVIAL_TAGS) or semi_trivial_changes > 0
-    has_non_trivial = bool(tags & NON_TRIVIAL_TAGS) or non_trivial_changes > 0
+    # Tier presence: based on tags (reliable signal for what actually ran)
+    has_trivial = bool(tags & TRIVIAL_TAGS)
+    has_semi_trivial = bool(tags & SEMI_TRIVIAL_TAGS)
+    has_non_trivial = bool(tags & NON_TRIVIAL_TAGS)
 
     total = trivial_changes + semi_trivial_changes + non_trivial_changes
 
-    # Dominant category: highest complexity tier that was touched
-    if has_non_trivial or non_trivial_changes > 0:
+    # Dominant category: based on tags (reliable signal for what actually ran)
+    if has_non_trivial:
         dominant = "non-trivial"
-    elif has_semi_trivial or semi_trivial_changes > 0:
+    elif has_semi_trivial:
         dominant = "semi-trivial"
-    elif has_trivial or trivial_changes > 0:
+    elif has_trivial:
         dominant = "trivial"
     else:
         dominant = "none"
