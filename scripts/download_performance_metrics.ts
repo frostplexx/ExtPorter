@@ -1,4 +1,4 @@
-#!/usr/bin/env npx ts-node
+#!/usr/bin/env tsx
 
 import { MongoClient, Db } from 'mongodb';
 import * as dotenv from 'dotenv';
@@ -20,7 +20,8 @@ dotenv.config();
  * - Per-extension timing breakdown
  *
  * Usage:
- *   npx ts-node scripts/download_performance_metrics.ts [--json] [--output=<file>] [--detailed]
+ *   yarn metrics [--json] [--output=<file>] [--detailed]
+ *   # or directly: npx tsx scripts/download_performance_metrics.ts [options]
  */
 
 interface MigrationMetrics {

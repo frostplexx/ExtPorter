@@ -40,7 +40,8 @@
         "ext": "ts-node ext_analyzer/ext.ts",
         "lint": "eslint migrator --ext .ts",
         "lint:fix": "eslint migrator --ext .ts --fix",
-        "format": "nix run nixpkgs#prettier -- --write \"**/*.{ts,tsx,js,jsx,json,css,md}\""
+        "format": "nix run nixpkgs#prettier -- --write \"**/*.{ts,tsx,js,jsx,json,css,md}\"",
+        "metrics": "tsx scripts/download_performance_metrics.ts"
     },
     "dependencies": {
         "@opencode-ai/sdk": "^1.0.129",
