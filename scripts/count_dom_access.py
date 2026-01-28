@@ -156,15 +156,15 @@ def extract_background_scripts(manifest_path: Path) -> List[str]:
         return []
 
 
-def check_extension_dom_access(ext_dir: Path) -> Tuple[str, bool]:
+def check_extension_dom_access(ext_dir: Path) -> Tuple[str, bool, bool]:
     """
     Check if an extension has DOM access in its background scripts.
-    
+
     Args:
         ext_dir: Path to extension directory
-        
+
     Returns:
-        Tuple of (extension_name, has_dom_access)
+        Tuple of (extension_name, is_mv2_extension, has_dom_access)
     """
     try:
         ext_name = ext_dir.name
@@ -172,12 +172,22 @@ def check_extension_dom_access(ext_dir: Path) -> Tuple[str, bool]:
 
         # Check manifest exists
         if not manifest_path.exists():
-            return (ext_name, False)
+            return (ext_name, False, False)
 
-        # Extract background scripts
+        # Extract background scripts (returns [] for non-MV2)
         bg_scripts = extract_background_scripts(manifest_path)
         if not bg_scripts:
-            return (ext_name, False)
+            # Check if it's still an MV2 extension (just without background scripts)
+            try:
+                with open(manifest_path, 'r', encoding='utf-8', errors='ignore') as f:
+                    manifest = json.load(f)
+                is_mv2 = (isinstance(manifest, dict)
+                           and manifest.get('manifest_version') == 2
+                           and 'app' not in manifest
+                           and 'theme' not in manifest)
+            except Exception:
+                is_mv2 = False
+            return (ext_name, is_mv2, False)
 
         # Check each background script
         for script in bg_scripts:
@@ -201,13 +211,13 @@ def check_extension_dom_access(ext_dir: Path) -> Tuple[str, bool]:
             # Check .js files
             if script.endswith('.js'):
                 if contains_dom_access(script_path):
-                    return (ext_name, True)
+                    return (ext_name, True, True)
 
-        return (ext_name, False)
+        return (ext_name, True, False)
 
     except Exception:
         # Silently skip extensions that cause errors
-        return (ext_dir.name if isinstance(ext_dir, Path) else str(ext_dir), False)
+        return (ext_dir.name if isinstance(ext_dir, Path) else str(ext_dir), False, False)
 
 
 def process_extensions(extensions_dir: Path, verbose: bool = False, workers: Optional[int] = None) -> None:
@@ -246,6 +256,7 @@ def process_extensions(extensions_dir: Path, verbose: bool = False, workers: Opt
 
     # Process extensions in parallel
     dom_access_extensions = []
+    mv2_count = 0
     processed = 0
     errors = 0
     start_time = time.time()
@@ -255,8 +266,11 @@ def process_extensions(extensions_dir: Path, verbose: bool = False, workers: Opt
         results = pool.imap_unordered(check_extension_dom_access, ext_dirs, chunksize=100)
 
         try:
-            for ext_name, has_dom_access in results:
+            for ext_name, is_mv2, has_dom_access in results:
                 processed += 1
+
+                if is_mv2:
+                    mv2_count += 1
 
                 if has_dom_access:
                     dom_access_extensions.append(ext_name)
@@ -282,19 +296,25 @@ def process_extensions(extensions_dir: Path, verbose: bool = False, workers: Opt
     print()
 
     # Display results
+    dom_count = len(dom_access_extensions)
+    no_dom_count = mv2_count - dom_count
+
     print("\033[34m" + "=" * 60 + "\033[0m")
-    print("\033[34mResults\033[0m")
+    print("\033[34mResults (MV2 extensions only)\033[0m")
     print("\033[34m" + "=" * 60 + "\033[0m")
     print()
-    print(f"Total extensions scanned: \033[33m{total:,}\033[0m")
-    print(f"Extensions with DOM access in background: \033[32m{len(dom_access_extensions):,}\033[0m")
+    print(f"Total directories scanned: \033[33m{total:,}\033[0m")
+    print(f"MV2 extensions found: \033[33m{mv2_count:,}\033[0m")
+    print()
+    print(f"MV2 with DOM access in background:    \033[32m{dom_count:,}\033[0m")
+    print(f"MV2 without DOM access in background:  \033[33m{no_dom_count:,}\033[0m")
 
-    if total > 0:
-        percentage = (len(dom_access_extensions) / total) * 100
-        print(f"Percentage: \033[32m{percentage:.2f}%\033[0m")
+    if mv2_count > 0:
+        percentage = (dom_count / mv2_count) * 100
+        print(f"Percentage with DOM access: \033[32m{percentage:.2f}%\033[0m")
 
     elapsed_total = time.time() - start_time
-    print(f"Total time: \033[33m{elapsed_total:.1f}s\033[0m")
+    print(f"\nTotal time: \033[33m{elapsed_total:.1f}s\033[0m")
     print()
 
     # List extensions with DOM access if verbose
