@@ -44,7 +44,6 @@ def strip_comments_and_strings(code: str) -> str:
 # Intentionally conservative – if in doubt, leave it out.
 DOM_PATTERNS = [
 
-
     # ── window.* APIs that do NOT exist in service workers ───────────────────
     # (excluding navigator/location/screen which are available via self.*)
     r'(?<!chrome\.)window\.(alert|confirm|prompt)\s*\(',
