@@ -107,23 +107,23 @@ def classify_extension(ext: dict) -> Dict[str, Any]:
     tags = set(ext.get("tags", []))
     breakdown = ext.get("interestingness_breakdown", {})
 
-    # Determine which tiers were touched (boolean flags from tags)
-    has_trivial = bool(tags & TRIVIAL_TAGS)
-    has_semi_trivial = bool(tags & SEMI_TRIVIAL_TAGS)
-    has_non_trivial = bool(tags & NON_TRIVIAL_TAGS)
-
     # Count individual changes per tier from breakdown
     trivial_changes = _sum_breakdown(breakdown, TRIVIAL_BREAKDOWN)
     semi_trivial_changes = _sum_breakdown(breakdown, SEMI_TRIVIAL_BREAKDOWN)
     non_trivial_changes = _sum_breakdown(breakdown, NON_TRIVIAL_BREAKDOWN)
 
-    # Also count if a tag fires but breakdown is 0 (tag alone = at least 1 change)
-    if has_trivial and trivial_changes == 0:
+    # Tags indicate a migration module ran; if breakdown is 0 count at least 1
+    if tags & TRIVIAL_TAGS and trivial_changes == 0:
         trivial_changes = 1
-    if has_semi_trivial and semi_trivial_changes == 0:
+    if tags & SEMI_TRIVIAL_TAGS and semi_trivial_changes == 0:
         semi_trivial_changes = 1
-    if has_non_trivial and non_trivial_changes == 0:
+    if tags & NON_TRIVIAL_TAGS and non_trivial_changes == 0:
         non_trivial_changes = 1
+
+    # Tier presence: true if tag OR breakdown indicates changes at this tier
+    has_trivial = bool(tags & TRIVIAL_TAGS) or trivial_changes > 0
+    has_semi_trivial = bool(tags & SEMI_TRIVIAL_TAGS) or semi_trivial_changes > 0
+    has_non_trivial = bool(tags & NON_TRIVIAL_TAGS) or non_trivial_changes > 0
 
     total = trivial_changes + semi_trivial_changes + non_trivial_changes
 
