@@ -7,19 +7,24 @@ Definitions (based on the bachelor thesis):
   Trivial       – Only manifest.json updates (manifest_version bump, permissions
                   restructuring, CSP adjustments).  No code changes.
   Semi-Trivial  – Code changes that follow well-defined mechanical patterns:
-                  deprecated API renames, file modifications for those renames.
-  Non-Trivial   – Significant architectural changes: background page → service
-                  worker conversion, webRequest → declarativeNetRequest migration,
-                  offscreen document injection, bridge injection.
+                  deprecated API renames, file modifications for those renames,
+                  callback-to-promise bridge injection.
+  Non-Trivial   – Significant architectural changes: webRequest →
+                  declarativeNetRequest migration, offscreen document injection
+                  for DOM access in service workers.
 
-Each extension is classified into exactly ONE dominant category (the highest
-complexity tier it touches).  Additionally, per-extension counts of each tier
-are recorded so you can analyse overlaps.
+Classification:
+  Each extension is assigned a dominant category based on the HIGHEST complexity
+  tier it required.  An extension that needed both API renames (semi-trivial) and
+  DNR migration (non-trivial) is classified as non-trivial.
+
+  Extensions that only received manifest/CSP updates and nothing else are trivial.
 
 The CSV contains:
-  1. Per-extension rows with raw counts and dominant category.
-  2. A summary section with distribution statistics (mean, median, stddev,
-     quartiles, IQR, and outlier bounds).
+  1. Per-extension rows with per-tier change indicators and dominant category.
+  2. A summary section with distribution counts and percentages.
+  3. Descriptive statistics (mean, median, stddev, quartiles, IQR, fences).
+  4. Outlier list (extensions outside the 1.5×IQR fences).
 
 Usage:
     python change_distribution.py [--uri URI] [--db DB] [--csv output.csv]
@@ -51,31 +56,30 @@ except ImportError:
 DEFAULT_URI = "mongodb://admin:password@localhost:27017/migrator?authSource=admin"
 DEFAULT_DB = "migrator"
 
-# ── Tags that indicate each category ────────────────────────────────────────
+# ── Classification rules ─────────────────────────────────────────────────────
+#
+# We use TAGS (set by the migration pipeline) as the primary signal because
+# they directly reflect which migration modules actually ran.
+#
+# The interestingness breakdown fields are feature-complexity scores, not
+# migration-action indicators (e.g. background_page=1 means the extension HAS
+# a background page, not that it was migrated).  We only use breakdown fields
+# that genuinely count migration actions (api_renames, file_modifications,
+# webRequest_to_dnr_migrations, manifest_changes).
 
-TRIVIAL_TAGS = {
-    "MANIFEST_MIGRATED",
-    "CSP_VALUE_MODIFIED",
-}
+# Tags that indicate trivial changes (manifest-only updates)
+TRIVIAL_TAGS = {"MANIFEST_MIGRATED", "CSP_VALUE_MODIFIED"}
 
-SEMI_TRIVIAL_TAGS = {
-    "API_RENAMES_APPLIED",
-}
+# Tags that indicate semi-trivial changes (mechanical code transformations)
+SEMI_TRIVIAL_TAGS = {"API_RENAMES_APPLIED", "BRIDGE_INJECTED"}
 
-NON_TRIVIAL_TAGS = {
-    "DECLARATIVE_NET_REQUEST_MIGRATED",
-    "BRIDGE_INJECTED",
-    "OFFSCREEN_DOCUMENT_ADDED",
-}
+# Tags that indicate non-trivial changes (architectural migrations)
+NON_TRIVIAL_TAGS = {"DECLARATIVE_NET_REQUEST_MIGRATED", "OFFSCREEN_DOCUMENT_ADDED"}
 
-# ── Interestingness breakdown fields per category ───────────────────────────
-
-TRIVIAL_FIELDS = ["manifest_changes"]
-SEMI_TRIVIAL_FIELDS = ["api_renames", "file_modifications"]
-NON_TRIVIAL_FIELDS = [
-    "webRequest",
-    "webRequest_to_dnr_migrations",
-]
+# Breakdown fields used to count the number of individual changes per tier
+TRIVIAL_BREAKDOWN = ["manifest_changes"]
+SEMI_TRIVIAL_BREAKDOWN = ["api_renames", "file_modifications"]
+NON_TRIVIAL_BREAKDOWN = ["webRequest_to_dnr_migrations"]
 
 
 def connect_to_db(uri: str) -> MongoClient:
@@ -89,51 +93,46 @@ def connect_to_db(uri: str) -> MongoClient:
         sys.exit(1)
 
 
+def _sum_breakdown(breakdown: dict, fields: List[str]) -> int:
+    total = 0
+    for field in fields:
+        val = breakdown.get(field, 0)
+        if val and val > 0:
+            total += int(val)
+    return total
+
+
 def classify_extension(ext: dict) -> Dict[str, Any]:
     """Classify a single extension's migration changes."""
     tags = set(ext.get("tags", []))
     breakdown = ext.get("interestingness_breakdown", {})
 
-    # Count changes per tier
-    trivial_count = 0
-    semi_trivial_count = 0
-    non_trivial_count = 0
+    # Determine which tiers were touched (boolean flags from tags)
+    has_trivial = bool(tags & TRIVIAL_TAGS)
+    has_semi_trivial = bool(tags & SEMI_TRIVIAL_TAGS)
+    has_non_trivial = bool(tags & NON_TRIVIAL_TAGS)
 
-    # Trivial: manifest changes
-    for field in TRIVIAL_FIELDS:
-        val = breakdown.get(field, 0)
-        if val and val > 0:
-            trivial_count += int(val)
-    for tag in TRIVIAL_TAGS:
-        if tag in tags:
-            trivial_count += 1
+    # Count individual changes per tier from breakdown
+    trivial_changes = _sum_breakdown(breakdown, TRIVIAL_BREAKDOWN)
+    semi_trivial_changes = _sum_breakdown(breakdown, SEMI_TRIVIAL_BREAKDOWN)
+    non_trivial_changes = _sum_breakdown(breakdown, NON_TRIVIAL_BREAKDOWN)
 
-    # Semi-trivial: API renames, file modifications
-    for field in SEMI_TRIVIAL_FIELDS:
-        val = breakdown.get(field, 0)
-        if val and val > 0:
-            semi_trivial_count += int(val)
-    for tag in SEMI_TRIVIAL_TAGS:
-        if tag in tags:
-            semi_trivial_count += 1
+    # Also count if a tag fires but breakdown is 0 (tag alone = at least 1 change)
+    if has_trivial and trivial_changes == 0:
+        trivial_changes = 1
+    if has_semi_trivial and semi_trivial_changes == 0:
+        semi_trivial_changes = 1
+    if has_non_trivial and non_trivial_changes == 0:
+        non_trivial_changes = 1
 
-    # Non-trivial: webRequest, DNR, background page, bridge, offscreen
-    for field in NON_TRIVIAL_FIELDS:
-        val = breakdown.get(field, 0)
-        if val and val > 0:
-            non_trivial_count += int(val)
-    for tag in NON_TRIVIAL_TAGS:
-        if tag in tags:
-            non_trivial_count += 1
+    total = trivial_changes + semi_trivial_changes + non_trivial_changes
 
-    total = trivial_count + semi_trivial_count + non_trivial_count
-
-    # Dominant category: highest tier that has any changes
-    if non_trivial_count > 0:
+    # Dominant category: highest complexity tier that was touched
+    if has_non_trivial or non_trivial_changes > 0:
         dominant = "non-trivial"
-    elif semi_trivial_count > 0:
+    elif has_semi_trivial or semi_trivial_changes > 0:
         dominant = "semi-trivial"
-    elif trivial_count > 0:
+    elif has_trivial or trivial_changes > 0:
         dominant = "trivial"
     else:
         dominant = "none"
@@ -141,9 +140,12 @@ def classify_extension(ext: dict) -> Dict[str, Any]:
     return {
         "id": ext.get("id", ""),
         "name": ext.get("name", ""),
-        "trivial_count": trivial_count,
-        "semi_trivial_count": semi_trivial_count,
-        "non_trivial_count": non_trivial_count,
+        "has_trivial": has_trivial,
+        "has_semi_trivial": has_semi_trivial,
+        "has_non_trivial": has_non_trivial,
+        "trivial_changes": trivial_changes,
+        "semi_trivial_changes": semi_trivial_changes,
+        "non_trivial_changes": non_trivial_changes,
         "total_changes": total,
         "dominant_category": dominant,
         "interestingness_score": ext.get("interestingness", 0),
@@ -212,28 +214,29 @@ def run(client: MongoClient, db_name: str) -> Tuple[List[Dict], Dict]:
     extensions = list(extensions_col.find(query))
     print(f"Found {len(extensions)} migrated extensions")
 
-    # Debug: sample a few extensions to inspect actual field values
-    if extensions:
-        print("\n--- DEBUG: Sample of 3 extensions ---")
-        for ext in extensions[:3]:
-            print(f"  id={ext.get('id', '?')}")
-            print(f"    tags={ext.get('tags', [])}")
-            print(f"    breakdown={ext.get('interestingness_breakdown', {})}")
-            print()
-
     rows = [classify_extension(ext) for ext in extensions]
 
-    # Distribution of dominant category
+    # ── Dominant category distribution ──
     cat_counts = Counter(r["dominant_category"] for r in rows)
+    total_n = max(len(rows), 1)
     print(f"\nDominant category distribution:")
     for cat in ["trivial", "semi-trivial", "non-trivial", "none"]:
         count = cat_counts.get(cat, 0)
-        pct = round(count / max(len(rows), 1) * 100, 1)
+        pct = round(count / total_n * 100, 1)
         print(f"  {cat:15s} {count:5d}  ({pct}%)")
 
-    # Stats per count column
+    # ── Tier presence (extensions can belong to multiple tiers) ──
+    print(f"\nTier presence (extensions touching each tier):")
+    for tier, key in [("trivial", "has_trivial"),
+                      ("semi-trivial", "has_semi_trivial"),
+                      ("non-trivial", "has_non_trivial")]:
+        count = sum(1 for r in rows if r[key])
+        pct = round(count / total_n * 100, 1)
+        print(f"  {tier:15s} {count:5d}  ({pct}%)")
+
+    # ── Descriptive stats per change count ──
     stats = {}
-    for key in ["trivial_count", "semi_trivial_count", "non_trivial_count",
+    for key in ["trivial_changes", "semi_trivial_changes", "non_trivial_changes",
                  "total_changes", "interestingness_score"]:
         vals = [float(r[key]) for r in rows]
         stats[key] = compute_stats(vals)
@@ -245,35 +248,52 @@ def export_csv(rows: List[Dict], stats: Dict, path: str) -> None:
     with open(path, "w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
 
-        # Per-extension data
+        # ── Per-extension data ──
         header = [
             "extension_id", "name",
-            "trivial_count", "semi_trivial_count", "non_trivial_count",
-            "total_changes", "dominant_category", "interestingness_score",
+            "dominant_category",
+            "has_trivial", "has_semi_trivial", "has_non_trivial",
+            "trivial_changes", "semi_trivial_changes", "non_trivial_changes",
+            "total_changes", "interestingness_score",
         ]
         w.writerow(header)
         for r in sorted(rows, key=lambda x: x["total_changes"], reverse=True):
             w.writerow([
                 r["id"], r["name"],
-                r["trivial_count"], r["semi_trivial_count"],
-                r["non_trivial_count"], r["total_changes"],
-                r["dominant_category"], r["interestingness_score"],
+                r["dominant_category"],
+                int(r["has_trivial"]), int(r["has_semi_trivial"]),
+                int(r["has_non_trivial"]),
+                r["trivial_changes"], r["semi_trivial_changes"],
+                r["non_trivial_changes"], r["total_changes"],
+                r["interestingness_score"],
             ])
 
-        # Blank separator
         w.writerow([])
         w.writerow([])
 
-        # Summary statistics
-        w.writerow(["=== Distribution Summary ==="])
+        # ── Dominant category summary ──
+        w.writerow(["=== Dominant Category Distribution ==="])
         cat_counts = Counter(r["dominant_category"] for r in rows)
-        total = max(len(rows), 1)
+        total_n = max(len(rows), 1)
         w.writerow(["category", "count", "percentage"])
         for cat in ["trivial", "semi-trivial", "non-trivial", "none"]:
             count = cat_counts.get(cat, 0)
-            w.writerow([cat, count, round(count / total * 100, 2)])
+            w.writerow([cat, count, round(count / total_n * 100, 2)])
 
         w.writerow([])
+
+        # ── Tier presence summary ──
+        w.writerow(["=== Tier Presence (non-exclusive) ==="])
+        w.writerow(["tier", "count", "percentage"])
+        for tier, key in [("trivial", "has_trivial"),
+                          ("semi-trivial", "has_semi_trivial"),
+                          ("non-trivial", "has_non_trivial")]:
+            count = sum(1 for r in rows if r[key])
+            w.writerow([tier, count, round(count / total_n * 100, 2)])
+
+        w.writerow([])
+
+        # ── Descriptive statistics ──
         w.writerow(["=== Descriptive Statistics ==="])
         stat_header = [
             "metric", "n", "mean", "median", "stddev", "min", "max",
@@ -283,21 +303,23 @@ def export_csv(rows: List[Dict], stats: Dict, path: str) -> None:
         for key, s in stats.items():
             w.writerow([key] + [s[h] for h in stat_header[1:]])
 
-        # Outlier list
+        # ── Outliers ──
         w.writerow([])
-        w.writerow(["=== Outliers (by total_changes) ==="])
+        w.writerow(["=== Outliers (by total_changes, outside 1.5×IQR) ==="])
         total_stats = stats["total_changes"]
-        w.writerow(["extension_id", "name", "total_changes", "dominant_category",
-                     "trivial_count", "semi_trivial_count", "non_trivial_count",
-                     "interestingness_score"])
+        w.writerow([
+            "extension_id", "name", "total_changes", "dominant_category",
+            "trivial_changes", "semi_trivial_changes", "non_trivial_changes",
+            "interestingness_score",
+        ])
         for r in sorted(rows, key=lambda x: x["total_changes"], reverse=True):
             tc = r["total_changes"]
             if tc < total_stats["lower_fence"] or tc > total_stats["upper_fence"]:
                 w.writerow([
                     r["id"], r["name"], r["total_changes"],
                     r["dominant_category"],
-                    r["trivial_count"], r["semi_trivial_count"],
-                    r["non_trivial_count"], r["interestingness_score"],
+                    r["trivial_changes"], r["semi_trivial_changes"],
+                    r["non_trivial_changes"], r["interestingness_score"],
                 ])
 
     print(f"\nExported to: {path}")
