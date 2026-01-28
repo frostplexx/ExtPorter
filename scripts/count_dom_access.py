@@ -2,14 +2,15 @@
 
 """
 Script to count MV2 extensions that interact with the DOM in their background scripts.
+Only counts extensions that would genuinely need an offscreen document after migration to MV3.
+
 Usage: ./count_dom_access.py <extensions_folder> [--verbose]
 
-Optimized for handling 100k+ extensions efficiently:
-- Multiprocessing support for parallel processing
-- Compiled regex patterns for performance
-- Streaming results to avoid memory issues
-- Progress bar with ETA
-- Proper error handling for malformed files
+Strictness measures:
+- Comments (// and /* */) and string literals are stripped before pattern matching
+- Only patterns that truly require a document/DOM context are checked
+  (APIs available in service workers like fetch, Blob, FileReader etc. are excluded)
+- Generic methods like .play(), .addEventListener() are excluded (they exist on non-DOM objects)
 """
 
 import sys
@@ -17,80 +18,109 @@ import json
 import re
 import argparse
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import Optional, Tuple
 from multiprocessing import Pool, cpu_count
 import time
 
-# DOM access patterns (ported from offscreen_document.ts)
+# ── Comment and string stripping ─────────────────────────────────────────────
+# Order matters: match strings first so we don't treat quotes inside comments
+# as string boundaries and vice versa.
+_STRIP_RE = re.compile(
+    r'//[^\n]*'            # single-line comment
+    r'|/\*[\s\S]*?\*/'    # multi-line comment
+    r'|`(?:[^`\\]|\\.)*`' # template literal
+    r"|'(?:[^'\\]|\\.)*'" # single-quoted string
+    r'|"(?:[^"\\]|\\.)*"' # double-quoted string
+)
+
+
+def strip_comments_and_strings(code: str) -> str:
+    """Remove comments and string literals so we only match actual code."""
+    return _STRIP_RE.sub(' ', code)
+
+
+# ── DOM patterns that DEFINITELY need a document context ─────────────────────
+# These would all fail in a MV3 service worker and require an offscreen document.
+# Intentionally conservative – if in doubt, leave it out.
 DOM_PATTERNS = [
-    # Document API
-    r'\bdocument\.(getElementById|querySelector|querySelectorAll|createElement|createElementNS)\b',
-    r'\bdocument\.(body|head|title|cookie|documentElement|forms|images|links|scripts)\b',
-    r'\bdocument\.(write|writeln|open|close)\b',
-    r'\bnew\s+DOMParser\(\)',
-    r'\bdocument\.implementation',
+    # ── document.* APIs ──────────────────────────────────────────────────────
+    r'\bdocument\.(getElementById|getElementsByClassName|getElementsByTagName|getElementsByName)\b',
+    r'\bdocument\.(querySelector|querySelectorAll)\b',
+    r'\bdocument\.(createElement|createElementNS|createTextNode|createDocumentFragment)\b',
+    r'\bdocument\.(body|head|documentElement|forms|images|links|scripts)\b',
+    r'\bdocument\.(write|writeln)\b',
+    r'\bdocument\.cookie\b',
+    r'\bdocument\.title\b',
+    r'\bdocument\.implementation\b',
 
-    # Window API (excluding chrome.windows)
-    r'(?<!chrome\.)window\.(location|history|navigator|screen|localStorage|sessionStorage)\b',
-    r'(?<!chrome\.)window\.(alert|confirm|prompt)\b',
-    r'(?<!chrome\.)window\.(open|close|focus|blur)\b',
-    r'(?<!chrome\.)window\.(innerWidth|innerHeight|outerWidth|outerHeight|scrollX|scrollY)\b',
-    r'(?<!chrome\.)window\.(getComputedStyle|matchMedia)\b',
+    # ── DOMParser ────────────────────────────────────────────────────────────
+    r'\bnew\s+DOMParser\b',
 
-    # DOM manipulation
-    r'\.(appendChild|removeChild|replaceChild|insertBefore)\b',
-    r'\.(innerHTML|outerHTML|textContent|innerText)\s*=',
-    r'\.(setAttribute|getAttribute|removeAttribute|hasAttribute)\b',
-    r'\.(classList|className|style)\.',
-    r'\.(addEventListener|removeEventListener|dispatchEvent)\b',
+    # ── window.* APIs that do NOT exist in service workers ───────────────────
+    # (excluding navigator/location/screen which are available via self.*)
+    r'(?<!chrome\.)window\.(alert|confirm|prompt)\s*\(',
+    r'(?<!chrome\.)window\.(getComputedStyle|matchMedia)\s*\(',
+    r'(?<!chrome\.)window\.(innerWidth|innerHeight|outerWidth|outerHeight|scrollX|scrollY|pageXOffset|pageYOffset)\b',
+    r'(?<!chrome\.)window\.(localStorage|sessionStorage)\b',
+    r'(?<!chrome\.)window\.history\b',
 
-    # Canvas API
-    r'\bnew\s+(HTMLCanvasElement|CanvasRenderingContext2D|ImageData)\b',
-    r'\.getContext\s*\(\s*[\'"`](2d|webgl|webgl2)[\'"`]\s*\)',
-    r'\.(canvas|fillRect|strokeRect|fillText|strokeText|drawImage)\b',
+    # ── DOM element manipulation (with preceding dot = called on an element) ─
+    r'\.(innerHTML|outerHTML)\s*=',
+    r'\.(insertAdjacentHTML|insertAdjacentElement)\s*\(',
 
-    # Audio/Video API
-    r'\bnew\s+(Audio|HTMLAudioElement|HTMLVideoElement|AudioContext|MediaSource)\b',
-    r'\.play\s*\(\)',
-    r'\.pause\s*\(\)',
+    # ── Canvas / OffscreenCanvas (2D/WebGL rendering) ────────────────────────
+    r'\.getContext\s*\(\s*[\'"`](2d|webgl|webgl2|bitmaprenderer)[\'"`]\s*\)',
+    r'\bnew\s+CanvasRenderingContext2D\b',
 
-    # Web APIs that require document context
-    r'\bnew\s+(Blob|File|FileReader|Image|XMLHttpRequest)\b',
-    r'\.(fetch|XMLHttpRequest|FormData|URLSearchParams)\b',
+    # ── Audio/Video (needs DOM for HTMLMediaElement) ─────────────────────────
+    r'\bnew\s+Audio\s*\(',
+    r'\bnew\s+(AudioContext|webkitAudioContext)\s*\(',
+    r'\bnew\s+MediaSource\s*\(',
+    r'\bnew\s+(HTMLAudioElement|HTMLVideoElement|HTMLCanvasElement|HTMLImageElement)\b',
+
+    # ── new Image() (creates HTMLImageElement, needs DOM) ────────────────────
+    r'\bnew\s+Image\s*\(',
+
+    # ── Clipboard API (needs document focus) ─────────────────────────────────
+    r'\bdocument\.execCommand\s*\(',
+    r'\bnavigator\.clipboard\.(writeText|write|readText|read)\s*\(',
+
+    # ── Notifications that require permission via DOM ────────────────────────
+    r'\bnew\s+Notification\s*\(',
+
+    # ── Web Workers created from background (would need restructuring) ───────
+    r'\bnew\s+Worker\s*\(',
+    r'\bnew\s+SharedWorker\s*\(',
 ]
 
-# Combined pattern for fast single-pass checking
 COMBINED_PATTERN = re.compile('|'.join(f'(?:{p})' for p in DOM_PATTERNS))
 
-# Pattern to extract <script src="..."> from HTML background pages
+# HTML parsing for background pages
 SCRIPT_SRC_PATTERN = re.compile(r'<script[^>]+src\s*=\s*["\']([^"\']+)["\']', re.IGNORECASE)
-
-# Pattern to extract inline <script>...</script> content
 INLINE_SCRIPT_PATTERN = re.compile(r'<script(?:\s[^>]*)?>(.+?)</script>', re.IGNORECASE | re.DOTALL)
 
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
 
 
-def content_has_dom_access(content: str) -> bool:
-    """Check if text content contains DOM access patterns."""
-    return COMBINED_PATTERN.search(content) is not None
+def code_has_dom_access(code: str) -> bool:
+    """Check if code (with comments/strings already stripped) has DOM patterns."""
+    return COMBINED_PATTERN.search(code) is not None
 
 
 def file_has_dom_access(file_path: Path) -> bool:
-    """Check if a file contains DOM access patterns."""
+    """Read a JS file, strip comments/strings, and check for DOM patterns."""
     try:
         if file_path.stat().st_size > MAX_FILE_SIZE:
             return False
         with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
-            return content_has_dom_access(f.read())
+            content = f.read()
+        return code_has_dom_access(strip_comments_and_strings(content))
     except Exception:
         return False
 
 
 def check_background_page(ext_dir: Path, page_path: str) -> bool:
-    """
-    Check a background HTML page and all scripts it references for DOM access.
-    """
+    """Check a background HTML page and all scripts it references."""
     try:
         html_file = ext_dir / page_path
         if not html_file.exists() or html_file.stat().st_size > MAX_FILE_SIZE:
@@ -101,14 +131,15 @@ def check_background_page(ext_dir: Path, page_path: str) -> bool:
 
         # Check inline scripts
         for match in INLINE_SCRIPT_PATTERN.finditer(html_content):
-            if content_has_dom_access(match.group(1)):
+            code = strip_comments_and_strings(match.group(1))
+            if code_has_dom_access(code):
                 return True
 
         # Check referenced script files
         page_dir = html_file.parent
         for match in SCRIPT_SRC_PATTERN.finditer(html_content):
             src = match.group(1)
-            if src.startswith('http://') or src.startswith('https://'):
+            if src.startswith(('http://', 'https://', '//')):
                 continue
             try:
                 script_path = page_dir / src
@@ -136,7 +167,6 @@ def check_extension_dom_access(ext_dir: Path) -> Tuple[str, bool, bool]:
         if not manifest_path.exists():
             return (ext_name, False, False)
 
-        # Skip large manifests (likely corrupted)
         if manifest_path.stat().st_size > 1024 * 1024:
             return (ext_name, False, False)
 
@@ -169,7 +199,7 @@ def check_extension_dom_access(ext_dir: Path) -> Tuple[str, bool, bool]:
                 for script in bg_scripts:
                     if not isinstance(script, str) or not script:
                         continue
-                    if script.startswith('http://') or script.startswith('https://'):
+                    if script.startswith(('http://', 'https://')):
                         continue
                     try:
                         script_path = ext_dir / script
@@ -178,7 +208,7 @@ def check_extension_dom_access(ext_dir: Path) -> Tuple[str, bool, bool]:
                     except Exception:
                         continue
 
-        # Check background.page (HTML file that may contain inline/referenced scripts)
+        # Check background.page (HTML file with inline/referenced scripts)
         if 'page' in background:
             page = background['page']
             if isinstance(page, str) and page:
@@ -192,9 +222,7 @@ def check_extension_dom_access(ext_dir: Path) -> Tuple[str, bool, bool]:
 
 
 def process_extensions(extensions_dir: Path, verbose: bool = False, workers: Optional[int] = None) -> None:
-    """
-    Process all extensions and count those with DOM access.
-    """
+    """Process all extensions and count those with DOM access."""
     print(f"\033[34mScanning extensions in: {extensions_dir}\033[0m")
 
     ext_dirs = [d for d in extensions_dir.iterdir() if d.is_dir()]
@@ -284,7 +312,7 @@ def process_extensions(extensions_dir: Path, verbose: bool = False, workers: Opt
 def main():
     """Main entry point."""
     parser = argparse.ArgumentParser(
-        description='Count MV2 extensions that interact with the DOM in their background scripts',
+        description='Count MV2 extensions that would need an offscreen document after MV3 migration',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
