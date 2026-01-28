@@ -20,6 +20,7 @@ Requirements:
 import argparse
 import json
 import os
+import re
 import sys
 from dataclasses import dataclass, field, asdict
 from datetime import datetime
@@ -371,75 +372,122 @@ def get_interestingness_metrics(db) -> InterestingnessMetrics:
 
 
 def get_log_timing_metrics(db, detailed: bool) -> LogTimingMetrics:
-    """Get migration timing statistics from logs."""
+    """Get migration timing statistics from logs.
+
+    Calculates timing by identifying migration sessions (batches of logs
+    within a time window) rather than using first/last log per extension.
+    """
     logs = db.logs
 
-    migration_logs = list(logs.find({
+    # Find migration session markers - progress logs indicate active migration
+    progress_logs = list(logs.find({
         "$or": [
-            {"message": {"$regex": "migration.*start", "$options": "i"}},
-            {"message": {"$regex": "migration.*complete", "$options": "i"}},
-            {"message": {"$regex": "migration.*finish", "$options": "i"}},
-            {"message": {"$regex": "processing extension", "$options": "i"}},
-            {"message": {"$regex": "migrated extension", "$options": "i"}}
+            {"message": {"$regex": "progress.*extension", "$options": "i"}},
+            {"message": {"$regex": "GC after.*extensions", "$options": "i"}},
+            {"message": {"$regex": "starting migration", "$options": "i"}},
+            {"message": {"$regex": "migration complete", "$options": "i"}},
+            {"message": {"$regex": "extensions processed", "$options": "i"}}
         ]
     }).sort("time", 1))
 
-    migration_start_time = None
-    migration_end_time = None
+    if not progress_logs:
+        return LogTimingMetrics()
 
-    for log in migration_logs:
+    # Identify migration sessions by finding time gaps > 1 hour
+    SESSION_GAP_MS = 3600000  # 1 hour gap indicates new session
+
+    sessions = []
+    current_session = {"start": progress_logs[0]["time"], "end": progress_logs[0]["time"], "count": 0}
+
+    for i, log in enumerate(progress_logs):
+        time = log["time"]
         msg = (log.get("message") or "").lower()
-        time = log.get("time")
 
-        if "start" in msg:
-            if migration_start_time is None or time < migration_start_time:
-                migration_start_time = time
-        if "complete" in msg or "finish" in msg:
-            if migration_end_time is None or time > migration_end_time:
-                migration_end_time = time
+        # Check if this is a new session
+        if time - current_session["end"] > SESSION_GAP_MS:
+            if current_session["count"] > 0:
+                sessions.append(current_session)
+            current_session = {"start": time, "end": time, "count": 0}
 
-    # Per-extension timing
-    pipeline = [
-        {"$match": {"extension.id": {"$exists": True}}},
-        {
-            "$group": {
-                "_id": "$extension.id",
-                "name": {"$first": "$extension.name"},
-                "start_time": {"$min": "$time"},
-                "end_time": {"$max": "$time"}
-            }
-        },
-        {
-            "$project": {
-                "id": "$_id",
-                "name": 1,
-                "duration_ms": {"$subtract": ["$end_time", "$start_time"]}
-            }
-        },
-        {"$sort": {"duration_ms": -1}},
-        {"$limit": 100 if detailed else 10}
-    ]
+        current_session["end"] = time
 
-    extension_logs = list(logs.aggregate(pipeline))
+        # Try to extract extension count from progress messages
+        # Match patterns like "Progress: 100 new + 50 skipped = 150/1000"
+        # or "GC after 100 extensions"
+        count_match = re.search(r'(\d+)\s*(?:new|extensions)', msg)
+        if count_match:
+            count = int(count_match.group(1))
+            current_session["count"] = max(current_session["count"], count)
 
-    extension_times = [
-        {"id": e["id"], "name": e.get("name") or "Unknown", "duration_ms": e["duration_ms"]}
-        for e in extension_logs
-        if e.get("duration_ms", 0) > 0
-    ]
+    # Don't forget last session
+    if current_session["count"] > 0:
+        sessions.append(current_session)
 
-    total_duration = None
-    if migration_start_time and migration_end_time:
-        total_duration = migration_end_time - migration_start_time
+    if not sessions:
+        return LogTimingMetrics()
+
+    # Calculate totals across all sessions
+    total_duration = sum(s["end"] - s["start"] for s in sessions)
+    total_extensions = sum(s["count"] for s in sessions)
 
     avg_time = None
-    if extension_times:
-        avg_time = round(sum(e["duration_ms"] for e in extension_times) / len(extension_times))
+    if total_extensions > 0:
+        avg_time = round(total_duration / total_extensions)
+
+    # Get per-extension timing by analyzing log sequences within sessions
+    # Look for consecutive logs for the same extension within a short window
+    extension_times = []
+
+    if detailed:
+        # Get extensions with multiple log entries in quick succession
+        pipeline = [
+            {"$match": {"extension.id": {"$exists": True}}},
+            {"$sort": {"time": 1}},
+            {
+                "$group": {
+                    "_id": "$extension.id",
+                    "name": {"$first": "$extension.name"},
+                    "times": {"$push": "$time"},
+                    "count": {"$sum": 1}
+                }
+            },
+            {"$match": {"count": {"$gte": 2}}},
+            {"$limit": 200}
+        ]
+
+        ext_logs = list(logs.aggregate(pipeline))
+
+        for ext in ext_logs:
+            times = sorted(ext["times"])
+            # Find the shortest gap between consecutive logs (processing time)
+            # Filter to gaps under 5 minutes (actual processing, not session spans)
+            gaps = []
+            for i in range(len(times) - 1):
+                gap = times[i + 1] - times[i]
+                if 0 < gap < 300000:  # Under 5 minutes
+                    gaps.append(gap)
+
+            if gaps:
+                # Use median gap as representative processing time
+                gaps.sort()
+                median_gap = gaps[len(gaps) // 2]
+                extension_times.append({
+                    "id": ext["_id"],
+                    "name": ext.get("name") or "Unknown",
+                    "duration_ms": median_gap
+                })
+
+        # Sort by duration descending
+        extension_times.sort(key=lambda x: x["duration_ms"], reverse=True)
+        extension_times = extension_times[:10]
+
+    # Get the most recent session for display
+    latest_session = sessions[-1] if sessions else None
 
     return LogTimingMetrics(
-        migration_start_time=migration_start_time,
-        migration_end_time=migration_end_time,
-        total_migration_duration_ms=total_duration,
+        migration_start_time=sessions[0]["start"] if sessions else None,
+        migration_end_time=sessions[-1]["end"] if sessions else None,
+        total_migration_duration_ms=total_duration if total_duration > 0 else None,
         avg_time_per_extension_ms=avg_time,
         extension_processing_times=extension_times
     )
