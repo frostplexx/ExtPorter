@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 """
-Script to count extensions that interact with the DOM in their background scripts.
+Script to count MV2 extensions that interact with the DOM in their background scripts.
 Usage: ./count_dom_access.py <extensions_folder> [--verbose]
 
 Optimized for handling 100k+ extensions efficiently:
@@ -59,109 +59,72 @@ DOM_PATTERNS = [
     r'\.(fetch|XMLHttpRequest|FormData|URLSearchParams)\b',
 ]
 
-# Compile patterns once for performance
-COMPILED_PATTERNS = [re.compile(pattern) for pattern in DOM_PATTERNS]
-
-# Combined pattern for even faster single-pass checking
+# Combined pattern for fast single-pass checking
 COMBINED_PATTERN = re.compile('|'.join(f'(?:{p})' for p in DOM_PATTERNS))
 
+# Pattern to extract <script src="..."> from HTML background pages
+SCRIPT_SRC_PATTERN = re.compile(r'<script[^>]+src\s*=\s*["\']([^"\']+)["\']', re.IGNORECASE)
 
-def contains_dom_access(file_path: Path, max_size_mb: int = 10) -> bool:
-    """
-    Check if a JavaScript file contains DOM access patterns.
-    
-    Args:
-        file_path: Path to the JavaScript file
-        max_size_mb: Maximum file size in MB to process
-        
-    Returns:
-        True if DOM access patterns found, False otherwise
-    """
+# Pattern to extract inline <script>...</script> content
+INLINE_SCRIPT_PATTERN = re.compile(r'<script(?:\s[^>]*)?>(.+?)</script>', re.IGNORECASE | re.DOTALL)
+
+MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
+
+
+def content_has_dom_access(content: str) -> bool:
+    """Check if text content contains DOM access patterns."""
+    return COMBINED_PATTERN.search(content) is not None
+
+
+def file_has_dom_access(file_path: Path) -> bool:
+    """Check if a file contains DOM access patterns."""
     try:
-        # Skip large files
-        file_size = file_path.stat().st_size
-        if file_size > max_size_mb * 1024 * 1024:
+        if file_path.stat().st_size > MAX_FILE_SIZE:
             return False
-
-        # Read file content
         with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
-            content = f.read()
-
-        # Quick check with combined pattern
-        return COMBINED_PATTERN.search(content) is not None
-
+            return content_has_dom_access(f.read())
     except Exception:
-        # Silently skip files that can't be read
         return False
 
 
-def extract_background_scripts(manifest_path: Path) -> List[str]:
+def check_background_page(ext_dir: Path, page_path: str) -> bool:
     """
-    Extract background script paths from manifest.json.
-    
-    Args:
-        manifest_path: Path to manifest.json
-        
-    Returns:
-        List of background script paths
+    Check a background HTML page and all scripts it references for DOM access.
     """
     try:
-        # Skip large manifests (likely corrupted)
-        if manifest_path.stat().st_size > 1024 * 1024:
-            return []
+        html_file = ext_dir / page_path
+        if not html_file.exists() or html_file.stat().st_size > MAX_FILE_SIZE:
+            return False
 
-        with open(manifest_path, 'r', encoding='utf-8', errors='ignore') as f:
-            manifest = json.load(f)
+        with open(html_file, 'r', encoding='utf-8', errors='ignore') as f:
+            html_content = f.read()
 
-        scripts = []
+        # Check inline scripts
+        for match in INLINE_SCRIPT_PATTERN.finditer(html_content):
+            if content_has_dom_access(match.group(1)):
+                return True
 
-        # Ensure manifest is a dict
-        if not isinstance(manifest, dict):
-            return []
+        # Check referenced script files
+        page_dir = html_file.parent
+        for match in SCRIPT_SRC_PATTERN.finditer(html_content):
+            src = match.group(1)
+            if src.startswith('http://') or src.startswith('https://'):
+                continue
+            try:
+                script_path = page_dir / src
+                if script_path.exists() and file_has_dom_access(script_path):
+                    return True
+            except Exception:
+                continue
 
-        # Only process MV2 extensions (skip MV3, Chrome Apps, and themes)
-        manifest_version = manifest.get('manifest_version')
-        if manifest_version != 2:
-            return []
-
-        # Skip Chrome Apps (they have "app" key)
-        if 'app' in manifest:
-            return []
-
-        # Skip themes
-        if 'theme' in manifest:
-            return []
-
-        # Get background configuration
-        background = manifest.get('background', {})
-        if not isinstance(background, dict):
-            return []
-
-        # MV2 background.scripts array
-        if 'scripts' in background:
-            bg_scripts = background['scripts']
-            if isinstance(bg_scripts, list):
-                scripts.extend([s for s in bg_scripts if isinstance(s, str)])
-
-        # MV2 background.page
-        if 'page' in background:
-            page = background['page']
-            if isinstance(page, str):
-                scripts.append(page)
-
-        return scripts
-
+        return False
     except Exception:
-        # Silently skip malformed manifests
-        return []
+        return False
 
 
 def check_extension_dom_access(ext_dir: Path) -> Tuple[str, bool, bool]:
     """
-    Check if an extension has DOM access in its background scripts.
-
-    Args:
-        ext_dir: Path to extension directory
+    Check if an MV2 extension has DOM access in its background scripts.
 
     Returns:
         Tuple of (extension_name, is_mv2_extension, has_dom_access)
@@ -170,66 +133,68 @@ def check_extension_dom_access(ext_dir: Path) -> Tuple[str, bool, bool]:
         ext_name = ext_dir.name
         manifest_path = ext_dir / 'manifest.json'
 
-        # Check manifest exists
         if not manifest_path.exists():
             return (ext_name, False, False)
 
-        # Extract background scripts (returns [] for non-MV2)
-        bg_scripts = extract_background_scripts(manifest_path)
-        if not bg_scripts:
-            # Check if it's still an MV2 extension (just without background scripts)
-            try:
-                with open(manifest_path, 'r', encoding='utf-8', errors='ignore') as f:
-                    manifest = json.load(f)
-                is_mv2 = (isinstance(manifest, dict)
-                           and manifest.get('manifest_version') == 2
-                           and 'app' not in manifest
-                           and 'theme' not in manifest)
-            except Exception:
-                is_mv2 = False
-            return (ext_name, is_mv2, False)
+        # Skip large manifests (likely corrupted)
+        if manifest_path.stat().st_size > 1024 * 1024:
+            return (ext_name, False, False)
 
-        # Check each background script
-        for script in bg_scripts:
-            # Skip if script is not a string
-            if not isinstance(script, str):
-                continue
+        try:
+            with open(manifest_path, 'r', encoding='utf-8', errors='ignore') as f:
+                manifest = json.load(f)
+        except Exception:
+            return (ext_name, False, False)
 
-            # Skip empty or invalid paths
-            if not script or script.startswith('http://') or script.startswith('https://'):
-                continue
+        if not isinstance(manifest, dict):
+            return (ext_name, False, False)
 
-            try:
-                script_path = ext_dir / script
-            except Exception:
-                # Skip invalid paths
-                continue
+        # Only MV2 extensions (skip MV3, Chrome Apps, themes)
+        if manifest.get('manifest_version') != 2:
+            return (ext_name, False, False)
+        if 'app' in manifest:
+            return (ext_name, False, False)
+        if 'theme' in manifest:
+            return (ext_name, False, False)
 
-            if not script_path.exists():
-                continue
+        # It's a valid MV2 extension
+        background = manifest.get('background', {})
+        if not isinstance(background, dict):
+            return (ext_name, True, False)
 
-            # Check .js files
-            if script.endswith('.js'):
-                if contains_dom_access(script_path):
+        # Check background.scripts (JS files listed in manifest)
+        if 'scripts' in background:
+            bg_scripts = background['scripts']
+            if isinstance(bg_scripts, list):
+                for script in bg_scripts:
+                    if not isinstance(script, str) or not script:
+                        continue
+                    if script.startswith('http://') or script.startswith('https://'):
+                        continue
+                    try:
+                        script_path = ext_dir / script
+                        if script_path.exists() and file_has_dom_access(script_path):
+                            return (ext_name, True, True)
+                    except Exception:
+                        continue
+
+        # Check background.page (HTML file that may contain inline/referenced scripts)
+        if 'page' in background:
+            page = background['page']
+            if isinstance(page, str) and page:
+                if check_background_page(ext_dir, page):
                     return (ext_name, True, True)
 
         return (ext_name, True, False)
 
     except Exception:
-        # Silently skip extensions that cause errors
         return (ext_dir.name if isinstance(ext_dir, Path) else str(ext_dir), False, False)
 
 
 def process_extensions(extensions_dir: Path, verbose: bool = False, workers: Optional[int] = None) -> None:
     """
     Process all extensions and count those with DOM access.
-    
-    Args:
-        extensions_dir: Directory containing extensions
-        verbose: Show detailed output
-        workers: Number of worker processes (default: CPU count)
     """
-    # Get all extension directories
     print(f"\033[34mScanning extensions in: {extensions_dir}\033[0m")
 
     ext_dirs = [d for d in extensions_dir.iterdir() if d.is_dir()]
@@ -241,28 +206,21 @@ def process_extensions(extensions_dir: Path, verbose: bool = False, workers: Opt
 
     print(f"\033[34mFound {total:,} extension directories\033[0m")
 
-    # Determine number of workers
     if workers is None:
-        # Cap at 32 workers to avoid overwhelming the system
         workers = min(32, max(1, cpu_count() - 1))
-    else:
-        # User-specified, but warn if too high
-        if workers > 64:
-            print(f"\033[33mWarning: {workers} workers is very high, consider using 8-32 workers\033[0m")
+    elif workers > 64:
+        print(f"\033[33mWarning: {workers} workers is very high, consider using 8-32 workers\033[0m")
 
     print(f"\033[32mUsing {workers} worker processes\033[0m")
     print()
     print("\033[34mProcessing extensions...\033[0m")
 
-    # Process extensions in parallel
     dom_access_extensions = []
     mv2_count = 0
     processed = 0
-    errors = 0
     start_time = time.time()
 
     with Pool(processes=workers) as pool:
-        # Use imap_unordered for better performance with large datasets
         results = pool.imap_unordered(check_extension_dom_access, ext_dirs, chunksize=100)
 
         try:
@@ -275,7 +233,6 @@ def process_extensions(extensions_dir: Path, verbose: bool = False, workers: Opt
                 if has_dom_access:
                     dom_access_extensions.append(ext_name)
 
-                # Show progress
                 if processed % 1000 == 0 or processed == total:
                     elapsed = time.time() - start_time
                     rate = processed / elapsed if elapsed > 0 else 0
@@ -287,15 +244,13 @@ def process_extensions(extensions_dir: Path, verbose: bool = False, workers: Opt
                           f"\033[33mRate:\033[0m {rate:.0f}/s | "
                           f"\033[33mETA:\033[0m {eta:.0f}s", end='', flush=True)
         except Exception as e:
-            errors += 1
             print(f"\n\033[31mError during processing: {e}\033[0m", file=sys.stderr)
             print(f"\033[33mProcessed {processed:,} extensions before error\033[0m", file=sys.stderr)
             raise
 
-    print()  # New line after progress
+    print()
     print()
 
-    # Display results
     dom_count = len(dom_access_extensions)
     no_dom_count = mv2_count - dom_count
 
@@ -317,7 +272,6 @@ def process_extensions(extensions_dir: Path, verbose: bool = False, workers: Opt
     print(f"\nTotal time: \033[33m{elapsed_total:.1f}s\033[0m")
     print()
 
-    # List extensions with DOM access if verbose
     if verbose and dom_access_extensions:
         print("\033[34mExtensions with DOM access:\033[0m")
         for ext_name in sorted(dom_access_extensions):
@@ -330,19 +284,13 @@ def process_extensions(extensions_dir: Path, verbose: bool = False, workers: Opt
 def main():
     """Main entry point."""
     parser = argparse.ArgumentParser(
-        description='Count extensions that interact with the DOM in their background scripts',
+        description='Count MV2 extensions that interact with the DOM in their background scripts',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
   %(prog)s /path/to/extensions
   %(prog)s /path/to/extensions --verbose
   %(prog)s /path/to/extensions --workers 8
-  
-Performance notes:
-  - Uses multiprocessing for parallel processing
-  - Default workers: CPU count - 1
-  - Can process 1000+ extensions/second with multiple cores
-  - Memory usage scales with worker count but stays reasonable
         """
     )
 
@@ -352,7 +300,6 @@ Performance notes:
 
     args = parser.parse_args()
 
-    # Validate directory
     if not args.extensions_dir.exists():
         print(f"\033[31mError: Directory '{args.extensions_dir}' does not exist\033[0m", file=sys.stderr)
         sys.exit(1)
