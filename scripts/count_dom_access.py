@@ -119,16 +119,23 @@ def extract_background_scripts(manifest_path: Path) -> List[str]:
         if not isinstance(manifest, dict):
             return []
 
+        # Only process MV2 extensions (skip MV3, Chrome Apps, and themes)
+        manifest_version = manifest.get('manifest_version')
+        if manifest_version != 2:
+            return []
+
+        # Skip Chrome Apps (they have "app" key)
+        if 'app' in manifest:
+            return []
+
+        # Skip themes
+        if 'theme' in manifest:
+            return []
+
         # Get background configuration
         background = manifest.get('background', {})
         if not isinstance(background, dict):
             return []
-
-        # MV3 service_worker
-        if 'service_worker' in background:
-            sw = background['service_worker']
-            if isinstance(sw, str):
-                scripts.append(sw)
 
         # MV2 background.scripts array
         if 'scripts' in background:
