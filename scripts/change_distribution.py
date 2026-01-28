@@ -206,13 +206,12 @@ def run(client: MongoClient, db_name: str) -> Tuple[List[Dict], Dict]:
     db = client[db_name]
     extensions_col = db["extensions"]
 
-    # Only consider MV2 extensions (proper, not apps/themes) that were migrated
+    # Migrated extensions have mv3_extension_id set by the migration pipeline
     query = {
-        "manifest_version": 2,
-        "tags": {"$exists": True, "$ne": []},
+        "mv3_extension_id": {"$exists": True, "$ne": None},
     }
     extensions = list(extensions_col.find(query))
-    print(f"Found {len(extensions)} migrated MV2 extensions")
+    print(f"Found {len(extensions)} migrated extensions")
 
     rows = [classify_extension(ext) for ext in extensions]
 
