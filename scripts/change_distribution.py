@@ -75,7 +75,6 @@ SEMI_TRIVIAL_FIELDS = ["api_renames", "file_modifications"]
 NON_TRIVIAL_FIELDS = [
     "webRequest",
     "webRequest_to_dnr_migrations",
-    "background_page",
 ]
 
 
@@ -212,6 +211,15 @@ def run(client: MongoClient, db_name: str) -> Tuple[List[Dict], Dict]:
     }
     extensions = list(extensions_col.find(query))
     print(f"Found {len(extensions)} migrated extensions")
+
+    # Debug: sample a few extensions to inspect actual field values
+    if extensions:
+        print("\n--- DEBUG: Sample of 3 extensions ---")
+        for ext in extensions[:3]:
+            print(f"  id={ext.get('id', '?')}")
+            print(f"    tags={ext.get('tags', [])}")
+            print(f"    breakdown={ext.get('interestingness_breakdown', {})}")
+            print()
 
     rows = [classify_extension(ext) for ext in extensions]
 
