@@ -1,25 +1,21 @@
 #!/usr/bin/env python3
 """
-Analyze why certain extensions were not migrated (no mv3_extension_id).
+Analyze why certain extensions on the filesystem were not imported into the database.
 
-Checks for:
-- Chrome Apps (not migratable)
-- Themes (not migratable)
-- Already MV3 (don't need migration)
-- Migration errors
-- Missing/invalid manifests
-- Other reasons
+Compares INPUT_DIR against the database to find missing extensions and explains why
+they weren't imported (Chrome Apps, Themes, already MV3, parse errors, etc.)
 
 Usage:
-    python debug_unmigrated.py [--uri URI] [--db DB] [--verbose]
+    python debug_unmigrated.py [--uri URI] [--db DB] [--input-dir DIR] [--verbose]
 """
 
 import argparse
+import json
 import os
+import re
 import sys
-from collections import Counter
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, Optional, Set
 
 try:
     from dotenv import load_dotenv
@@ -69,226 +65,225 @@ def get_manifest_version(manifest: Dict[Any, Any] | None) -> int | None:
         return None
 
 
-def analyze_unmigrated(client: MongoClient, db_name: str, verbose: bool = False) -> Dict[str, Any]:
+def load_manifest(manifest_path: Path) -> Optional[Dict[Any, Any]]:
+    """Try to load a manifest.json file, handling various encoding issues."""
+    raw = None
+
+    # 1) Try normal json.load with UTF-8
+    try:
+        with open(manifest_path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        pass
+
+    # 2) Try reading bytes and decoding with utf-8-sig to handle BOM
+    try:
+        raw = manifest_path.read_bytes()
+        text = raw.decode("utf-8-sig")
+        return json.loads(text)
+    except Exception:
+        pass
+
+    # 3) Fallback: decode with replace and try to heuristically extract manifest_version
+    try:
+        if raw is None:
+            raw = manifest_path.read_bytes()
+        text = raw.decode("utf-8", errors="replace")
+        # Try to extract at least manifest_version
+        m = re.search(r'"manifest_version"\s*:\s*(\d+)', text)
+        if m:
+            mv = int(m.group(1))
+            # Also try to extract app/theme markers
+            manifest: Dict[str, Any] = {"manifest_version": mv}
+            if '"app"' in text:
+                manifest["app"] = {}
+            if '"theme"' in text:
+                manifest["theme"] = {}
+            return manifest
+    except Exception:
+        pass
+
+    return None
+
+
+def get_filesystem_extensions(input_dir: Path) -> Dict[str, Dict[str, Any]]:
+    """Get all extension IDs from the filesystem with their manifest info."""
+    extensions = {}
+
+    if not input_dir.exists():
+        print(f"Error: INPUT_DIR does not exist: {input_dir}")
+        return extensions
+
+    for ext_dir in input_dir.iterdir():
+        if not ext_dir.is_dir():
+            continue
+
+        ext_id = ext_dir.name
+        manifest_path = ext_dir / "manifest.json"
+
+        if not manifest_path.exists():
+            extensions[ext_id] = {
+                "id": ext_id,
+                "manifest": None,
+                "error": "no_manifest_file"
+            }
+            continue
+
+        manifest = load_manifest(manifest_path)
+        extensions[ext_id] = {
+            "id": ext_id,
+            "manifest": manifest,
+            "error": "parse_error" if manifest is None else None
+        }
+
+    return extensions
+
+
+def analyze_missing(
+    client: MongoClient,
+    db_name: str,
+    input_dir: Path,
+    verbose: bool = False
+) -> Dict[str, Any]:
+    """Compare filesystem extensions against database to find missing ones."""
     db = client[db_name]
     extensions_col = db["extensions"]
 
-    # Get total count
-    total_count = extensions_col.count_documents({})
+    # Get all extension IDs from database
+    print("Loading extension IDs from database...")
+    db_ids: Set[str] = set()
+    for doc in extensions_col.find({}, {"id": 1}):
+        if doc.get("id"):
+            db_ids.add(doc["id"])
 
-    # Get migrated count
-    migrated_count = extensions_col.count_documents({
-        "mv3_extension_id": {"$exists": True, "$ne": None}
-    })
+    print(f"Database contains: {len(db_ids)} extensions")
 
-    # Get unmigrated extensions (no mv3_extension_id or it's null)
-    unmigrated_query = {
-        "$or": [
-            {"mv3_extension_id": {"$exists": False}},
-            {"mv3_extension_id": None}
-        ]
-    }
+    # Get all extensions from filesystem
+    print(f"Scanning filesystem: {input_dir}")
+    fs_extensions = get_filesystem_extensions(input_dir)
+    print(f"Filesystem contains: {len(fs_extensions)} directories")
 
-    unmigrated = list(extensions_col.find(unmigrated_query))
+    # Find missing extensions (in filesystem but not in database)
+    missing_ids = set(fs_extensions.keys()) - db_ids
+    print(f"Missing from database: {len(missing_ids)}")
 
-    print(f"\nTotal extensions: {total_count}")
-    print(f"Migrated: {migrated_count}")
-    print(f"Unmigrated: {len(unmigrated)}")
-    print(f"Discrepancy check: {migrated_count} + {len(unmigrated)} = {migrated_count + len(unmigrated)} (should be {total_count})")
+    # Also check reverse (in DB but not filesystem) for completeness
+    extra_in_db = db_ids - set(fs_extensions.keys())
+    if extra_in_db:
+        print(f"In database but not on filesystem: {len(extra_in_db)}")
 
-    # Categorize reasons
+    # Categorize missing extensions by reason
     reasons = {
         "chrome_app": [],
         "theme": [],
         "already_mv3": [],
-        "has_migration_error": [],
-        "has_error_field": [],
-        "missing_manifest": [],
-        "invalid_manifest": [],
-        "has_skip_tag": [],
+        "manifest_parse_error": [],
+        "no_manifest_file": [],
         "unknown": [],
     }
 
-    # Track all fields present in unmigrated docs
-    all_fields = Counter()
-    error_messages = Counter()
-    skip_tags = Counter()
-    tag_counts = Counter()
+    for ext_id in missing_ids:
+        ext_info = fs_extensions[ext_id]
+        manifest = ext_info.get("manifest")
+        error = ext_info.get("error")
 
-    for ext in unmigrated:
-        ext_id = ext.get("id", ext.get("_id", "unknown"))
-        name = ext.get("name", "Unknown")
-        manifest = ext.get("manifest")
-        tags = ext.get("tags", [])
+        # No manifest file
+        if error == "no_manifest_file":
+            reasons["no_manifest_file"].append({"id": ext_id})
+            continue
 
-        # Track all fields
-        for field in ext.keys():
-            all_fields[field] += 1
+        # Parse error
+        if error == "parse_error" or manifest is None:
+            reasons["manifest_parse_error"].append({"id": ext_id})
+            continue
 
-        # Track tags
-        for tag in tags:
-            tag_counts[tag] += 1
-
-        categorized = False
-
-        # Check for Chrome App
+        # Chrome App
         if is_chrome_app(manifest):
-            reasons["chrome_app"].append({"id": ext_id, "name": name})
-            categorized = True
+            reasons["chrome_app"].append({
+                "id": ext_id,
+                "name": manifest.get("name", "?")
+            })
             continue
 
-        # Check for Theme
+        # Theme
         if is_theme(manifest):
-            reasons["theme"].append({"id": ext_id, "name": name})
-            categorized = True
+            reasons["theme"].append({
+                "id": ext_id,
+                "name": manifest.get("name", "?")
+            })
             continue
 
-        # Check for already MV3
+        # Already MV3
         mv = get_manifest_version(manifest)
         if mv == 3:
-            reasons["already_mv3"].append({"id": ext_id, "name": name})
-            categorized = True
-            continue
-
-        # Check for missing manifest
-        if manifest is None:
-            reasons["missing_manifest"].append({"id": ext_id, "name": name})
-            categorized = True
-            continue
-
-        # Check for invalid manifest (not a dict)
-        if not isinstance(manifest, dict):
-            reasons["invalid_manifest"].append({
+            reasons["already_mv3"].append({
                 "id": ext_id,
-                "name": name,
-                "manifest_type": type(manifest).__name__
+                "name": manifest.get("name", "?")
             })
-            categorized = True
-            continue
-
-        # Check for migration error field
-        migration_error = ext.get("migration_error") or ext.get("error") or ext.get("migrationError")
-        if migration_error:
-            error_str = str(migration_error)[:200]
-            reasons["has_migration_error"].append({
-                "id": ext_id,
-                "name": name,
-                "error": error_str
-            })
-            error_messages[error_str] += 1
-            categorized = True
-            continue
-
-        # Check for error in tags
-        error_tags = [t for t in tags if "ERROR" in str(t).upper() or "FAIL" in str(t).upper() or "SKIP" in str(t).upper()]
-        if error_tags:
-            reasons["has_skip_tag"].append({
-                "id": ext_id,
-                "name": name,
-                "tags": error_tags
-            })
-            for t in error_tags:
-                skip_tags[t] += 1
-            categorized = True
-            continue
-
-        # Check for any error-like fields
-        error_fields = []
-        for field in ext.keys():
-            field_lower = field.lower()
-            if any(kw in field_lower for kw in ["error", "fail", "skip", "exception"]):
-                val = ext.get(field)
-                if val:
-                    error_fields.append(f"{field}={str(val)[:100]}")
-
-        if error_fields:
-            reasons["has_error_field"].append({
-                "id": ext_id,
-                "name": name,
-                "fields": error_fields
-            })
-            categorized = True
             continue
 
         # Unknown reason
-        if not categorized:
-            # Capture some diagnostic info
-            reasons["unknown"].append({
-                "id": ext_id,
-                "name": name,
-                "manifest_version": mv,
-                "tags": tags[:5] if tags else [],
-                "fields": list(ext.keys())[:10],
-            })
+        reasons["unknown"].append({
+            "id": ext_id,
+            "name": manifest.get("name", "?") if manifest else "?",
+            "manifest_version": mv,
+        })
 
     return {
         "summary": {
-            "total": total_count,
-            "migrated": migrated_count,
-            "unmigrated": len(unmigrated),
+            "filesystem_total": len(fs_extensions),
+            "database_total": len(db_ids),
+            "missing_from_db": len(missing_ids),
+            "extra_in_db": len(extra_in_db),
         },
         "reasons": {k: len(v) for k, v in reasons.items()},
-        "details": reasons if verbose else {k: v[:5] for k, v in reasons.items()},
-        "all_fields_in_unmigrated": all_fields.most_common(30),
-        "tags_in_unmigrated": tag_counts.most_common(20),
-        "error_messages": error_messages.most_common(10),
-        "skip_tags": skip_tags.most_common(10),
+        "details": reasons if verbose else {k: v[:10] for k, v in reasons.items()},
+        "extra_in_db_sample": list(extra_in_db)[:10] if extra_in_db else [],
     }
 
 
 def print_results(results: Dict[str, Any], verbose: bool = False) -> None:
     s = results["summary"]
     print(f"\n{'=' * 70}")
-    print(f"UNMIGRATED EXTENSIONS ANALYSIS")
+    print(f"MISSING EXTENSIONS ANALYSIS")
     print(f"{'=' * 70}")
-    print(f"Total: {s['total']}  |  Migrated: {s['migrated']}  |  Unmigrated: {s['unmigrated']}")
+    print(f"Filesystem: {s['filesystem_total']}  |  Database: {s['database_total']}  |  Missing: {s['missing_from_db']}")
 
-    print(f"\n--- Reasons for not migrating ---")
+    if s["extra_in_db"] > 0:
+        print(f"(Note: {s['extra_in_db']} extensions in DB but not on filesystem)")
+
+    print(f"\n--- Reasons why extensions were not imported ---")
     total_explained = 0
     for reason, count in sorted(results["reasons"].items(), key=lambda x: -x[1]):
         if count > 0:
-            pct = round(count / max(s["unmigrated"], 1) * 100, 1)
+            pct = round(count / max(s["missing_from_db"], 1) * 100, 1)
             print(f"  {reason:30s} {count:6d}  ({pct}%)")
             total_explained += count
 
     print(f"\n  {'TOTAL EXPLAINED':30s} {total_explained:6d}")
 
-    if results["tags_in_unmigrated"]:
-        print(f"\n--- Tags present in unmigrated extensions ---")
-        for tag, count in results["tags_in_unmigrated"]:
-            print(f"  {str(tag):45s} {count:6d}")
-
-    if results["error_messages"]:
-        print(f"\n--- Common error messages ---")
-        for msg, count in results["error_messages"]:
-            print(f"  [{count:3d}x] {msg[:80]}")
-
-    if results["skip_tags"]:
-        print(f"\n--- Skip/error tags ---")
-        for tag, count in results["skip_tags"]:
-            print(f"  {str(tag):45s} {count:6d}")
-
-    if results["all_fields_in_unmigrated"]:
-        print(f"\n--- Fields present in unmigrated docs ---")
-        for field, count in results["all_fields_in_unmigrated"]:
-            print(f"  {field:30s} {count:6d}")
-
     # Show examples from each category
     print(f"\n--- Examples from each category ---")
     for reason, examples in results["details"].items():
         if examples:
-            print(f"\n  {reason} ({len(examples)} shown):")
-            for ex in examples[:3]:
+            shown = len(examples) if verbose else min(len(examples), 5)
+            total_in_category = results["reasons"].get(reason, len(examples))
+            print(f"\n  {reason} ({shown} of {total_in_category} shown):")
+            for ex in examples[:shown]:
                 ext_id = ex.get("id", "?")
-                name = ex.get("name", "?")
+                name = ex.get("name", "")
+                mv = ex.get("manifest_version", "")
                 extra = ""
-                if "error" in ex:
-                    extra = f" - error: {ex['error'][:60]}..."
-                elif "tags" in ex and isinstance(ex["tags"], list):
-                    extra = f" - tags: {ex['tags']}"
-                elif "fields" in ex and isinstance(ex["fields"], list):
-                    extra = f" - fields: {ex['fields'][:5]}"
-                print(f"    [{ext_id}] {name[:40]}{extra}")
+                if name:
+                    extra = f" - {name[:50]}"
+                if mv:
+                    extra += f" (MV{mv})"
+                print(f"    {ext_id}{extra}")
+
+    if results.get("extra_in_db_sample"):
+        print(f"\n--- Sample of extensions in DB but not on filesystem ---")
+        for ext_id in results["extra_in_db_sample"]:
+            print(f"    {ext_id}")
 
 
 def main():
@@ -300,7 +295,7 @@ def main():
                 break
 
     parser = argparse.ArgumentParser(
-        description="Analyze why certain extensions were not migrated."
+        description="Analyze why certain extensions on the filesystem were not imported into the database."
     )
     parser.add_argument(
         "--uri", type=str, default=os.environ.get("MONGODB_URI", DEFAULT_URI)
@@ -309,14 +304,27 @@ def main():
         "--db", type=str, default=os.environ.get("DB_NAME", DEFAULT_DB)
     )
     parser.add_argument(
+        "--input-dir", type=str, default=os.environ.get("INPUT_DIR"),
+        help="Input directory containing extensions (default: from INPUT_DIR env var)"
+    )
+    parser.add_argument(
         "--verbose", "-v", action="store_true",
-        help="Show all examples instead of just first 5"
+        help="Show all examples instead of just first few"
     )
     args = parser.parse_args()
 
+    if not args.input_dir:
+        print("Error: INPUT_DIR not specified. Use --input-dir or set INPUT_DIR env var.")
+        sys.exit(1)
+
+    input_dir = Path(args.input_dir)
+    if not input_dir.exists():
+        print(f"Error: INPUT_DIR does not exist: {input_dir}")
+        sys.exit(1)
+
     client = connect_to_db(args.uri)
     try:
-        results = analyze_unmigrated(client, args.db, args.verbose)
+        results = analyze_missing(client, args.db, input_dir, args.verbose)
         print_results(results, args.verbose)
     finally:
         client.close()
