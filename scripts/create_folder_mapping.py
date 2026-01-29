@@ -1,9 +1,15 @@
 #!/usr/bin/env python3
 """
-Create a JSON mapping of MV3 extension folder names to MV2 extension folder names.
+Create a JSON mapping of MV2 extension folder names to MV3 extension folder names.
 
-Queries the database to build a mapping from the migrated MV3 extension folder names
-back to their original MV2 source folder names.
+Queries the database to build a mapping from the original MV2 source folder names
+to their migrated MV3 extension folder names.
+
+Output format:
+    {
+        "mv2_folder_name": "mv3_folder_name",
+        ...
+    }
 
 Usage:
     python create_folder_mapping.py [output.json] [--uri URI] [--db DB]
@@ -57,10 +63,10 @@ def get_folder_name(path: Optional[str]) -> Optional[str]:
 
 def create_mapping(client: MongoClient, db_name: str) -> Dict[str, str]:
     """
-    Create a mapping of MV3 folder names to MV2 folder names.
+    Create a mapping of MV2 folder names to MV3 folder names.
 
     Returns:
-        Dict mapping mv3_folder_name -> mv2_folder_name
+        Dict mapping mv2_folder_name -> mv3_folder_name
     """
     db = client[db_name]
     collection = db[EXTENSIONS_COLLECTION]
@@ -84,28 +90,29 @@ def create_mapping(client: MongoClient, db_name: str) -> Dict[str, str]:
     for ext in cursor:
         processed += 1
 
-        # Get MV2 folder name from path
+        # Get MV2 folder name from manifest_v2_path (original source folder)
         mv2_path = ext.get("manifest_v2_path")
-        mv2_folder = get_folder_name(mv2_path)
+        mv2_folder_name = get_folder_name(mv2_path)
 
         # Get MV3 folder name - prefer manifest_v3_path, fall back to mv3_extension_id
         mv3_path = ext.get("manifest_v3_path")
-        mv3_folder = get_folder_name(mv3_path)
+        mv3_folder_name = get_folder_name(mv3_path)
 
-        # If no mv3_path, try mv3_extension_id
-        if not mv3_folder:
-            mv3_folder = ext.get("mv3_extension_id")
+        # If no mv3_path, try mv3_extension_id (the generated MV3 ID used as folder name)
+        if not mv3_folder_name:
+            mv3_folder_name = ext.get("mv3_extension_id")
 
         # Skip if we don't have both
-        if not mv2_folder or not mv3_folder:
+        if not mv2_folder_name or not mv3_folder_name:
             skipped += 1
             continue
 
-        mapping[mv3_folder] = mv2_folder
+        # Map: MV2 folder name -> MV3 folder name
+        mapping[mv2_folder_name] = mv3_folder_name
 
     print(f"Processed {processed} extensions")
-    print(f"Skipped {skipped} (missing mv2 or mv3 path)")
-    print(f"Created {len(mapping)} mappings")
+    print(f"Skipped {skipped} (missing MV2 or MV3 path)")
+    print(f"Created {len(mapping)} mappings (MV2 -> MV3)")
 
     return mapping
 
@@ -121,7 +128,7 @@ def main():
                 break
 
     parser = argparse.ArgumentParser(
-        description="Create a JSON mapping of MV3 folder names to MV2 folder names."
+        description="Create a JSON mapping of MV2 folder names to MV3 folder names."
     )
     parser.add_argument(
         "output",
