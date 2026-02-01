@@ -20,20 +20,38 @@ of Chrome extension migration in the face of Google's deprecation of Manifest V2
 
 ## Features
 
-- **Automated MV2 → MV3 Migration**: Converts extension manifests, API calls, and code structure
+- **Automated MV2 to MV3 Migration**: Converts extension manifests, API calls, and code structure
+- **webRequest to declarativeNetRequest**: Automatically converts blocking webRequest API to the new declarativeNetRequest API
+- **Service Worker Conversion**: Migrates background scripts to service workers with proper event handling
 - **Database Integration**: Tracks migration results and statistics with MongoDB
 - **Chrome Web Store Metadata**: Automatically extracts and stores extension metadata (description, ratings, developer info, etc.) from CWS HTML files for better searchability and filtering
 - **Docker Support**: Full containerized development and deployment
-- **Manual Analysis**: Provides tools for manually analysing if the migration succeeded
+- **TUI Client**: Interactive terminal UI for managing migrations, exploring extensions, and manual analysis
+- **LLM Integration**: AI-powered extension description generation and migration error fixing
+- **Resume Support**: Migration can be stopped and resumed, tracking progress in the database
+- **Manual Analysis**: Side-by-side browser comparison for testing MV2 vs MV3 versions
+
+## Architecture
+
+ExtPorter consists of two main components:
+
+| Component            | Technology         | Description                                                               |
+| -------------------- | ------------------ | ------------------------------------------------------------------------- |
+| **Migration Server** | TypeScript/Node.js | Core migration logic, WebSocket server, database management               |
+| **TUI Client**       | Rust (ratatui)     | Terminal UI for extension analysis, migration control, and manual testing |
+
+Communication between components is done via WebSocket, allowing the client and server to run on different machines.
 
 # Usage
 
 ## Requirements
 
 ### Server Requirements
+
 - Docker & Docker Compose
 
 ### Client Requirements
+
 - Rust toolchain (cargo, rustc)
 - Cargo (comes with Rust)
 - yarn
@@ -80,16 +98,15 @@ The easiest way to run ExtPorter is using Docker for the server and a native cli
     - Mongo Express admin UI on `http://localhost:8081`
 
     **Note:** On its first start the server will ask you to authenticate with GitHub to get access to LLM features.
-   You have to complete this step otherwise the server won't fully start. Instructions, including the authentication code will
-   be **printed to stdout**.
+    You have to complete this step otherwise the server won't fully start. Instructions, including the authentication code will
+    be **printed to stdout**.
 
 5. Set up the SSH bridge.
-    If the server runs on a remote machine, you need to create an SSH tunnel so the client can connect.
+   If the server runs on a remote machine, you need to create an SSH tunnel so the client can connect.
    To do that run `./scripts/ssh_bridge.sh <user@remote-host> [local-port] [remote-port] [ssh-port] [ssh-options]`
    Remote and local port, if left default are `8080` e.g. `./scripts/ssh_bridge.sh ubuntu@192.168.0.123 8080 8080 22`
    bridges remote port `8080` to local port `8080`.
-   
-7. **Run the Rust client**
+6. **Run the Rust client**
 
     ```bash
     yarn run client
@@ -159,8 +176,7 @@ For active development, you may want to run the server locally instead of in Doc
 
 - View Source needs you to use the [kitty](https://sw.kovidgoyal.net/kitty/) terminal as it opens new tabs and panes
 - Displaying images needs a terminal that supports that feature such as kitty, WezTerm or Ghostty
-- If you want to use "Generate Description" You must first configure an ollama endpoint in `.env`. See [LLM Integration](https://github.com/frostplexx/ExtPorter/blob/dev/README.md#llm-integration) for more info.
-
+- If you want to use "Generate Description" You must first configure an LLM endpoint in `.env`. See [LLM Integration](#llm-integration) for more info.
 
 ### Modules
 
@@ -168,20 +184,70 @@ ExtPorter is made up of modules that can be added/removed to the migration pipel
 
 ```ts
 const migrationModules = [
+    WebRequestMigrator.migrate,
     MigrateManifest.migrate,
     MigrateCSP.migrate,
-    ResourceDownloader.migrate,
     RenameAPIS.migrate,
     BridgeInjector.migrate,
+    OffscreenDocumentMigrator.migrate,
+    ListenerAnalyzer.migrate,
     InterestingnessScorer.migrate,
     WriteMigrated.migrate,
 ];
 ```
 
+| Module                      | Purpose                                                                       |
+| --------------------------- | ----------------------------------------------------------------------------- |
+| `WebRequestMigrator`        | Converts blocking `webRequest` API to `declarativeNetRequest`                 |
+| `MigrateManifest`           | Converts MV2 manifest to MV3 format (permissions, actions, service workers)   |
+| `MigrateCSP`                | Migrates Content Security Policy to MV3 requirements                          |
+| `RenameAPIS`                | Renames deprecated Chrome API calls to MV3 equivalents                        |
+| `BridgeInjector`            | Injects compatibility bridges for background-to-content communication         |
+| `OffscreenDocumentMigrator` | Handles offscreen document requirements for DOM operations in service workers |
+| `ListenerAnalyzer`          | Extracts event listeners for analysis                                         |
+| `InterestingnessScorer`     | Calculates "interestingness" scores for prioritization                        |
+| `WriteMigrated`             | Writes migrated extensions to disk                                            |
+
 Modules are stored in `migrator/modules/` and get applied one after the other to the extension in the same order as they are defined in the array.
 
 Each module **must** implement the abstract class of `MigrationModule` found in `migrator/types/migration_module.ts`. This class provides a migrate function that takes an extension as a parameter and returns either the modified extension or a migration error.
 In addition to this mandatory function a module can include any arbitrary amount of code, however keep in mind that `migrate` is always the main entry point.
+
+### Project Structure
+
+```
+ExtPorter/
+├── migrator/                    # TypeScript migration server
+│   ├── index.ts                 # Entry point
+│   ├── modules/                 # Migration modules
+│   │   ├── manifest/            # Manifest migration
+│   │   ├── web_request_migrator/# webRequest to declarativeNetRequest
+│   │   ├── api_renames/         # API renaming
+│   │   ├── bridge_injector/     # Compatibility bridges
+│   │   ├── offscreen_documents/ # Offscreen document handling
+│   │   ├── csp/                 # Content Security Policy migration
+│   │   ├── listener_analyzer/   # Event listener extraction
+│   │   ├── interestingness_scorer/ # Extension scoring
+│   │   └── write_extension/     # Write migrated extensions
+│   ├── features/                # Core features
+│   │   ├── server/              # WebSocket server
+│   │   ├── database/            # MongoDB integration
+│   │   └── llm/                 # LLM integration
+│   ├── types/                   # TypeScript type definitions
+│   └── utils/                   # Utility functions
+├── ext_analyzer/                # Rust TUI client
+│   ├── src/
+│   │   ├── main.rs              # Entry point
+│   │   ├── app.rs               # Application state
+│   │   └── tabs/                # UI tabs (migrator, explorer, analyzer, reports)
+│   └── Cargo.toml               # Rust dependencies
+├── tests/                       # Test suites
+│   ├── unit/                    # Unit tests
+│   └── integration/             # Integration tests
+├── scripts/                     # Utility scripts
+├── docker-compose.yml           # Docker configuration
+└── package.json                 # Node.js dependencies
+```
 
 ### Chrome Web Store Metadata Extraction
 
@@ -261,3 +327,32 @@ For more scripts look in `package.json`.
 - `yarn test:full` - Run all tests
 - `yarn test:unit` - Run unit tests only
 - `yarn test:integration` - Run integration tests
+
+### LLM Integration
+
+ExtPorter supports AI-powered features for enhanced migration and analysis:
+
+**Features:**
+
+- **Description Generation**: Automatically generate extension descriptions using LLM
+- **Extension Fixing**: AI-assisted fixing of migration errors
+
+**Setup:**
+
+1. The server uses GitHub Copilot authentication via the OpenCode SDK
+2. On first start, the server will prompt you to authenticate with GitHub
+3. Follow the instructions printed to stdout to complete authentication
+
+**Configuration:**
+
+Add the following to your `.env` file:
+
+```bash
+LLM_MODEL=gpt-4o  # or your preferred model
+```
+
+For local LLM support with Ollama, configure:
+
+```bash
+OLLAMA_ENDPOINT=http://localhost:11434
+```
