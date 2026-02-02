@@ -47,5 +47,9 @@ dist
 .env
 
 # Rust build artifacts
-ext_analyzer_rust/target
-ext_analyzer_rust/Cargo.lock
+ext_analyzer/target
+
+# Generated files
+*.csv
+*.heapsnapshot
+__pycache__
