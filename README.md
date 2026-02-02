@@ -89,7 +89,7 @@ The easiest way to run ExtPorter is using Docker for the server and a native cli
 
     ```bash
     # Use the provided script to ensure proper file ownership
-    docker-compose.sh up -d
+    docker-compose up -d
     ```
 
     This will start:
