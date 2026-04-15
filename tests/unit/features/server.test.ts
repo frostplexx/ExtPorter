@@ -7,6 +7,7 @@ describe('MigrationServer Database API', () => {
     let server: MigrationServer;
     let ws: WebSocket;
     let serverStarted = false;
+    let testPort: number;
     const testGlobals = {
         extensionsPath: '/tmp/test-extensions',
         outputDir: '/tmp/test-output',
@@ -32,8 +33,22 @@ describe('MigrationServer Database API', () => {
             return;
         }
 
+        // Pick a random available port to avoid EADDRINUSE when tests run in parallel
+        testPort = await new Promise<number>((resolve, reject) => {
+            const net = require('net');
+            const srv = net.createServer();
+            srv.listen(0, '127.0.0.1', () => {
+                const port = (srv.address() as any).port;
+                srv.close((err?: Error) => {
+                    if (err) reject(err);
+                    else resolve(port);
+                });
+            });
+            srv.on('error', reject);
+        });
+
         // Start server
-        server = new MigrationServer(testGlobals);
+        server = new MigrationServer(testGlobals, testPort);
         server.start();
         serverStarted = true;
 
@@ -60,7 +75,7 @@ describe('MigrationServer Database API', () => {
             return;
         }
 
-        ws = new WebSocket('ws://localhost:8080');
+        ws = new WebSocket(`ws://localhost:${testPort}`);
 
         ws.on('open', () => {
             expect(ws.readyState).toBe(WebSocket.OPEN);
@@ -89,7 +104,7 @@ describe('MigrationServer Database API', () => {
             return;
         }
 
-        ws = new WebSocket('ws://localhost:8080');
+        ws = new WebSocket(`ws://localhost:${testPort}`);
 
         ws.on('open', () => {
             const request = {
@@ -139,7 +154,7 @@ describe('MigrationServer Database API', () => {
             return;
         }
 
-        ws = new WebSocket('ws://localhost:8080');
+        ws = new WebSocket(`ws://localhost:${testPort}`);
 
         ws.on('open', () => {
             const request = {
@@ -199,7 +214,7 @@ describe('MigrationServer Database API', () => {
             return;
         }
 
-        ws = new WebSocket('ws://localhost:8080');
+        ws = new WebSocket(`ws://localhost:${testPort}`);
 
         ws.on('open', () => {
             const request = {
