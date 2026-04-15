@@ -226,6 +226,76 @@ describe('MigrateManifest', () => {
                     expect(result.manifest.action).toBeUndefined();
                 }
             });
+
+            it('should remove chrome_style from browser_action', async () => {
+                baseExtension.manifest.browser_action = {
+                    default_popup: 'popup.html',
+                    chrome_style: true,
+                };
+
+                const result = await MigrateManifest.migrate(baseExtension);
+
+                expect(result).not.toBeInstanceOf(MigrationError);
+                if (!(result instanceof MigrationError)) {
+                    expect(result.manifest.action).toBeDefined();
+                    expect(result.manifest.action.chrome_style).toBeUndefined();
+                    expect(result.manifest.action.default_popup).toBe('popup.html');
+                }
+            });
+
+            it('should remove chrome_style from page_action', async () => {
+                baseExtension.manifest.page_action = {
+                    default_title: 'My Action',
+                    chrome_style: false,
+                };
+
+                const result = await MigrateManifest.migrate(baseExtension);
+
+                expect(result).not.toBeInstanceOf(MigrationError);
+                if (!(result instanceof MigrationError)) {
+                    expect(result.manifest.action).toBeDefined();
+                    expect(result.manifest.action.chrome_style).toBeUndefined();
+                    expect(result.manifest.action.default_title).toBe('My Action');
+                }
+            });
+
+            it('should remove chrome_style when merging both browser_action and page_action', async () => {
+                baseExtension.manifest.browser_action = {
+                    default_popup: 'popup.html',
+                    chrome_style: true,
+                };
+                baseExtension.manifest.page_action = {
+                    default_title: 'Page Action',
+                    chrome_style: false,
+                };
+
+                const result = await MigrateManifest.migrate(baseExtension);
+
+                expect(result).not.toBeInstanceOf(MigrationError);
+                if (!(result instanceof MigrationError)) {
+                    expect(result.manifest.action).toBeDefined();
+                    expect(result.manifest.action.chrome_style).toBeUndefined();
+                    expect(result.manifest.action.default_popup).toBe('popup.html');
+                    expect(result.manifest.action.default_title).toBe('Page Action');
+                }
+            });
+
+            it('should migrate action without chrome_style unchanged', async () => {
+                baseExtension.manifest.browser_action = {
+                    default_popup: 'popup.html',
+                    default_icon: { 16: 'icon16.png' },
+                };
+
+                const result = await MigrateManifest.migrate(baseExtension);
+
+                expect(result).not.toBeInstanceOf(MigrationError);
+                if (!(result instanceof MigrationError)) {
+                    expect(result.manifest.action).toEqual({
+                        default_popup: 'popup.html',
+                        default_icon: { 16: 'icon16.png' },
+                    });
+                }
+            });
         });
 
         describe('background migration', () => {
