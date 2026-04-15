@@ -56,7 +56,7 @@ flate2 = "1.0"
 tempfile = "3.10"
 
 # Hashing for cache validation
-md-5 = "0.10"
+md-5 = "0.11"
 
 # Unix socket for kitty
 libc = "0.2"
