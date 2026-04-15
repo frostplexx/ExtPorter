@@ -7,7 +7,7 @@ description = "Terminal UI client for ExtPorter migration framework"
 
 [dependencies]
 # TUI framework
-ratatui = "0.29"
+ratatui = "0.30"
 crossterm = "0.29"
 tachyonfx = "0.20"
 
