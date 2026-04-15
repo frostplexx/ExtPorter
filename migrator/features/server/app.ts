@@ -71,10 +71,10 @@ export class MigrationServer {
     private cleanupInterval: NodeJS.Timeout | null = null;
     private readonly cleanupIntervalMs = 60 * 1000; // Run cleanup every minute
 
-    constructor(globals: Globals) {
+    constructor(globals: Globals, port: number = 8080) {
         this.globals = globals;
         this.server = new WebSocketServer({
-            port: 8080,
+            port,
             maxPayload: 100 * 1024 * 1024, // 100MB max payload size
         });
 

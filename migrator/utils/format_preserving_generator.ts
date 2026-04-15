@@ -1,13 +1,12 @@
 import * as escodegen from 'escodegen';
+import * as espree from 'espree';
 import * as ESTree from 'estree';
-import { logger } from './logger';
 
 /**
  * Utility for generating JavaScript code while attempting to preserve
  * original formatting characteristics like indentation style and comments
  */
 export class FormatPreservingGenerator {
-
     /**
      * Analyze the original source code to detect formatting preferences
      */
@@ -85,7 +84,6 @@ export class FormatPreservingGenerator {
         };
     }
 
-
     /**
      * Generate JavaScript code with formatting that matches the original source
      */
@@ -93,12 +91,62 @@ export class FormatPreservingGenerator {
         ast: ESTree.Node,
         originalSource: string
     ): string {
+        // Honor PRESERVE_COMMENTS=false environment variable
+        const preserveComments = process.env.PRESERVE_COMMENTS !== 'false';
 
         const formatting = this.analyzeFormatting(originalSource);
 
+        // Attach comments from the original source to the AST so escodegen can emit them.
+        // espree stores comments on ast.comments but does not attach them to individual nodes;
+        // escodegen.attachComments() requires both the comment list and the token list to
+        // determine where each comment belongs relative to code tokens.
+        if (preserveComments) {
+            try {
+                // Re-parse the original source with tokens to obtain positional token data.
+                // We only need tokens+comments from the original source – the (potentially
+                // transformed) ast nodes already carry correct range/loc information.
+                const reparsed = espree.parse(originalSource, {
+                    ecmaVersion: 'latest',
+                    sourceType: 'script',
+                    loc: true,
+                    range: true,
+                    comment: true,
+                    tokens: true,
+                } as any);
+
+                // attachComments mutates ast in-place, annotating each node with
+                // leadingComments / trailingComments arrays.
+                (escodegen as any).attachComments(
+                    ast,
+                    (reparsed as any).comments || [],
+                    (reparsed as any).tokens || []
+                );
+            } catch {
+                // If re-parsing fails (e.g. module syntax), try module sourceType
+                try {
+                    const reparsed = espree.parse(originalSource, {
+                        ecmaVersion: 'latest',
+                        sourceType: 'module',
+                        loc: true,
+                        range: true,
+                        comment: true,
+                        tokens: true,
+                    } as any);
+
+                    (escodegen as any).attachComments(
+                        ast,
+                        (reparsed as any).comments || [],
+                        (reparsed as any).tokens || []
+                    );
+                } catch {
+                    // Fall through: generate without comments rather than throwing
+                }
+            }
+        }
+
         // Generate code with preserved formatting
         const generated = escodegen.generate(ast, {
-            comment: true,
+            comment: preserveComments,
             format: {
                 indent: {
                     style: formatting.indentStyle,
