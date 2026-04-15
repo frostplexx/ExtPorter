@@ -45,10 +45,7 @@ export function makeCSPStringCompliant(csp: string): string {
             directiveName === 'object-src' ||
             directiveName === 'worker-src'
         ) {
-            const compliantValues = filterCompliantValues(
-                directiveValues,
-                allowedValues
-            );
+            const compliantValues = filterCompliantValues(directiveValues, allowedValues);
 
             // Ensure at least 'self' is present if no compliant values remain
             if (compliantValues.length === 0) {
@@ -116,16 +113,10 @@ function filterCompliantValues(values: string[], allowedValues: Set<string>): st
             continue;
         }
 
-        // Skip any other values (they are non-compliant):
-        // - 'unsafe-eval'
-        // - 'unsafe-inline'
-        // - Remote URLs
-        // - Wildcards
-        // - Hash or nonce values (should be kept, but checking for them)
-        if (valueLower.startsWith("'sha") || valueLower.startsWith("'nonce-")) {
-            // Hashes and nonces are allowed in MV3
-            compliantValues.push(value);
-        }
+        // Hash ('sha256-...', 'sha384-...', 'sha512-...') and nonce ('nonce-...') sources
+        // are NOT permitted in extension_pages CSP in MV3. Chrome rejects them at install
+        // time. They are silently dropped here so the migrated manifest is accepted.
+        // (They are only valid in the 'sandbox' CSP directive.)
     }
 
     return compliantValues;

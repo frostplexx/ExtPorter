@@ -67,6 +67,12 @@ export class cspValidator {
             return false;
         }
 
+        // Hash and nonce sources are not allowed in extension_pages CSP in MV3.
+        // Chrome rejects extensions at install time if these are present.
+        if (/'sha\d+-/i.test(scriptSrcValue) || /'nonce-/i.test(scriptSrcValue)) {
+            return false;
+        }
+
         // Check for bare file paths (paths that don't start with quotes or special schemes)
         // File paths like "script.js" or "path/to/file.js" are not allowed
         const tokens = scriptSrcValue.split(/\s+/);
