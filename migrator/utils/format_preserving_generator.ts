@@ -620,7 +620,7 @@ export class FormatPreservingGenerator {
 
         // Generate code with preserved formatting
         const generated = escodegen.generate(ast, {
-            comment: false, // We'll handle comments manually
+            comment: true,
             format: {
                 indent: {
                     style: formatting.indentStyle,

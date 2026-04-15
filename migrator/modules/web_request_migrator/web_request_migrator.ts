@@ -709,6 +709,7 @@ export class WebRequestMigrator implements MigrationModule {
                         sourceType: 'script',
                         loc: true,
                         range: true,
+                        comment: true
                     });
                 } catch {
                     return undefined;

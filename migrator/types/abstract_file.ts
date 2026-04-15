@@ -65,6 +65,7 @@ export class LazyFile implements AbstractFile {
                     sourceType: 'script',
                     loc: true,
                     range: true,
+                    comment: true
                 } as any) as ESTree.Program;
             } catch (scriptError) {
                 // Fallback: try parsing as module if script parsing fails
@@ -74,6 +75,7 @@ export class LazyFile implements AbstractFile {
                         sourceType: 'module',
                         loc: true,
                         range: true,
+                        comment: true
                     } as any) as ESTree.Program;
                 } catch {
                     throw scriptError; // Throw original error
@@ -229,6 +231,7 @@ export function createTransformedFile(
                     sourceType: 'script',
                     loc: true,
                     range: true,
+                    comment: true
                 } as any) as ESTree.Program;
             } catch {
                 try {
@@ -237,6 +240,7 @@ export function createTransformedFile(
                         sourceType: 'module',
                         loc: true,
                         range: true,
+                        comment: true
                     } as any) as ESTree.Program;
                 } catch {
                     // Parsing failed
@@ -352,6 +356,8 @@ export function createNewFile(
                     sourceType: 'script',
                     loc: true,
                     range: true,
+
+                    comment: true
                 } as any) as ESTree.Program;
             } catch {
                 try {
@@ -360,6 +366,7 @@ export function createNewFile(
                         sourceType: 'module',
                         loc: true,
                         range: true,
+                        comment: true
                     } as any) as ESTree.Program;
                 } catch {
                     // Parsing failed
