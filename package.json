@@ -45,7 +45,7 @@
     "dependencies": {
         "@opencode-ai/sdk": "^1.0.129",
         "@types/escodegen": "^0.0.10",
-        "@types/espree": "^10.1.0",
+        "@types/espree": "^11.0.0",
         "@types/estree": "^1.0.8",
         "@types/inquirer": "^9.0.9",
         "@types/mongodb": "^4.0.7",
