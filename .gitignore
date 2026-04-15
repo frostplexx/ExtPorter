@@ -1,5 +1,6 @@
 *logs/*
 migrator/output/*
+tests/
 migrator/extensions
 migrator/node_modules
 ext_analyzer/target
