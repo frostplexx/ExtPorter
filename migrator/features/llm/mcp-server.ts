@@ -12,7 +12,9 @@ export class MCPServer {
 
     constructor(extensionDir: string) {
         // Convert to absolute path, normalize, and remove trailing slash for consistent comparisons
-        this.extensionDir = path.normalize(path.resolve(extensionDir)).replace(/[\/\\]+$/, '');
+        this.extensionDir = path
+            .normalize(path.resolve(extensionDir))
+            .replace(new RegExp('[\\/]+$'), '');
         this.allowedOperations = new Set(['read_file', 'write_file', 'list_files']);
 
         logger.info(null, `MCP Server initialized with extension directory: ${this.extensionDir}`);

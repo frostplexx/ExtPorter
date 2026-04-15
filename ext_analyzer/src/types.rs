@@ -11,6 +11,8 @@ pub enum AppEvent {
     WebSocketBinaryMessage(Vec<u8>),
     WebSocketError(String),
     SendWebSocketMessage(String),
+    /// Internal event to clear the extensions loading flag (timeout/fallback)
+    ClearExtensionsLoading,
     #[allow(dead_code)]
     ExtensionsLoaded(Vec<Extension>),
     SwitchToTab(usize),
@@ -24,6 +26,7 @@ pub enum AppEvent {
     LLMFixStarted(String),                  // extension_id
     LLMFixSuccess(String, String),          // (extension_id, modified_files_json)
     LLMFixError(String, String),            // (extension_id, error)
+    InvalidateExtensionCache(String),       // extension_id - invalidate cache after LLM fix
 
     // Extension download events
     DownloadExtension(String),        // extension_id - request download
@@ -116,11 +119,11 @@ pub struct CwsDetails {
     pub size: Option<String>,
     #[serde(default)]
     pub languages: Vec<String>,
-    #[serde(default)]
+    #[serde(default, rename = "userCount")]
     pub user_count: Option<String>,
     #[serde(default)]
     pub rating: Option<String>,
-    #[serde(default)]
+    #[serde(default, rename = "ratingCount")]
     pub rating_count: Option<String>,
     #[serde(default)]
     pub website: Option<String>,
@@ -134,9 +137,9 @@ pub struct CwsImages {
     pub logo: Option<String>,
     #[serde(default)]
     pub screenshots: Vec<String>,
-    #[serde(default)]
+    #[serde(default, rename = "videoThumbnails")]
     pub video_thumbnails: Vec<String>,
-    #[serde(default)]
+    #[serde(default, rename = "videoEmbeds")]
     pub video_embeds: Vec<String>,
 }
 
@@ -230,6 +233,12 @@ pub struct ExtensionStats {
 pub struct ExtensionsWithStats {
     pub extensions: Vec<Extension>,
     pub stats: ExtensionStats,
+    #[serde(default)]
+    pub page: Option<usize>,
+    #[serde(default, rename = "pageSize")]
+    pub page_size: Option<usize>,
+    #[serde(default, rename = "totalPages")]
+    pub total_pages: Option<usize>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]

@@ -19,9 +19,11 @@ export const extensionUtils = {
         // Close all file descriptors for LazyFile objects
         extension.files.forEach((file) => {
             try {
-                file.close();
+                if (file) {
+                    file.close();
+                }
             } catch (error) {
-                logger.warn(extension, `Error closing file ${file.path}:`, error);
+                logger.warn(extension, `Error closing file ${file?.path}:`, error);
             }
         });
     },

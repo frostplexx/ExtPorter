@@ -21,6 +21,9 @@ export class ListenerAnalyzer implements MigrationModule {
                 listeners: listeners.slice(0, 10), // Log first 10 for debugging
             });
 
+            // NOTE: Do NOT call releaseMemory() or close() here!
+            // Files are written asynchronously by WriteQueue and closed by Writer.writeFiles()
+
             return extension;
         } catch (error) {
             logger.error(extension, 'Failed to extract event listeners', { error });

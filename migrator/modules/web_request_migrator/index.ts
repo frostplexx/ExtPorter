@@ -1,4 +1,5 @@
 import { Extension } from '../../types/extension';
+import { AbstractFile } from '../../types/abstract_file';
 import { MigrationError, MigrationModule } from '../../types/migration_module';
 import { logger } from '../../utils/logger';
 import { Tags } from '../../types/tags';
@@ -72,7 +73,7 @@ export class WebRequestMigrator implements MigrationModule {
             }
 
             // Transform JavaScript files to comment out migrated webRequest calls
-            let finalFiles = transformWebRequestFiles(extension, webRequestUsages);
+            let finalFiles: AbstractFile[] = transformWebRequestFiles(extension, webRequestUsages);
 
             // Create rules.json file if we have static rules
             if (staticRules.length > 0) {
@@ -120,6 +121,10 @@ export class WebRequestMigrator implements MigrationModule {
                     updatedExtension.tags.push(dnrTag);
                 }
             }
+
+
+            // NOTE: Do NOT call releaseMemory() or close() here!
+            // Files are written asynchronously by WriteQueue and closed by Writer.writeFiles()
 
             return updatedExtension;
         } catch (error) {

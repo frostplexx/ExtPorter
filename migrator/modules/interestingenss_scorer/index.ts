@@ -27,6 +27,10 @@ export class InterestingnessScorer implements MigrationModule {
             // Add feature/characteristic tags based on analysis
             await FeatureTagger.addFeatureTags(extension, score.breakdown);
 
+
+            // NOTE: Do NOT call releaseMemory() or close() here!
+            // Files are written asynchronously by WriteQueue and closed by Writer.writeFiles()
+
             return extension;
         } catch (error) {
             logger.error(extension, 'Failed to calculate interestingness score', {

@@ -13,6 +13,11 @@ export class WriteMigrated implements MigrationModule {
                 extensionId: extension.id,
             });
 
+            // NOTE: Do NOT call releaseMemory() or close() here!
+            // The WriteQueue processes files asynchronously, and closing them here
+            // would release the content before the writer can access it.
+            // The Writer.writeFiles() handles cleanup in its finally block.
+
             return extension;
         } catch (error) {
             logger.error(extension, 'Failed to queue extension for writing', {

@@ -1,5 +1,5 @@
 import { Extension } from '../../types/extension';
-import { LazyFile } from '../../types/abstract_file';
+import { AbstractFile } from '../../types/abstract_file';
 import { ServiceWorkerInjector } from './service_worker_injector';
 import { HtmlInjector } from './html_injector';
 import { logger } from '../../utils/logger';
@@ -12,11 +12,11 @@ export function injectBridgeIntoManifest(
     manifest: any,
     bridgeFilename: string,
     extension?: Extension
-): { updatedManifest: any; transformedFiles: Map<string, LazyFile> } {
+): { updatedManifest: any; transformedFiles: Map<string, AbstractFile> } {
     const updatedManifest = JSON.parse(JSON.stringify(manifest));
 
     // Track transformed files to replace in extension.files
-    const transformedFiles: Map<string, LazyFile> = new Map();
+    const transformedFiles: Map<string, AbstractFile> = new Map();
 
     // Inject into background service worker
     if (updatedManifest.background && updatedManifest.background.service_worker) {
@@ -149,10 +149,10 @@ export function injectBridgeIntoManifest(
             }
         }
 
-        // Replace files in extension.files with transformed versions
+        // Replace files in `extension.files` with transformed versions
         if (transformedFiles.size > 0) {
             extension.files = extension.files.map((file) =>
-                transformedFiles.has(file.path) ? transformedFiles.get(file.path)! : file
+                transformedFiles.has(file!.path) ? transformedFiles.get(file!.path)! : file
             );
         }
     }

@@ -61,7 +61,7 @@ pub fn render_list_mode(
 }
 
 fn render_stats_bar(f: &mut Frame, area: &ratatui::layout::Rect, state: &AppState) {
-    let stats = Paragraph::new(Line::from(vec![
+    let mut spans = vec![
         Span::styled("Total:", Style::default().fg(state.theme.stats_total)),
         Span::raw(format!(" {} ", state.extension_stats.total)),
         Span::styled(
@@ -69,7 +69,17 @@ fn render_stats_bar(f: &mut Frame, area: &ratatui::layout::Rect, state: &AppStat
             Style::default().fg(state.theme.stats_avg_score),
         ),
         Span::raw(format!(" {:.1}", state.extension_stats.avg_score)),
-    ]));
+    ];
+
+    if state.loading_extensions {
+        spans.push(Span::raw("  "));
+        spans.push(Span::styled(
+            "Loading...",
+            Style::default().fg(state.theme.search_label),
+        ));
+    }
+
+    let stats = Paragraph::new(Line::from(spans));
 
     f.render_widget(stats, *area);
 }

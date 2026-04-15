@@ -1,6 +1,6 @@
 import * as espree from 'espree';
 import { Extension } from '../../types/extension';
-import { LazyFile } from '../../types/abstract_file';
+import { AbstractFile, LazyFile } from '../../types/abstract_file';
 import { logger } from '../../utils/logger';
 import { WebRequestUsage } from './types';
 
@@ -10,9 +10,9 @@ import { WebRequestUsage } from './types';
 export function transformWebRequestFiles(
     extension: Extension,
     webRequestUsages: WebRequestUsage[]
-): LazyFile[] {
+): AbstractFile[] {
     // Group usages by file
-    const usagesByFile = new Map<LazyFile, WebRequestUsage[]>();
+    const usagesByFile = new Map<AbstractFile, WebRequestUsage[]>();
     for (const usage of webRequestUsages) {
         if (!usagesByFile.has(usage.file)) {
             usagesByFile.set(usage.file, []);
@@ -20,8 +20,15 @@ export function transformWebRequestFiles(
         usagesByFile.get(usage.file)!.push(usage);
     }
 
+
     // Transform files that have webRequest usages
     return extension.files.map((file) => {
+
+        if (!file) {
+            logger.error(extension, "File is null")
+            return;
+        }
+
         const usages = usagesByFile.get(file);
         if (!usages || usages.length === 0) {
             return file; // No changes needed
@@ -88,13 +95,20 @@ export function transformWebRequestFiles(
         transformedFile._transformedContent = modifiedContent;
         transformedFile._absolutePath = (file as any)._absolutePath;
 
+        // Cache buffer for efficient access
+        const contentBuffer = Buffer.from(modifiedContent, 'utf8');
+
         // Override methods to work with transformed content
         transformedFile.getContent = () => modifiedContent;
-        transformedFile.getSize = () => Buffer.byteLength(modifiedContent, 'utf8');
-        transformedFile.getBuffer = () => Buffer.from(modifiedContent, 'utf8');
+        transformedFile.getBuffer = () => contentBuffer;
+        transformedFile.getSize = () => contentBuffer.length;
         transformedFile.close = () => {
             /* No-op for in-memory content */
         };
+        transformedFile.releaseMemory = () => {
+            /* No-op for in-memory content */
+        };
+        transformedFile.cleanContent = () => transformedFile;
         transformedFile.getAST = () => {
             try {
                 return espree.parse(modifiedContent, {
@@ -108,10 +122,12 @@ export function transformWebRequestFiles(
             }
         };
 
-        logger.info(
-            extension,
-            `Commented out ${usages.length} webRequest call(s) in ${file.path}`
-        );
+        // Release memory from original file since we now have transformed content
+        if (file.releaseMemory) {
+            file.releaseMemory();
+        }
+
+        logger.info(extension, `Commented out ${usages.length} webRequest call(s) in ${file.path}`);
 
         return transformedFile;
     });

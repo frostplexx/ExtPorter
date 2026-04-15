@@ -1,11 +1,11 @@
-import { LazyFile } from '../../types/abstract_file';
+import { AbstractFile } from '../../types/abstract_file';
 
 /**
  * Represents a webRequest API usage found in the code
  */
 export interface WebRequestUsage {
     node: any;
-    file: LazyFile;
+    file: AbstractFile;
     eventType: string;
     callback: any;
     filter: any;

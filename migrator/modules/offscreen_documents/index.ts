@@ -70,7 +70,7 @@ export class OffscreenDocumentMigrator implements MigrationModule {
 
             // Check if offscreen document files already exist
             const hasOffscreenHTML = extension.files.some(
-                (file) => file.path === OffscreenFileCreator.OFFSCREEN_HTML_FILENAME
+                (file) => file!.path === OffscreenFileCreator.OFFSCREEN_HTML_FILENAME
             );
 
             // If offscreen files already exist and no other migrations are needed, return unchanged
@@ -107,7 +107,7 @@ export class OffscreenDocumentMigrator implements MigrationModule {
 
                 if (transformedServiceWorker) {
                     updatedFiles = updatedFiles.map((file) =>
-                        file.path === transformedServiceWorker.path
+                        file!.path === transformedServiceWorker.path
                             ? transformedServiceWorker
                             : file
                     );
@@ -138,7 +138,8 @@ export class OffscreenDocumentMigrator implements MigrationModule {
 
                 if (transformedServiceWorker) {
                     updatedFiles = updatedFiles.map((file) =>
-                        file.path === transformedServiceWorker.path
+                        file!.path === transformedServiceWorker.path
+
                             ? transformedServiceWorker
                             : file
                     );
@@ -175,6 +176,10 @@ export class OffscreenDocumentMigrator implements MigrationModule {
                     updatedExtension.tags.push(offscreenTag);
                 }
             }
+
+
+            // NOTE: Do NOT call releaseMemory() or close() here!
+            // Files are written asynchronously by WriteQueue and closed by Writer.writeFiles()
 
             return updatedExtension;
         } catch (error) {

@@ -68,7 +68,7 @@ describe('RenameAPIS', () => {
 
             expect(result).not.toBeInstanceOf(MigrationError);
             if (!(result instanceof MigrationError)) {
-                const backgroundFile = result.files.find((f) => f.path === 'background.js');
+                const backgroundFile = result.files.find((f) => f!.path === 'background.js');
                 expect(backgroundFile).toBeDefined();
 
                 if (backgroundFile) {
@@ -80,9 +80,9 @@ describe('RenameAPIS', () => {
                 }
             }
 
-            extension.files.forEach((file) => file.close());
+            extension.files.forEach((file) => { if (file) { file.close() } });
             if (!(result instanceof MigrationError)) {
-                result.files.forEach((file) => file.close());
+                result.files.forEach((file) => { if (file) { file.close() } });
             }
         });
 
@@ -102,7 +102,7 @@ describe('RenameAPIS', () => {
 
             expect(result).not.toBeInstanceOf(MigrationError);
             if (!(result instanceof MigrationError)) {
-                const contentFile = result.files.find((f) => f.path === 'content.js');
+                const contentFile = result.files.find((f) => f!.path === 'content.js');
                 expect(contentFile).toBeDefined();
 
                 if (contentFile) {
@@ -114,9 +114,9 @@ describe('RenameAPIS', () => {
                 }
             }
 
-            extension.files.forEach((file) => file.close());
+            extension.files.forEach((file) => { if (file) { file.close() } });
             if (!(result instanceof MigrationError)) {
-                result.files.forEach((file) => file.close());
+                result.files.forEach((file) => { if (file) { file.close() } });
             }
         });
 
@@ -155,7 +155,7 @@ describe('RenameAPIS', () => {
 
             expect(result).not.toBeInstanceOf(MigrationError);
             if (!(result instanceof MigrationError)) {
-                const popupFile = result.files.find((f) => f.path === 'popup.js');
+                const popupFile = result.files.find((f) => f!.path === 'popup.js');
                 expect(popupFile).toBeDefined();
 
                 if (popupFile) {
@@ -176,9 +176,9 @@ describe('RenameAPIS', () => {
                 }
             }
 
-            extension.files.forEach((file) => file.close());
+            extension.files.forEach((file) => { if (file) { file.close() } });
             if (!(result instanceof MigrationError)) {
-                result.files.forEach((file) => file.close());
+                result.files.forEach((file) => { if (file) { file.close() } });
             }
         });
 
@@ -208,7 +208,7 @@ describe('RenameAPIS', () => {
 
             expect(result).not.toBeInstanceOf(MigrationError);
             if (!(result instanceof MigrationError)) {
-                const backgroundFile = result.files.find((f) => f.path === 'background.js');
+                const backgroundFile = result.files.find((f) => f!.path === 'background.js');
                 expect(backgroundFile).toBeDefined();
 
                 if (backgroundFile) {
@@ -227,9 +227,9 @@ describe('RenameAPIS', () => {
                 }
             }
 
-            extension.files.forEach((file) => file.close());
+            extension.files.forEach((file) => { if (file) { file.close() } });
             if (!(result instanceof MigrationError)) {
-                result.files.forEach((file) => file.close());
+                result.files.forEach((file) => { if (file) { file.close() } });
             }
         });
 
@@ -256,7 +256,7 @@ describe('RenameAPIS', () => {
 
             expect(result).not.toBeInstanceOf(MigrationError);
             if (!(result instanceof MigrationError)) {
-                const utilityFile = result.files.find((f) => f.path === 'utility.js');
+                const utilityFile = result.files.find((f) => f!.path === 'utility.js');
                 expect(utilityFile).toBeDefined();
 
                 if (utilityFile) {
@@ -267,9 +267,9 @@ describe('RenameAPIS', () => {
                 }
             }
 
-            extension.files.forEach((file) => file.close());
+            extension.files.forEach((file) => { if (file) { file.close() } });
             if (!(result instanceof MigrationError)) {
-                result.files.forEach((file) => file.close());
+                result.files.forEach((file) => { if (file) { file.close() } });
             }
         });
 
@@ -290,28 +290,32 @@ describe('RenameAPIS', () => {
             ]);
 
             // Override file types
-            extension.files[1].filetype = ExtFileType.CSS;
-            extension.files[2].filetype = ExtFileType.OTHER;
+            if (extension.files[1] && extension.files[2]) {
+                extension.files[1].filetype = ExtFileType.CSS;
+                extension.files[2].filetype = ExtFileType.OTHER;
+            } else {
+                return
+            }
 
             const result = await RenameAPIS.migrate(extension);
 
             expect(result).not.toBeInstanceOf(MigrationError);
             if (!(result instanceof MigrationError)) {
                 // JS file should be processed
-                const jsFile = result.files.find((f) => f.path === 'script.js');
+                const jsFile = result.files.find((f) => f!.path === 'script.js');
                 expect(jsFile?.getContent()).toContain('chrome.action.onClicked');
 
                 // CSS and JSON files should remain unchanged
-                const cssFile = result.files.find((f) => f.path === 'style.css');
+                const cssFile = result.files.find((f) => f!.path === 'style.css');
                 expect(cssFile?.getContent()).toBe('body { color: red; }');
 
-                const jsonFile = result.files.find((f) => f.path === 'data.json');
+                const jsonFile = result.files.find((f) => f!.path === 'data.json');
                 expect(jsonFile?.getContent()).toBe('{"key": "value"}');
             }
 
-            extension.files.forEach((file) => file.close());
+            extension.files.forEach((file) => { if (file) { file.close() } });
             if (!(result instanceof MigrationError)) {
-                result.files.forEach((file) => file.close());
+                result.files.forEach((file) => { if (file) { file.close() } });
             }
         });
 
@@ -340,7 +344,7 @@ describe('RenameAPIS', () => {
 
             expect(result).not.toBeInstanceOf(MigrationError);
             if (!(result instanceof MigrationError)) {
-                const file = result.files.find((f) => f.path === 'edge-cases.js');
+                const file = result.files.find((f) => f!.path === 'edge-cases.js');
                 expect(file).toBeDefined();
 
                 if (file) {
@@ -368,9 +372,9 @@ describe('RenameAPIS', () => {
                 }
             }
 
-            extension.files.forEach((file) => file.close());
+            extension.files.forEach((file) => { if (file) { file.close() } });
             if (!(result instanceof MigrationError)) {
-                result.files.forEach((file) => file.close());
+                result.files.forEach((file) => { if (file) { file.close() } });
             }
         });
 
@@ -419,9 +423,9 @@ describe('RenameAPIS', () => {
                 expect(result.manifest_v2_path).toBe(extension.manifest_v2_path);
             }
 
-            extension.files.forEach((file) => file.close());
+            extension.files.forEach((file) => { if (file) { file.close() } });
             if (!(result instanceof MigrationError)) {
-                result.files.forEach((file) => file.close());
+                result.files.forEach((file) => { if (file) { file.close() } });
             }
         });
 
@@ -468,7 +472,7 @@ describe('RenameAPIS', () => {
 
             expect(result).not.toBeInstanceOf(MigrationError);
             if (!(result instanceof MigrationError)) {
-                const file = result.files.find((f) => f.path === 'issue11.js');
+                const file = result.files.find((f) => f!.path === 'issue11.js');
                 expect(file).toBeDefined();
 
                 if (file) {
@@ -502,9 +506,9 @@ describe('RenameAPIS', () => {
                 }
             }
 
-            extension.files.forEach((file) => file.close());
+            extension.files.forEach((file) => { if (file) { file.close() } });
             if (!(result instanceof MigrationError)) {
-                result.files.forEach((file) => file.close());
+                result.files.forEach((file) => { if (file) { file.close() } });
             }
         });
 
@@ -565,7 +569,7 @@ describe('RenameAPIS', () => {
 
             expect(result).not.toBeInstanceOf(MigrationError);
             if (!(result instanceof MigrationError)) {
-                const file = result.files.find((f) => f.path === 'issue9.js');
+                const file = result.files.find((f) => f!.path === 'issue9.js');
                 expect(file).toBeDefined();
 
                 if (file) {
@@ -608,9 +612,9 @@ describe('RenameAPIS', () => {
                 }
             }
 
-            extension.files.forEach((file) => file.close());
+            extension.files.forEach((file) => { if (file) { file.close() } });
             if (!(result instanceof MigrationError)) {
-                result.files.forEach((file) => file.close());
+                result.files.forEach((file) => { if (file) { file.close() } });
             }
         });
 
@@ -653,7 +657,7 @@ describe('RenameAPIS', () => {
 
             expect(result).not.toBeInstanceOf(MigrationError);
             if (!(result instanceof MigrationError)) {
-                const file = result.files.find((f) => f.path === 'edge-cases.js');
+                const file = result.files.find((f) => f!.path === 'edge-cases.js');
                 expect(file).toBeDefined();
 
                 if (file) {
@@ -673,9 +677,9 @@ describe('RenameAPIS', () => {
                 }
             }
 
-            extension.files.forEach((file) => file.close());
+            extension.files.forEach((file) => { if (file) { file.close() } });
             if (!(result instanceof MigrationError)) {
-                result.files.forEach((file) => file.close());
+                result.files.forEach((file) => { if (file) { file.close() } });
             }
         });
 
@@ -711,9 +715,9 @@ chrome.pageAction.setTitle({
 
 // Additional content to make the file large
 ${'// Padding comment line '
-    .repeat(10)
-    .split(' ')
-    .join(' segment ' + segmentIndex + ' ')}
+                    .repeat(10)
+                    .split(' ')
+                    .join(' segment ' + segmentIndex + ' ')}
 
 // Functions and variables in segment ${segmentIndex}
 function segment${segmentIndex}Function() {
@@ -789,7 +793,7 @@ chrome.pageAction.setIcon({
 
             expect(result).not.toBeInstanceOf(MigrationError);
             if (!(result instanceof MigrationError)) {
-                const migratedFile = result.files.find((f) => f.path === 'large-background.js');
+                const migratedFile = result.files.find((f) => f!.path === 'large-background.js');
                 expect(migratedFile).toBeDefined();
 
                 if (migratedFile) {
@@ -903,9 +907,9 @@ chrome.pageAction.setIcon({
                 }
             }
 
-            extension.files.forEach((file) => file.close());
+            extension.files.forEach((file) => { if (file) { file.close() } });
             if (!(result instanceof MigrationError)) {
-                result.files.forEach((file) => file.close());
+                result.files.forEach((file) => { if (file) { file.close() } });
             }
         });
 
@@ -931,7 +935,7 @@ chrome.pageAction.setIcon({
 
             expect(result).not.toBeInstanceOf(MigrationError);
             if (!(result instanceof MigrationError)) {
-                const backgroundFile = result.files.find((f) => f.path === 'background.js');
+                const backgroundFile = result.files.find((f) => f!.path === 'background.js');
                 expect(backgroundFile).toBeDefined();
 
                 if (backgroundFile) {
@@ -949,9 +953,9 @@ chrome.pageAction.setIcon({
                 }
             }
 
-            extension.files.forEach((file) => file.close());
+            extension.files.forEach((file) => { if (file) { file.close() } });
             if (!(result instanceof MigrationError)) {
-                result.files.forEach((file) => file.close());
+                result.files.forEach((file) => { if (file) { file.close() } });
             }
         });
 
@@ -979,7 +983,7 @@ chrome.pageAction.setIcon({
 
             expect(result).not.toBeInstanceOf(MigrationError);
             if (!(result instanceof MigrationError)) {
-                const popupFile = result.files.find((f) => f.path === 'popup.js');
+                const popupFile = result.files.find((f) => f!.path === 'popup.js');
                 expect(popupFile).toBeDefined();
 
                 if (popupFile) {
@@ -999,9 +1003,9 @@ chrome.pageAction.setIcon({
                 }
             }
 
-            extension.files.forEach((file) => file.close());
+            extension.files.forEach((file) => { if (file) { file.close() } });
             if (!(result instanceof MigrationError)) {
-                result.files.forEach((file) => file.close());
+                result.files.forEach((file) => { if (file) { file.close() } });
             }
         });
 
@@ -1026,7 +1030,7 @@ chrome.pageAction.setIcon({
 
             expect(result).not.toBeInstanceOf(MigrationError);
             if (!(result instanceof MigrationError)) {
-                const contentFile = result.files.find((f) => f.path === 'content.js');
+                const contentFile = result.files.find((f) => f!.path === 'content.js');
                 expect(contentFile).toBeDefined();
 
                 if (contentFile) {
@@ -1046,9 +1050,9 @@ chrome.pageAction.setIcon({
                 }
             }
 
-            extension.files.forEach((file) => file.close());
+            extension.files.forEach((file) => { if (file) { file.close() } });
             if (!(result instanceof MigrationError)) {
-                result.files.forEach((file) => file.close());
+                result.files.forEach((file) => { if (file) { file.close() } });
             }
         });
 
@@ -1075,7 +1079,7 @@ chrome.pageAction.setIcon({
 
             expect(result).not.toBeInstanceOf(MigrationError);
             if (!(result instanceof MigrationError)) {
-                const backgroundFile = result.files.find((f) => f.path === 'background.js');
+                const backgroundFile = result.files.find((f) => f!.path === 'background.js');
                 expect(backgroundFile).toBeDefined();
 
                 if (backgroundFile) {
@@ -1096,9 +1100,9 @@ chrome.pageAction.setIcon({
                 }
             }
 
-            extension.files.forEach((file) => file.close());
+            extension.files.forEach((file) => { if (file) { file.close() } });
             if (!(result instanceof MigrationError)) {
-                result.files.forEach((file) => file.close());
+                result.files.forEach((file) => { if (file) { file.close() } });
             }
         });
 
@@ -1126,7 +1130,7 @@ chrome.pageAction.setIcon({
 
             expect(result).not.toBeInstanceOf(MigrationError);
             if (!(result instanceof MigrationError)) {
-                const popupFile = result.files.find((f) => f.path === 'popup.js');
+                const popupFile = result.files.find((f) => f!.path === 'popup.js');
                 expect(popupFile).toBeDefined();
 
                 if (popupFile) {
@@ -1147,9 +1151,9 @@ chrome.pageAction.setIcon({
                 }
             }
 
-            extension.files.forEach((file) => file.close());
+            extension.files.forEach((file) => { if (file) { file.close() } });
             if (!(result instanceof MigrationError)) {
-                result.files.forEach((file) => file.close());
+                result.files.forEach((file) => { if (file) { file.close() } });
             }
         });
 
@@ -1172,7 +1176,7 @@ chrome.pageAction.setIcon({
                 if (!(result instanceof MigrationError)) {
                     // All webpack files should remain unchanged (blacklisted)
                     webpackFiles.forEach(({ name, content }) => {
-                        const file = result.files.find((f) => f.path === name);
+                        const file = result.files.find((f) => f!.path === name);
                         expect(file).toBeDefined();
                         if (file) {
                             expect(file.getContent()).toBe(content);
@@ -1190,9 +1194,9 @@ chrome.pageAction.setIcon({
                     });
                 }
 
-                extension.files.forEach((file) => file.close());
+                extension.files.forEach((file) => { if (file) { file.close() } });
                 if (!(result instanceof MigrationError)) {
-                    result.files.forEach((file) => file.close());
+                    result.files.forEach((file) => { if (file) { file.close() } });
                 }
             });
 
@@ -1227,7 +1231,7 @@ chrome.pageAction.setIcon({
 
                 expect(result).not.toBeInstanceOf(MigrationError);
                 if (!(result instanceof MigrationError)) {
-                    const file = result.files.find((f) => f.path === 'mysterious-file.js');
+                    const file = result.files.find((f) => f!.path === 'mysterious-file.js');
                     expect(file).toBeDefined();
                     if (file) {
                         // Should be detected as webpack by content and remain unchanged
@@ -1236,9 +1240,9 @@ chrome.pageAction.setIcon({
                     }
                 }
 
-                extension.files.forEach((file) => file.close());
+                extension.files.forEach((file) => { if (file) { file.close() } });
                 if (!(result instanceof MigrationError)) {
-                    result.files.forEach((file) => file.close());
+                    result.files.forEach((file) => { if (file) { file.close() } });
                 }
             });
 
@@ -1264,7 +1268,7 @@ chrome.pageAction.setIcon({
                 // The system should handle webpack bundles properly by blacklisting them
                 // and providing appropriate logging (this test verifies no crashes occur)
                 if (!(result instanceof MigrationError)) {
-                    const file = result.files.find((f) => f.path === 'large-bundle.js');
+                    const file = result.files.find((f) => f!.path === 'large-bundle.js');
                     expect(file).toBeDefined();
                     if (file) {
                         // Should remain unchanged due to webpack detection
@@ -1273,9 +1277,9 @@ chrome.pageAction.setIcon({
                     }
                 }
 
-                extension.files.forEach((file) => file.close());
+                extension.files.forEach((file) => { if (file) { file.close() } });
                 if (!(result instanceof MigrationError)) {
-                    result.files.forEach((file) => file.close());
+                    result.files.forEach((file) => { if (file) { file.close() } });
                 }
             });
 
@@ -1297,18 +1301,18 @@ chrome.pageAction.setIcon({
 
                 if (!(result instanceof MigrationError)) {
                     // Regular files should be transformed
-                    const backgroundFile = result.files.find((f) => f.path === 'background.js');
+                    const backgroundFile = result.files.find((f) => f!.path === 'background.js');
                     expect(backgroundFile?.getContent()).toContain('chrome.action');
 
                     // Webpack bundle should remain unchanged
-                    const bundleFile = result.files.find((f) => f.path === 'webpack.bundle.js');
+                    const bundleFile = result.files.find((f) => f!.path === 'webpack.bundle.js');
                     expect(bundleFile?.getContent()).toContain('__webpack_require__');
                     expect(bundleFile?.getContent()).toContain('chrome.pageAction'); // Not transformed
                 }
 
-                extension.files.forEach((file) => file.close());
+                extension.files.forEach((file) => { if (file) { file.close() } });
                 if (!(result instanceof MigrationError)) {
-                    result.files.forEach((file) => file.close());
+                    result.files.forEach((file) => { if (file) { file.close() } });
                 }
             });
 
@@ -1333,22 +1337,22 @@ chrome.pageAction.setIcon({
                 expect(result).not.toBeInstanceOf(MigrationError);
                 if (!(result instanceof MigrationError)) {
                     // Regular files should be transformed
-                    const backgroundFile = result.files.find((f) => f.path === 'background.js');
+                    const backgroundFile = result.files.find((f) => f!.path === 'background.js');
                     expect(backgroundFile?.getContent()).toContain('chrome.action');
                     expect(backgroundFile?.getContent()).not.toContain('chrome.browserAction');
 
-                    const contentFile = result.files.find((f) => f.path === 'content.js');
+                    const contentFile = result.files.find((f) => f!.path === 'content.js');
                     expect(contentFile?.getContent()).toContain('chrome.scripting.executeScript');
                     expect(contentFile?.getContent()).not.toContain('chrome.tabs.executeScript');
 
                     // Webpack bundle should remain unchanged
-                    const bundleFile = result.files.find((f) => f.path === 'vendor.bundle.js');
+                    const bundleFile = result.files.find((f) => f!.path === 'vendor.bundle.js');
                     expect(bundleFile?.getContent()).toContain('__webpack_require__');
                 }
 
-                extension.files.forEach((file) => file.close());
+                extension.files.forEach((file) => { if (file) { file.close() } });
                 if (!(result instanceof MigrationError)) {
-                    result.files.forEach((file) => file.close());
+                    result.files.forEach((file) => { if (file) { file.close() } });
                 }
             });
 
@@ -1377,9 +1381,9 @@ chrome.pageAction.setIcon({
                 const result = await RenameAPIS.migrate(extension);
                 expect(result).not.toBeInstanceOf(MigrationError);
 
-                extension.files.forEach((file) => file.close());
+                extension.files.forEach((file) => { if (file) { file.close() } });
                 if (!(result instanceof MigrationError)) {
-                    result.files.forEach((file) => file.close());
+                    result.files.forEach((file) => { if (file) { file.close() } });
                 }
             });
         });
@@ -1405,7 +1409,7 @@ chrome.contextMenus.create({
 
                 expect(result).not.toBeInstanceOf(MigrationError);
                 if (!(result instanceof MigrationError)) {
-                    const backgroundFile = result.files.find((f) => f.path === 'background.js');
+                    const backgroundFile = result.files.find((f) => f!.path === 'background.js');
                     expect(backgroundFile).toBeDefined();
 
                     if (backgroundFile) {
@@ -1424,9 +1428,9 @@ chrome.contextMenus.create({
                     }
                 }
 
-                extension.files.forEach((file) => file.close());
+                extension.files.forEach((file) => { if (file) { file.close() } });
                 if (!(result instanceof MigrationError)) {
-                    result.files.forEach((file) => file.close());
+                    result.files.forEach((file) => { if (file) { file.close() } });
                 }
             });
 
@@ -1453,7 +1457,7 @@ function handleCopyText(info, tab) {
 
                 expect(result).not.toBeInstanceOf(MigrationError);
                 if (!(result instanceof MigrationError)) {
-                    const backgroundFile = result.files.find((f) => f.path === 'background.js');
+                    const backgroundFile = result.files.find((f) => f!.path === 'background.js');
                     expect(backgroundFile).toBeDefined();
 
                     if (backgroundFile) {
@@ -1472,9 +1476,9 @@ function handleCopyText(info, tab) {
                     }
                 }
 
-                extension.files.forEach((file) => file.close());
+                extension.files.forEach((file) => { if (file) { file.close() } });
                 if (!(result instanceof MigrationError)) {
-                    result.files.forEach((file) => file.close());
+                    result.files.forEach((file) => { if (file) { file.close() } });
                 }
             });
 
@@ -1500,7 +1504,7 @@ chrome.contextMenus.create({
 
                 expect(result).not.toBeInstanceOf(MigrationError);
                 if (!(result instanceof MigrationError)) {
-                    const backgroundFile = result.files.find((f) => f.path === 'background.js');
+                    const backgroundFile = result.files.find((f) => f!.path === 'background.js');
                     expect(backgroundFile).toBeDefined();
 
                     if (backgroundFile) {
@@ -1519,9 +1523,9 @@ chrome.contextMenus.create({
                     }
                 }
 
-                extension.files.forEach((file) => file.close());
+                extension.files.forEach((file) => { if (file) { file.close() } });
                 if (!(result instanceof MigrationError)) {
-                    result.files.forEach((file) => file.close());
+                    result.files.forEach((file) => { if (file) { file.close() } });
                 }
             });
 
@@ -1549,7 +1553,7 @@ chrome.contextMenus.onClicked.addListener(function(info, tab) {
 
                 expect(result).not.toBeInstanceOf(MigrationError);
                 if (!(result instanceof MigrationError)) {
-                    const backgroundFile = result.files.find((f) => f.path === 'background.js');
+                    const backgroundFile = result.files.find((f) => f!.path === 'background.js');
                     expect(backgroundFile).toBeDefined();
 
                     if (backgroundFile) {
@@ -1561,9 +1565,9 @@ chrome.contextMenus.onClicked.addListener(function(info, tab) {
                     }
                 }
 
-                extension.files.forEach((file) => file.close());
+                extension.files.forEach((file) => { if (file) { file.close() } });
                 if (!(result instanceof MigrationError)) {
-                    result.files.forEach((file) => file.close());
+                    result.files.forEach((file) => { if (file) { file.close() } });
                 }
             });
         });
@@ -1587,7 +1591,7 @@ chrome.runtime.onInstalled.addListener(function(details) {
 
                 expect(result).not.toBeInstanceOf(MigrationError);
                 if (!(result instanceof MigrationError)) {
-                    const backgroundFile = result.files.find((f) => f.path === 'background.js');
+                    const backgroundFile = result.files.find((f) => f!.path === 'background.js');
                     expect(backgroundFile).toBeDefined();
 
                     if (backgroundFile) {
@@ -1602,9 +1606,9 @@ chrome.runtime.onInstalled.addListener(function(details) {
                     }
                 }
 
-                extension.files.forEach((file) => file.close());
+                extension.files.forEach((file) => { if (file) { file.close() } });
                 if (!(result instanceof MigrationError)) {
-                    result.files.forEach((file) => file.close());
+                    result.files.forEach((file) => { if (file) { file.close() } });
                 }
             });
 
@@ -1625,7 +1629,7 @@ function openWelcomePage() {
 
                 expect(result).not.toBeInstanceOf(MigrationError);
                 if (!(result instanceof MigrationError)) {
-                    const backgroundFile = result.files.find((f) => f.path === 'background.js');
+                    const backgroundFile = result.files.find((f) => f!.path === 'background.js');
                     expect(backgroundFile).toBeDefined();
 
                     if (backgroundFile) {
@@ -1637,9 +1641,9 @@ function openWelcomePage() {
                     }
                 }
 
-                extension.files.forEach((file) => file.close());
+                extension.files.forEach((file) => { if (file) { file.close() } });
                 if (!(result instanceof MigrationError)) {
-                    result.files.forEach((file) => file.close());
+                    result.files.forEach((file) => { if (file) { file.close() } });
                 }
             });
 
@@ -1660,7 +1664,7 @@ chrome.browserAction.onClicked.addListener(function() {
 
                 expect(result).not.toBeInstanceOf(MigrationError);
                 if (!(result instanceof MigrationError)) {
-                    const backgroundFile = result.files.find((f) => f.path === 'background.js');
+                    const backgroundFile = result.files.find((f) => f!.path === 'background.js');
                     expect(backgroundFile).toBeDefined();
 
                     if (backgroundFile) {
@@ -1675,9 +1679,9 @@ chrome.browserAction.onClicked.addListener(function() {
                     }
                 }
 
-                extension.files.forEach((file) => file.close());
+                extension.files.forEach((file) => { if (file) { file.close() } });
                 if (!(result instanceof MigrationError)) {
-                    result.files.forEach((file) => file.close());
+                    result.files.forEach((file) => { if (file) { file.close() } });
                 }
             });
 
@@ -1701,7 +1705,7 @@ function openAbout() {
 
                 expect(result).not.toBeInstanceOf(MigrationError);
                 if (!(result instanceof MigrationError)) {
-                    const backgroundFile = result.files.find((f) => f.path === 'background.js');
+                    const backgroundFile = result.files.find((f) => f!.path === 'background.js');
                     expect(backgroundFile).toBeDefined();
 
                     if (backgroundFile) {
@@ -1715,9 +1719,9 @@ function openAbout() {
                     }
                 }
 
-                extension.files.forEach((file) => file.close());
+                extension.files.forEach((file) => { if (file) { file.close() } });
                 if (!(result instanceof MigrationError)) {
-                    result.files.forEach((file) => file.close());
+                    result.files.forEach((file) => { if (file) { file.close() } });
                 }
             });
 
@@ -1737,7 +1741,7 @@ function openInNewWindow() {
 
                 expect(result).not.toBeInstanceOf(MigrationError);
                 if (!(result instanceof MigrationError)) {
-                    const backgroundFile = result.files.find((f) => f.path === 'background.js');
+                    const backgroundFile = result.files.find((f) => f!.path === 'background.js');
                     expect(backgroundFile).toBeDefined();
 
                     if (backgroundFile) {
@@ -1756,9 +1760,9 @@ function openInNewWindow() {
                     }
                 }
 
-                extension.files.forEach((file) => file.close());
+                extension.files.forEach((file) => { if (file) { file.close() } });
                 if (!(result instanceof MigrationError)) {
-                    result.files.forEach((file) => file.close());
+                    result.files.forEach((file) => { if (file) { file.close() } });
                 }
             });
         });

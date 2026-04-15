@@ -10,6 +10,12 @@ export function calculateExtensionSize(extension: Extension, scores: Interesting
     let totalSize = 0;
 
     for (const file of extension.files) {
+
+        if(file == null){
+            console.error(extension, "File is null");
+            break;
+        }
+
         try {
             if (file.filetype === ExtFileType.OTHER) {
                 // For binary files, estimate size from buffer

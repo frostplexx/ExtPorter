@@ -77,9 +77,8 @@ export function parseCWSData(path_to_html: string): CWSData | null {
         };
 
         // Get logo from og:image meta tag or item logo
-        const logo = $('meta[property="og:image"]').attr('content') ||
-            $('.rBxtY').attr('src') ||
-            undefined;
+        const logo =
+            $('meta[property="og:image"]').attr('content') || $('.rBxtY').attr('src') || undefined;
 
         // Get screenshots from media carousel
         // Screenshots are in elements with data-media-url attribute and data-is-video="false"
@@ -104,7 +103,11 @@ export function parseCWSData(path_to_html: string): CWSData | null {
         // Get video embeds
         $('.d9kNsf[data-is-video="true"]').each((i, el) => {
             const mediaUrl = $(el).attr('data-media-url');
-            if (mediaUrl && mediaUrl.includes('youtube') && !images.videoEmbeds.includes(mediaUrl)) {
+            if (
+                mediaUrl &&
+                mediaUrl.includes('youtube') &&
+                !images.videoEmbeds.includes(mediaUrl)
+            ) {
                 images.videoEmbeds.push(mediaUrl);
             }
         });
@@ -141,10 +144,14 @@ export function parseCWSData(path_to_html: string): CWSData | null {
             const label = $(el).find('.nws2nb').text().trim();
             if (label === 'Languages') {
                 const languages: string[] = [];
-                $(el).find('div').not('.nws2nb').find('div').each((j, langEl) => {
-                    const lang = $(langEl).text().trim();
-                    if (lang) languages.push(lang);
-                });
+                $(el)
+                    .find('div')
+                    .not('.nws2nb')
+                    .find('div')
+                    .each((j, langEl) => {
+                        const lang = $(langEl).text().trim();
+                        if (lang) languages.push(lang);
+                    });
                 details.languages = languages;
             }
         });
@@ -163,6 +170,12 @@ export function parseCWSData(path_to_html: string): CWSData | null {
             if (match) {
                 details.ratingCount = match[1];
             }
+        }
+
+        // User count - extract from div with class F9iKBc (e.g., "2,000 users" or "5,000,000+ users")
+        const userCountEl = $('.F9iKBc');
+        if (userCountEl.length > 0) {
+            details.userCount = userCountEl.text().trim();
         }
 
         // Website
@@ -190,7 +203,6 @@ export function parseCWSData(path_to_html: string): CWSData | null {
             },
             details,
         };
-
     } catch (error) {
         logger.error(null, `Error parsing CWD HTML: ${error}`);
         return null;
