@@ -42,8 +42,6 @@ export class MigrateManifest implements MigrationModule {
             // Add MANIFEST_MIGRATED tag to extension object
             extension = extensionUtils.addTag(extension, Tags.MANIFEST_MIGRATED);
 
-
-
             return extension;
         } catch (error) {
             logger.error(extension, 'Failed to migrate manifest', {
@@ -51,7 +49,7 @@ export class MigrateManifest implements MigrationModule {
             });
             return new MigrationError(extension, error);
         }
-    };
+    }
 
     /**
      * Splits permissions into API permissions and host permissions
@@ -150,6 +148,11 @@ export class MigrateManifest implements MigrationModule {
         // Delete old keys
         delete extension.manifest['browser_action'];
         delete extension.manifest['page_action'];
+
+        // chrome_style is unsupported in MV3
+        if (extension.manifest['action']) {
+            delete extension.manifest['action']['chrome_style'];
+        }
     }
 
     /**
