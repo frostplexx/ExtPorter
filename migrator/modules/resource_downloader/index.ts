@@ -23,19 +23,12 @@ export class ResourceDownloader extends MigrationModule {
 
             logger.info(extension, 'Starting remote resource download');
 
-            // Close all file descriptors before downloading to prevent EBADF errors
-            // This is necessary because downloading uses execSync which needs file descriptors
-            logger.debug(extension, 'Closing file descriptors before download');
-            extension.files.forEach((file) => {
-                try {
-                    file.close();
-                } catch (error) {
-                    logger.error(extension, error as any);
-                    // Ignore errors when closing files
-                }
-            });
+
 
             const result = processExtension(extension);
+
+
+
 
             logger.info(extension, `Remote resource download completed`);
             return result;

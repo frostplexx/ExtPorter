@@ -29,6 +29,11 @@ export function updateReferencesToLocal(
 
     // Update file contents
     extension.files.forEach((file) => {
+
+        if (!file) {
+            logger.error(extension, "File is null");
+            return;
+        }
         if (
             file.filetype === ExtFileType.JS ||
             file.filetype === ExtFileType.CSS ||
@@ -53,10 +58,10 @@ export function updateReferencesToLocal(
                                 error:
                                     updateError instanceof Error
                                         ? {
-                                              message: updateError.message,
-                                              stack: updateError.stack,
-                                              name: updateError.name,
-                                          }
+                                            message: updateError.message,
+                                            stack: updateError.stack,
+                                            name: updateError.name,
+                                        }
                                         : String(updateError),
                             }
                         );

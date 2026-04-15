@@ -34,7 +34,14 @@ export class BridgeInjector implements MigrationModule {
 
             // Check if bridge is already injected
             const hasBridge = extension.files.some(
-                (file) => file.path === BridgeInjector.BRIDGE_FILENAME
+                (file) => {
+                    if (file == null) {
+                        logger.error(extension, "File is null");
+                        return
+                    }
+
+                    return file.path === BridgeInjector.BRIDGE_FILENAME
+                }
             );
             if (hasBridge) {
                 logger.debug(extension, 'Bridge already injected');
@@ -64,6 +71,9 @@ export class BridgeInjector implements MigrationModule {
             };
 
             updatedExtension = extensionUtils.addTag(updatedExtension, Tags.BRIDGE_INJECTED);
+
+
+
 
             return updatedExtension;
         } catch (error) {

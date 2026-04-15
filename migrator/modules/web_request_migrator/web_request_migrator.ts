@@ -1,9 +1,10 @@
 import { Extension } from '../../types/extension';
 import { MigrationError, MigrationModule } from '../../types/migration_module';
-import { LazyFile } from '../../types/abstract_file';
+import { AbstractFile, LazyFile } from '../../types/abstract_file';
 import { ExtFileType } from '../../types/ext_file_types';
 import { logger } from '../../utils/logger';
 import { Tags } from '../../types/tags';
+import { traverseAST, isWebRequestEventListener } from '../../utils/ast-utils';
 import * as espree from 'espree';
 import {
     Rule,
@@ -144,6 +145,12 @@ export class WebRequestMigrator implements MigrationModule {
         const usages: WebRequestUsage[] = [];
 
         for (const file of extension.files) {
+
+            if (!file) {
+                logger.error(extension, "File does not exist")
+                break;
+            }
+
             if (file.filetype !== ExtFileType.JS) {
                 continue;
             }
@@ -154,8 +161,8 @@ export class WebRequestMigrator implements MigrationModule {
             }
 
             // Traverse AST to find chrome.webRequest.* event listeners
-            WebRequestMigrator.traverseAST(ast, (node: any) => {
-                if (WebRequestMigrator.isWebRequestEventListener(node)) {
+            traverseAST(ast, (node: any) => {
+                if (isWebRequestEventListener(node)) {
                     const usage = WebRequestMigrator.extractWebRequestUsage(node, file);
                     // Only include blocking webRequest usages
                     if (
@@ -172,33 +179,12 @@ export class WebRequestMigrator implements MigrationModule {
         return usages;
     }
 
-    /**
-     * Check if an AST node is a webRequest event listener
-     */
-    private static isWebRequestEventListener(node: any): boolean {
-        // Pattern: chrome.webRequest.{event}.addListener(...)
-        if (
-            node.type === 'CallExpression' &&
-            node.callee?.type === 'MemberExpression' &&
-            node.callee.property?.name === 'addListener'
-        ) {
-            const obj = node.callee.object;
-            if (
-                obj?.type === 'MemberExpression' &&
-                obj.object?.type === 'MemberExpression' &&
-                obj.object.object?.name === 'chrome' &&
-                obj.object.property?.name === 'webRequest'
-            ) {
-                return true;
-            }
-        }
-        return false;
-    }
+
 
     /**
      * Extract webRequest usage information from an AST node
      */
-    private static extractWebRequestUsage(node: any, file: LazyFile): WebRequestUsage | null {
+    private static extractWebRequestUsage(node: any, file: AbstractFile): WebRequestUsage | null {
         const eventObj = node.callee.object;
         const eventType = eventObj.property?.name;
 
@@ -311,7 +297,7 @@ export class WebRequestMigrator implements MigrationModule {
         const patterns: string[] = [];
 
         // Check for various dynamic patterns
-        WebRequestMigrator.traverseAST(callbackBody, (node: any) => {
+        traverseAST(callbackBody, (node: any) => {
             // Conditional statements based on request properties
             if (node.type === 'IfStatement') {
                 patterns.push('conditional logic');
@@ -543,7 +529,7 @@ export class WebRequestMigrator implements MigrationModule {
                 }
             } else {
                 // Look for return statements in function body
-                WebRequestMigrator.traverseAST(body, (node: any) => {
+                traverseAST(body, (node: any) => {
                     if (node.type === 'ReturnStatement' && node.argument) {
                         const arg = node.argument;
                         if (arg.type === 'ObjectExpression') {
@@ -599,7 +585,7 @@ export class WebRequestMigrator implements MigrationModule {
     /**
      * Create a rules.json file
      */
-    private static createRulesFile(rules: Rule[]): LazyFile {
+    private static createRulesFile(rules: Rule[]): AbstractFile {
         // Chrome expects rules.json to be a direct array, not an object with a "rules" property
         const content = JSON.stringify(rules, null, 2);
 
@@ -627,9 +613,9 @@ export class WebRequestMigrator implements MigrationModule {
     private static transformWebRequestFiles(
         extension: Extension,
         webRequestUsages: WebRequestUsage[]
-    ): LazyFile[] {
+    ): AbstractFile[] {
         // Group usages by file
-        const usagesByFile = new Map<LazyFile, WebRequestUsage[]>();
+        const usagesByFile = new Map<AbstractFile, WebRequestUsage[]>();
         for (const usage of webRequestUsages) {
             if (!usagesByFile.has(usage.file)) {
                 usagesByFile.set(usage.file, []);
@@ -639,6 +625,10 @@ export class WebRequestMigrator implements MigrationModule {
 
         // Transform files that have webRequest usages
         return extension.files.map((file) => {
+            if (!file) {
+                logger.error(extension, "File is null");
+                return;
+            }
             const usages = usagesByFile.get(file);
             if (!usages || usages.length === 0) {
                 return file; // No changes needed
@@ -734,29 +724,6 @@ export class WebRequestMigrator implements MigrationModule {
         });
     }
 
-    /**
-     * Traverse AST using visitor pattern
-     */
-    private static traverseAST(node: any, visitor: (node: any) => void): void {
-        if (!node || typeof node !== 'object') {
-            return;
-        }
-
-        visitor(node);
-
-        for (const key in node) {
-            if (!Object.prototype.hasOwnProperty.call(node, key)) continue;
-
-            const value = node[key];
-            if (Array.isArray(value)) {
-                for (const item of value) {
-                    WebRequestMigrator.traverseAST(item, visitor);
-                }
-            } else if (typeof value === 'object') {
-                WebRequestMigrator.traverseAST(value, visitor);
-            }
-        }
-    }
 }
 
 /**
@@ -764,7 +731,7 @@ export class WebRequestMigrator implements MigrationModule {
  */
 interface WebRequestUsage {
     node: any;
-    file: LazyFile;
+    file: AbstractFile;
     eventType: string;
     callback: any;
     filter: any;

@@ -3,36 +3,38 @@ services:
         build:
             context: .
             dockerfile: Dockerfile
+            args:
+                USER_ID: ${UID:-424242}
+                GROUP_ID: ${GID:-424242}
         container_name: migrator-server
         restart: unless-stopped
-        # Run as host user to avoid permission issues with mounted volumes
-        user: '${UID:-1000}:${GID:-1000}'
         ports:
-            - '8080:8080' # Expose WebSocket server for client connections
+            - '8080:8080'
         env_file:
             - .env
         environment:
-            # Override specific variables for Docker environment
             - MONGODB_URI=mongodb://admin:password@mongodb:27017/migrator?authSource=admin
-            # Set paths to match volume mounts inside container
             - INPUT_DIR=/app/extensions
             - OUTPUT_DIR=/app/output
+            - CWS_DIR=/app/cws
+            - LOG_LEVEL=error
+            # Memory settings for Node.js - must match deploy.resources.limits.memory
+            - NODE_OPTIONS=--max-old-space-size=28672 --max-semi-space-size=512 --expose-gc
+        deploy:
+            resources:
+                limits:
+                    memory: 32G
+                reservations:
+                    memory: 8G
         volumes:
             - ./logs:/app/logs
-            # Mount host paths to standardized container paths
             - ${INPUT_DIR:-./extensions}:/app/extensions:ro
             - ${OUTPUT_DIR:-./output}:/app/output
+            - ${CWS_DIR:-./cws}:/app/cws
         depends_on:
             - mongodb
         networks:
             - migrator-network
-        # Add security options for Chrome/Puppeteer
-        privileged: true
-        security_opt:
-            - seccomp:unconfined
-            - label=disable
-        # Optionally add shared memory size for Chrome
-        shm_size: 2gb
 
     mongodb:
         image: mongo

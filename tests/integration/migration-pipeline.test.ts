@@ -64,11 +64,17 @@ describe('Migration Pipeline Integration Tests', () => {
                     if (resourceResult instanceof MigrationError) {
                         return;
                     }
-                    resourceResult.files.forEach((file) => file.close());
+                    resourceResult.files.forEach((file) => file!.close());
                 }
             }
 
-            extension.files.forEach((file: { close: () => any }) => file.close());
+            extension.files.forEach(
+                (file) => {
+                    if (file) {
+                        file.close()
+                    }
+                }
+            );
         });
     });
 
@@ -110,7 +116,7 @@ describe('Migration Pipeline Integration Tests', () => {
                     expect(fs.existsSync(remoteResourcesDir)).toBe(true);
 
                     // Verify that content was updated to use local resources
-                    const contentFile = resourceResult.files.find((f) => f.path === 'content.js');
+                    const contentFile = resourceResult.files.find((f) => f!.path === 'content.js');
                     expect(contentFile).toBeDefined();
                     if (contentFile) {
                         const content = contentFile.getContent();
@@ -118,7 +124,7 @@ describe('Migration Pipeline Integration Tests', () => {
                         expect(content).not.toContain('https://fonts.googleapis.com/');
                     }
 
-                    const cssFile = resourceResult.files.find((f) => f.path === 'content.css');
+                    const cssFile = resourceResult.files.find((f) => f!.path === 'content.css');
                     expect(cssFile).toBeDefined();
                     if (cssFile) {
                         const content = cssFile.getContent();
@@ -130,52 +136,12 @@ describe('Migration Pipeline Integration Tests', () => {
                 if (resourceResult instanceof MigrationError) {
                     return;
                 }
-                resourceResult.files.forEach((file) => file.close());
+                resourceResult.files.forEach((file) => { if (file) { file.close() } });
             }
 
-            extension.files.forEach((file: { close: () => any }) => file.close());
+            extension.files.forEach((file) => { if (file) { file.close() } });
         });
     });
-
-    // describe('New Tab Extension Migration', () => {
-    //     it('should correctly identify and migrate new tab extensions', async () => {
-    //         const extension = createTestExtension(SAMPLE_EXTENSIONS[2], testDir);
-    //
-    //         // Verify it's identified as a new tab extension
-    //         expect(extension.isNewTabExtension).toBeUndefined(); // Will be set by find_extensions in real scenario
-    //
-    //         // Manifest Migration
-    //         const manifestResult = await MigrateManifest.migrate(extension);
-    //         expect(manifestResult).not.toBeInstanceOf(MigrationError);
-    //
-    //         if (!(manifestResult instanceof MigrationError)) {
-    //             // New tab extensions should preserve chrome_url_overrides
-    //             expect(manifestResult.manifest.chrome_url_overrides).toBeDefined();
-    //             expect(manifestResult.manifest.chrome_url_overrides.newtab).toBe('newtab.html');
-    //
-    //             // Resource Downloader should process the Google Fonts in the HTML
-    //             const resourceResult = ResourceDownloader.migrate(manifestResult);
-    //             expect(resourceResult).not.toBeInstanceOf(MigrationError);
-    //
-    //             if (!(resourceResult instanceof MigrationError)) {
-    //                 const newtabFile = resourceResult.files.find((f) => f.path === 'newtab.html');
-    //                 expect(newtabFile).toBeDefined();
-    //                 if (newtabFile) {
-    //                     const content = newtabFile.getContent();
-    //                     expect(content).toContain('remote_resources/');
-    //                     expect(content).not.toContain('https://fonts.googleapis.com/');
-    //                 }
-    //             }
-    //
-    //             if (resourceResult instanceof MigrationError) {
-    //                 return;
-    //             }
-    //             resourceResult.files.forEach((file) => file.close());
-    //         }
-    //
-    //         extension.files.forEach((file: { close: () => any }) => file.close());
-    //     });
-    // });
 
     describe('Migration Error Handling', () => {
         it('should handle corrupted extension gracefully', async () => {
@@ -207,9 +173,11 @@ describe('Migration Pipeline Integration Tests', () => {
             const manifestResult = MigrateManifest.migrate(extensionWithMissingFiles);
             expect(manifestResult).not.toBeInstanceOf(MigrationError);
 
-            extensionWithMissingFiles.files.forEach((file: { close: () => void }) => {
+            extensionWithMissingFiles.files.forEach((file) => {
                 try {
-                    file.close();
+                    if (file) {
+                        file.close();
+                    }
                 } catch (error) {
                     console.log(error as any);
                     // Expected for missing files
@@ -217,51 +185,6 @@ describe('Migration Pipeline Integration Tests', () => {
             });
         });
     });
-
-    // describe('Migration Pipeline Consistency', () => {
-    //     it('should produce consistent results when run multiple times', async () => {
-    //         const extension1 = createTestExtension(SAMPLE_EXTENSIONS[1], testDir);
-    //         const extension2 = createTestExtension(
-    //             SAMPLE_EXTENSIONS[1],
-    //             path.join(testDir, 'second')
-    //         );
-    //
-    //         // Run pipeline on both extensions
-    //         const result1 = ResourceDownloader.migrate(
-    //             (await MigrateManifest.migrate(extension1)) as Extension
-    //         );
-    //         const result2 = ResourceDownloader.migrate(
-    //             (await MigrateManifest.migrate(extension2)) as Extension
-    //         );
-    //
-    //         expect(result1).not.toBeInstanceOf(MigrationError);
-    //         expect(result2).not.toBeInstanceOf(MigrationError);
-    //
-    //         if (!(result1 instanceof MigrationError) && !(result2 instanceof MigrationError)) {
-    //             // Both should have the same manifest structure
-    //             expect(result1.manifest.manifest_version).toBe(result2.manifest.manifest_version);
-    //             expect(result1.manifest.permissions).toEqual(result2.manifest.permissions);
-    //             expect(result1.manifest.host_permissions).toEqual(
-    //                 result2.manifest.host_permissions
-    //             );
-    //
-    //             // Both should have downloaded the same number of remote resources
-    //             const result1Downloads = result1.files.filter((f) =>
-    //                 f.path.startsWith('remote_resources/')
-    //             ).length;
-    //             const result2Downloads = result2.files.filter((f) =>
-    //                 f.path.startsWith('remote_resources/')
-    //             ).length;
-    //             expect(result1Downloads).toBe(result2Downloads);
-    //         }
-    //
-    //         [extension1, extension2].forEach((ext) =>
-    //             ext.files.forEach((file: { close: () => any }) => file.close())
-    //         );
-    //         if (!(result1 instanceof MigrationError)) result1.files.forEach((file) => file.close());
-    //         if (!(result2 instanceof MigrationError)) result2.files.forEach((file) => file.close());
-    //     });
-    // });
 
     describe('Migration Output Validation', () => {
         it('should create valid MV3 manifests', async () => {
@@ -318,7 +241,7 @@ describe('Migration Pipeline Integration Tests', () => {
                 expect(manifest.content_security_policy.extension_pages).toBeTruthy();
             }
 
-            extension.files.forEach((file: { close: () => any }) => file.close());
+            extension.files.forEach((file) => { if (file) { file.close() } });
         });
 
         it('should preserve important extension metadata', () => {
@@ -353,7 +276,7 @@ describe('Migration Pipeline Integration Tests', () => {
                     }
                 }
 
-                extension.files.forEach((file: { close: () => any }) => file.close());
+                extension.files.forEach((file) => { if (file) { file.close() } });
             });
         });
     });

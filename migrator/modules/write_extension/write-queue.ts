@@ -17,29 +17,17 @@ export class WriteQueue {
     private static instance: WriteQueue;
     private writeQueue: WriteTask[] = [];
     private isProcessing = false;
-    private readonly concurrentWrites = 10;
+    private readonly concurrentWrites = 5; // Reduced from 10 to lower memory pressure
+    private readonly MAX_QUEUE_SIZE = 5; // Reduced from 10 to limit memory usage
     private activeWriters = 0;
     private autoPro = true; // Auto-process queue (can be disabled for testing)
-    private readonly fileBatchSize = 50; // Number of files to write concurrently
+    private readonly fileBatchSize = 25; // Reduced from 50 for better memory management
 
     private constructor() {
-        // Handle graceful shutdown
+        // Handle graceful shutdown via beforeExit (non-signal cleanup)
+        // Note: SIGINT/SIGTERM handlers are centralized in index.ts to avoid duplicates
         process.on('beforeExit', async () => {
             await this.flush();
-        });
-
-        process.on('SIGINT', async () => {
-            console.log('Received SIGINT, flushing queues');
-            await this.flush();
-            await logger.flush();
-            process.exit(0);
-        });
-
-        process.on('SIGTERM', async () => {
-            console.log('Received SIGTERM, flushing queues');
-            await this.flush();
-            await logger.flush();
-            process.exit(0);
         });
     }
 
@@ -51,6 +39,10 @@ export class WriteQueue {
     }
 
     public async queueExtension(extension: Extension, priority: number = 0): Promise<void> {
+        // Block if queue is full
+        while (this.writeQueue.length >= this.MAX_QUEUE_SIZE) {
+            await new Promise(resolve => setTimeout(resolve, 100));
+        }
         const task: WriteTask = { extension, priority };
 
         this.insertTaskByPriority(task);

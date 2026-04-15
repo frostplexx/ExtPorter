@@ -1,6 +1,5 @@
 import { Extension } from '../../types/extension';
-import { LazyFile } from '../../types/abstract_file';
-import { FileTransformer } from './file_transformer';
+import { AbstractFile, createTransformedFile } from '../../types/abstract_file';
 import { logger } from '../../utils/logger';
 
 export class ServiceWorkerInjector {
@@ -12,9 +11,9 @@ export class ServiceWorkerInjector {
         extension: Extension,
         serviceWorkerPath: string,
         bridgeFilename: string
-    ): LazyFile | null {
+    ): AbstractFile | null {
         // Find the service worker file in the extension
-        const serviceWorkerFile = extension.files.find((file) => file.path === serviceWorkerPath);
+        const serviceWorkerFile = extension.files.find((file) => file!.path === serviceWorkerPath);
 
         if (!serviceWorkerFile) {
             logger.warn(extension, `Service worker file not found: ${serviceWorkerPath}`);
@@ -33,12 +32,13 @@ export class ServiceWorkerInjector {
             }
 
             // Prepend import statement
-            const newContent = `${importStatement}\n${currentContent}`;
+            const parts = [importStatement, currentContent];
+            const newContent = parts.join('\n');
 
             logger.info(extension, `Bridge injected into service worker: ${serviceWorkerPath}`);
 
             // Create and return transformed file (in memory only)
-            return FileTransformer.createTransformedFile(serviceWorkerFile, newContent);
+            return createTransformedFile(serviceWorkerFile, newContent);
         } catch (error) {
             logger.error(
                 extension,
@@ -47,10 +47,10 @@ export class ServiceWorkerInjector {
                     error:
                         error instanceof Error
                             ? {
-                                  message: error.message,
-                                  stack: error.stack,
-                                  name: error.name,
-                              }
+                                message: error.message,
+                                stack: error.stack,
+                                name: error.name,
+                            }
                             : String(error),
                 }
             );

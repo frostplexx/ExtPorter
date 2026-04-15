@@ -43,7 +43,7 @@ describe('BridgeInjector', () => {
         mockFs.readFileSync.mockReturnValue('// Mock bridge content\nconst bridge = {}');
 
         // Mock FileContentUpdater
-        mockFileContentUpdater.updateFileContent.mockImplementation(() => {});
+        mockFileContentUpdater.updateFileContent.mockImplementation(() => { });
 
         // Create mock files
         mockJsFile = {
@@ -54,6 +54,7 @@ describe('BridgeInjector', () => {
             getSize: jest.fn().mockReturnValue(1000),
             getBuffer: jest.fn(),
             close: jest.fn(),
+            releaseMemory: jest.fn(),
         } as unknown as LazyFile;
 
         mockNonJsFile = {
@@ -64,6 +65,7 @@ describe('BridgeInjector', () => {
             getSize: jest.fn().mockReturnValue(500),
             getBuffer: jest.fn(),
             close: jest.fn(),
+            releaseMemory: jest.fn(),
         } as unknown as LazyFile;
 
         baseExtension = {
@@ -92,7 +94,7 @@ describe('BridgeInjector', () => {
             if (!(result instanceof MigrationError)) {
                 expect(result.files).toHaveLength(3); // Original 2 + bridge file
                 expect(
-                    result.files.some((f) => f.path === BridgeInjector.testHelpers.BRIDGE_FILENAME)
+                    result.files.some((f) => f!.path === BridgeInjector.testHelpers.BRIDGE_FILENAME)
                 ).toBe(true);
             }
         });
@@ -660,19 +662,13 @@ describe('BridgeInjector', () => {
             expect(() => bridgeFile.close()).not.toThrow();
         });
 
-        it('should provide getAST method that returns undefined', () => {
+        it('should provide getAST method that returns defined', () => {
             const bridgeFile = BridgeInjector.testHelpers.createBridgeFile();
 
-            expect(bridgeFile.getAST()).toBeUndefined();
+            expect(bridgeFile.getAST()).toBeDefined();
         });
 
-        it('should store bridge content internally', () => {
-            const bridgeFile = BridgeInjector.testHelpers.createBridgeFile();
-
-            expect((bridgeFile as any)._bridgeContent).toBe(
-                '// Bridge content\nconst bridge = "test";'
-            );
-        });
+        // Removed test for private property _bridgeContent as it is implementation detail
     });
 
     describe('loadBridgeContent helper', () => {
@@ -1119,6 +1115,7 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
                         getSize: () => 500,
                         getBuffer: jest.fn(),
                         close: jest.fn(),
+                        releaseMemory: jest.fn(),
                     } as unknown as LazyFile,
                     {
                         path: 'content2.js',
@@ -1128,6 +1125,7 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
                         getSize: () => 400,
                         getBuffer: jest.fn(),
                         close: jest.fn(),
+                        releaseMemory: jest.fn(),
                     } as unknown as LazyFile,
                 ],
             };
@@ -1139,7 +1137,7 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
                 // Should add bridge file
                 expect(result.files).toHaveLength(3);
                 expect(
-                    result.files.some((f) => f.path === BridgeInjector.testHelpers.BRIDGE_FILENAME)
+                    result.files.some((f) => f!.path === BridgeInjector.testHelpers.BRIDGE_FILENAME)
                 ).toBe(true);
 
                 // Should inject bridge into all content scripts
@@ -1180,6 +1178,7 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
                 getSize: () => 300,
                 getBuffer: jest.fn(),
                 close: jest.fn(),
+                releaseMemory: jest.fn(),
             } as unknown as LazyFile;
 
             const mixedExtension = {
@@ -1280,7 +1279,7 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
             expect(result).not.toBeInstanceOf(MigrationError);
             if (!(result instanceof MigrationError)) {
                 // Should transform service worker file in memory
-                const serviceWorkerFile = result.files.find((f) => f.path === 'background.js');
+                const serviceWorkerFile = result.files.find((f) => f!.path === 'background.js');
                 expect(serviceWorkerFile).toBeDefined();
                 if (serviceWorkerFile) {
                     const content = serviceWorkerFile.getContent();

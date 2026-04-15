@@ -3,6 +3,7 @@ import { Extension } from '../../types/extension';
 import { Report } from '../../types/report';
 import { LLMFixAttempt } from '../../types/llm_fix_attempt';
 import { logger, LogLevel } from '../../utils/logger';
+import * as crypto from 'crypto';
 
 export enum Collections {
     EXTENSIONS = 'extensions',
@@ -29,6 +30,18 @@ export class Database {
     private pendingOperations: number = 0;
     private isProcessingQueue: boolean = false;
     private readonly maxConcurrentOperations: number = 10;
+    private readonly maxQueueSize: number = 1000; // Prevent unbounded queue growth
+
+    // Waiters used by enqueueOperation to avoid busy-waiting while the queue is full.
+    private queueWaiters: (() => void)[] = [];
+    private lastQueueWarnTime: number = 0;
+    private queueWasFull: boolean = false;
+    private readonly queueWarnIntervalMs: number =
+        Number(process.env.DB_QUEUE_WARN_INTERVAL_MS) || 5000;
+    private readonly queueWaitTimeoutMs: number =
+        Number(process.env.DB_QUEUE_WAIT_TIMEOUT_MS) || 30000;
+    // Maximum waiters to prevent unbounded memory growth under extreme load
+    private readonly maxQueueWaiters: number = 500;
 
     private constructor() {
         // Queue processor will be started after database initialization
@@ -38,6 +51,12 @@ export class Database {
         if (!process.env.MONGODB_URI) {
             throw Error('Could not find MONGODB_URI in environment');
         }
+
+        // Validate DB_NAME early so tests that expect failure do not hang on network connect
+        if (!process.env.DB_NAME) {
+            throw Error('Could not find DB_NAME in environment');
+        }
+
         this.client = new MongoClient(process.env.MONGODB_URI, {
             maxPoolSize: 10,
             minPoolSize: 2,
@@ -46,9 +65,6 @@ export class Database {
 
         try {
             await this.client.connect();
-            if (!process.env.DB_NAME) {
-                throw Error('Could not find DB_NAME in environment');
-            }
             this.database = this.client.db(process.env.DB_NAME);
 
             // Create collections upfront to avoid race conditions
@@ -100,61 +116,193 @@ export class Database {
     }
 
     /**
+     * Notify waiting enqueues that space is available.
+     * This wakes up up to N waiters where N = available slots.
+     */
+    private notifyWaiters() {
+        if (this.queueWaiters.length === 0) return;
+
+        while (this.operationQueue.length < this.maxQueueSize && this.queueWaiters.length > 0) {
+            const waiter = this.queueWaiters.shift();
+            if (!waiter) break;
+            try {
+                waiter();
+            } catch (err) {
+                logger.debug(null, 'Error invoking queue waiter:', err);
+            }
+        }
+
+        if (this.queueWasFull && this.operationQueue.length < this.maxQueueSize) {
+            logger.info(
+                null,
+                `Database queue drained (${this.operationQueue.length}/${this.maxQueueSize})`
+            );
+            this.queueWasFull = false;
+            this.lastQueueWarnTime = 0;
+        }
+    }
+
+    /**
      * Processes queued operations with concurrency control
      */
     private async processQueue() {
         while (this.isProcessingQueue) {
-            // Collect promises for operations we're starting
-            const activePromises: Promise<void>[] = [];
+            try {
+                // Collect promises for operations we're starting
+                const activePromises: Promise<void>[] = [];
 
-            // Process operations up to max concurrency
-            while (
-                this.operationQueue.length > 0 &&
-                this.pendingOperations < this.maxConcurrentOperations
-            ) {
-                const item = this.operationQueue.shift();
-                if (!item) continue;
+                // Process operations up to max concurrency
+                while (
+                    this.operationQueue.length > 0 &&
+                    this.pendingOperations < this.maxConcurrentOperations
+                ) {
+                    const item = this.operationQueue.shift();
+                    if (!item) continue;
 
-                this.pendingOperations++;
-                const promise = item
-                    .operation()
-                    .then((result) => {
-                        item.resolve(result);
-                    })
-                    .catch((error) => {
-                        item.reject(error);
-                    })
-                    .finally(() => {
-                        this.pendingOperations--;
-                    });
+                    // A slot in the queue was freed, notify any waiters
+                    this.notifyWaiters();
 
-                activePromises.push(promise);
-            }
+                    this.pendingOperations++;
+                    const promise = item
+                        .operation()
+                        .then((result) => {
+                            item.resolve(result);
+                        })
+                        .catch((error) => {
+                            item.reject(error);
+                        })
+                        .finally(() => {
+                            this.pendingOperations--;
+                            // Notify waiters in case space freed up
+                            this.notifyWaiters();
+                        });
 
-            // Wait for at least one operation to complete or a short timeout
-            if (activePromises.length > 0) {
-                await Promise.race([
-                    Promise.all(activePromises),
-                    new Promise((resolve) => setTimeout(resolve, 10)),
-                ]);
-            } else {
-                // No operations to process, wait a bit before checking again
-                await new Promise((resolve) => setTimeout(resolve, 10));
+                    activePromises.push(promise);
+                }
+
+                // Wait for at least one operation to complete or a short timeout
+                if (activePromises.length > 0) {
+                    await Promise.race([
+                        Promise.all(activePromises),
+                        new Promise((resolve) => setTimeout(resolve, 10)),
+                    ]);
+                } else {
+                    // No operations to process, wait a bit before checking again
+                    await new Promise((resolve) => setTimeout(resolve, 50));
+                }
+            } catch (error) {
+                // Catch any unexpected error so the queue processor doesn't crash the process
+                logger.error(null, 'Error processing database queue:', error);
+                // Back off briefly to avoid tight error loops
+                await new Promise((resolve) => setTimeout(resolve, 1000));
             }
         }
     }
 
     /**
-     * Enqueues a database operation to be executed
+     * Enqueues a database operation to be executed.
+     * Implements backpressure by waiting when queue is full.
      */
-    private enqueueOperation<T>(operation: () => Promise<T>): Promise<T> {
+    private async enqueueOperation<T>(operation: () => Promise<T>): Promise<T> {
+        if (this.isShuttingDown) {
+            throw new Error('Database is shutting down');
+        }
+
+        // Quick path: if there's room, enqueue immediately
+        if (this.operationQueue.length < this.maxQueueSize) {
+            return new Promise<T>((resolve, reject) => {
+                if (this.isShuttingDown) {
+                    reject(new Error('Database is shutting down'));
+                    return;
+                }
+                this.operationQueue.push({ operation, resolve, reject });
+            });
+        }
+
+        // Rate-limited warning
+        const now = Date.now();
+        if (now - this.lastQueueWarnTime > this.queueWarnIntervalMs) {
+            logger.warn(
+                null,
+                `Database queue full (${this.operationQueue.length}/${this.maxQueueSize}), waiting for drain...`
+            );
+            this.lastQueueWarnTime = now;
+            this.queueWasFull = true;
+        }
+
+        // Reject immediately if too many waiters are already queued (prevents unbounded memory growth)
+        if (this.queueWaiters.length >= this.maxQueueWaiters) {
+            logger.error(
+                null,
+                `Database waiter queue full (${this.queueWaiters.length}/${this.maxQueueWaiters}), rejecting operation`
+            );
+            return Promise.reject(
+                new Error(`Database waiter queue full (${this.maxQueueWaiters} waiters)`)
+            );
+        }
+
+        // Wait for space up to configured timeout. If timeout expires, reject to prevent indefinite blocking.
         return new Promise<T>((resolve, reject) => {
             if (this.isShuttingDown) {
                 reject(new Error('Database is shutting down'));
                 return;
             }
-            this.operationQueue.push({ operation, resolve, reject });
+
+            let timeoutId: NodeJS.Timeout | undefined;
+            let resolved = false;
+
+            const waiter = () => {
+                if (resolved) return;
+                if (timeoutId) {
+                    clearTimeout(timeoutId);
+                    timeoutId = undefined;
+                }
+
+                if (this.isShuttingDown) {
+                    resolved = true;
+                    reject(new Error('Database is shutting down'));
+                    return;
+                }
+
+                if (this.operationQueue.length < this.maxQueueSize) {
+                    this.operationQueue.push({ operation, resolve, reject });
+                    resolved = true;
+                    return;
+                }
+
+                // Still full; leave waiter registered for next notification
+            };
+
+            // Register waiter
+            this.queueWaiters.push(waiter);
+
+            // Setup timeout to reject the enqueue after waiting too long
+            timeoutId = setTimeout(() => {
+                if (resolved) return;
+                // Remove waiter from queueWaiters
+                const idx = this.queueWaiters.indexOf(waiter);
+                if (idx >= 0) this.queueWaiters.splice(idx, 1);
+                resolved = true;
+                logger.error(
+                    null,
+                    `Timed out waiting for database queue to drain (${this.queueWaitTimeoutMs}ms)`
+                );
+                reject(
+                    new Error(`Database queue full after waiting ${this.queueWaitTimeoutMs} ms`)
+                );
+            }, this.queueWaitTimeoutMs);
         });
+    }
+
+    /**
+     * Get current queue status for monitoring
+     */
+    getQueueStatus(): { queued: number; pending: number; maxSize: number } {
+        return {
+            queued: this.operationQueue.length,
+            pending: this.pendingOperations,
+            maxSize: this.maxQueueSize,
+        };
     }
 
     /**
@@ -196,21 +344,65 @@ export class Database {
         const MAX_BSON_SIZE = 15 * 1024 * 1024; // 15MB to be safe (MongoDB limit is 16MB)
 
         try {
-            const serialized = JSON.stringify(doc);
-            const byteSize = Buffer.byteLength(serialized, 'utf8');
+            // Fast heuristic: if the document contains files, estimate size from file contents
+            const hasFiles = doc && doc.files && Array.isArray(doc.files);
+            if (hasFiles) {
+                let estimatedSize = 0;
+                for (const file of doc.files) {
+                    if (!file) continue;
+                    if (typeof file.content === 'string') {
+                        estimatedSize += Buffer.byteLength(file.content, 'utf8');
+                    } else if (file.content && Buffer.isBuffer(file.content)) {
+                        estimatedSize += file.content.length;
+                    } else if (file.getContent && typeof file.getContent === 'function') {
+                        try {
+                            const c = file.getContent();
+                            if (typeof c === 'string')
+                                estimatedSize += Buffer.byteLength(c, 'utf8');
+                            else if (Buffer.isBuffer(c)) estimatedSize += c.length;
+                        } catch {
+                            // ignore
+                        }
+                    }
 
-            if (byteSize <= MAX_BSON_SIZE) {
-                return doc;
+                    if (estimatedSize > MAX_BSON_SIZE) break;
+                }
+
+                // If estimated size is below limit, try to serialize to confirm
+                if (estimatedSize <= MAX_BSON_SIZE) {
+                    try {
+                        const serialized = JSON.stringify(doc);
+                        const byteSize = Buffer.byteLength(serialized, 'utf8');
+                        if (byteSize <= MAX_BSON_SIZE) return doc;
+                        // otherwise fall through to truncation logic with measured size
+                    } catch {
+                        // fall through to truncation if serialization failed
+                    }
+                } else {
+                    logger.warn(
+                        null,
+                        `Document estimated too large (${(estimatedSize / 1024 / 1024).toFixed(2)}MB), truncating...`
+                    );
+                }
+            } else {
+                // Non-file documents - attempt to serialize and check size
+                const serialized = JSON.stringify(doc);
+                const byteSize = Buffer.byteLength(serialized, 'utf8');
+                if (byteSize <= MAX_BSON_SIZE) return doc;
             }
 
-            logger.warn(
-                null,
-                `Document too large (${(byteSize / 1024 / 1024).toFixed(2)}MB), truncating...`
-            );
-
+            // At this point, the document is too large - attempt to truncate intelligently
             // If it's an Extension object, aggressively truncate file contents
             if (doc.files && Array.isArray(doc.files)) {
                 const truncatedDoc = { ...doc };
+
+                // Try to get an accurate size if possible
+                let byteSize = 0;
+                try {
+                    byteSize = Buffer.byteLength(JSON.stringify(doc), 'utf8');
+                } catch {
+                    byteSize = MAX_BSON_SIZE + 1;
+                }
 
                 // For extremely large documents (>50MB), remove all file content
                 if (byteSize > 50 * 1024 * 1024) {
@@ -223,7 +415,11 @@ export class Database {
                         filetype: file.filetype,
                         _contentRemoved: true,
                         _reason: 'Document too large for MongoDB',
-                        _originalSize: file.content ? file.content.length : 0,
+                        _originalSize: file.content
+                            ? typeof file.content === 'string'
+                                ? file.content.length
+                                : file.content.length || 0
+                            : 0,
                     }));
                 } else {
                     // Keep first 5 files with limited content, summarize the rest
@@ -250,7 +446,11 @@ export class Database {
                                 filetype: file.filetype,
                                 _truncated: true,
                                 _reason: 'File removed to reduce document size',
-                                _originalSize: file.content ? file.content.length : 0,
+                                _originalSize: file.content
+                                    ? typeof file.content === 'string'
+                                        ? file.content.length
+                                        : file.content.length || 0
+                                    : 0,
                             };
                         }
                     });
@@ -258,13 +458,17 @@ export class Database {
 
                 truncatedDoc._documentTruncated = true;
                 truncatedDoc._originalFileCount = doc.files.length;
-                truncatedDoc._originalSize = byteSize;
+                try {
+                    truncatedDoc._originalSize = Buffer.byteLength(JSON.stringify(doc), 'utf8');
+                } catch {
+                    truncatedDoc._originalSize = undefined;
+                }
 
                 // Verify truncated size
                 const newSize = Buffer.byteLength(JSON.stringify(truncatedDoc), 'utf8');
                 logger.debug(
                     null,
-                    `Document truncated from ${(byteSize / 1024 / 1024).toFixed(2)}MB to ${(newSize / 1024 / 1024).toFixed(2)}MB`
+                    `Document truncated from ${truncatedDoc._originalSize ? (truncatedDoc._originalSize / 1024 / 1024).toFixed(2) : 'unknown'}MB to ${(newSize / 1024 / 1024).toFixed(2)}MB`
                 );
 
                 if (newSize > MAX_BSON_SIZE) {
@@ -280,11 +484,19 @@ export class Database {
             }
 
             // Generic truncation for other types
+            let summary = '... [TRUNCATED]';
+            try {
+                const serialized = JSON.stringify(doc);
+                summary = serialized.substring(0, 1000) + '... [TRUNCATED]';
+            } catch {
+                summary = String(doc).substring(0, 1000) + '... [TRUNCATED]';
+            }
+
             return {
                 _truncated: true,
-                _originalSize: byteSize,
+                _originalSize: undefined,
                 _reason: 'Document too large for MongoDB',
-                summary: JSON.stringify(doc).substring(0, 1000) + '... [TRUNCATED]',
+                summary,
             };
         } catch (error) {
             logger.error(null, 'Error sanitizing document size:', error);
@@ -375,6 +587,18 @@ export class Database {
 
             // Set shutdown flag to prevent new operations
             this.isShuttingDown = true;
+
+            // Reject any waiters that are waiting for queue space so they don't hang
+            if (this.queueWaiters.length > 0) {
+                for (const waiter of this.queueWaiters.slice()) {
+                    try {
+                        waiter();
+                    } catch (e) {
+                        logger.debug(null, 'Error rejecting queue waiter during shutdown:', e);
+                    }
+                }
+                this.queueWaiters = [];
+            }
 
             logger.debug(
                 null,
@@ -533,6 +757,7 @@ export class Database {
      * Get all extensions with statistics, pre-sorted by interestingness
      */
     async getExtensionsWithStats() {
+        // Backwards-compatible full response (kept for callers that expect entire list)
         return this.enqueueOperation(async () => {
             if (!this.database) throw new Error('Database not initialized');
 
@@ -568,6 +793,208 @@ export class Database {
                     failed,
                     avg_score,
                 },
+            };
+        });
+    }
+
+    /**
+     * Get a single page of extensions with pre-calculated statistics.
+     * This avoids serializing the whole collection at once and enables UI pagination/scrolling.
+     */
+    async getExtensionsPageWithStats(
+        page: number = 0,
+        pageSize: number = 100,
+        search: string | null = null,
+        sort: string | null = null,
+        seed: string | null = null
+    ) {
+        return this.enqueueOperation(async () => {
+            if (!this.database) throw new Error('Database not initialized');
+
+            const extensionsCollection = this.database.collection(Collections.EXTENSIONS);
+
+            const skip = Math.max(0, page) * Math.max(1, pageSize);
+
+            // Build filter for optional search
+            let filter: any = {};
+            if (search && typeof search === 'string' && search.trim().length > 0) {
+                const regex = { $regex: search, $options: 'i' };
+                filter = {
+                    $or: [
+                        { name: regex },
+                        { id: regex },
+                        { mv2_extension_id: regex },
+                        { mv3_extension_id: regex },
+                    ],
+                };
+            }
+
+            // Fetch page of extensions with requested sort
+            let extensionsPage: any[] = [];
+            if (sort === 'random') {
+                if (seed && typeof seed === 'string' && seed.length > 0) {
+                    // Deterministic seeded-random ordering:
+                    // 1) Fetch only IDs matching filter
+                    // 2) Compute hash(seed + id) for each id
+                    // 3) Sort ids by hash and then slice the requested page
+                    // 4) Fetch the documents for that slice and return them in the same order
+                    const idDocs = await extensionsCollection
+                        .find(filter, { projection: { id: 1 } })
+                        .toArray();
+                    const ids: string[] = idDocs.map((d: any) => d.id || String(d._id));
+
+                    // Compute hash -> use hex string for deterministic ordering
+                    const hashes = ids.map((id) => {
+                        const h = crypto
+                            .createHash('sha256')
+                            .update(seed + '::' + id)
+                            .digest('hex');
+                        return { id, h };
+                    });
+
+                    hashes.sort((a: any, b: any) => (a.h < b.h ? -1 : a.h > b.h ? 1 : 0));
+
+                    const pageIds = hashes.slice(skip, skip + pageSize).map((x: any) => x.id);
+
+                    if (pageIds.length === 0) {
+                        extensionsPage = [];
+                    } else {
+                        const docs = await extensionsCollection
+                            .find({ id: { $in: pageIds } })
+                            .toArray();
+                        // Preserve deterministic order
+                        const docsById: any = {};
+                        for (const d of docs) docsById[d.id || String(d._id)] = d;
+                        extensionsPage = pageIds.map((id) => docsById[id]).filter(Boolean);
+                    }
+                } else {
+                    // For random without seed, fallback to non-deterministic sample (legacy behavior)
+                    const pipeline: any[] = [{ $match: filter }, { $sample: { size: pageSize } }];
+                    extensionsPage = await extensionsCollection.aggregate(pipeline).toArray();
+                }
+            } else {
+                // Determine sort direction for interestingness (default: desc)
+                const direction = sort === 'interestingness_asc' ? 1 : -1;
+                extensionsPage = await extensionsCollection
+                    .find(filter)
+                    .sort({ interestingness_score: direction })
+                    .skip(skip)
+                    .limit(pageSize)
+                    .toArray();
+            }
+
+            // Sanitize extensions for transmission: remove heavy fields like `files`,
+            // keep only minimal manifest info for form display (popup/options/newtab detection),
+            // truncate long CWS descriptions, and strip large code snippets from event listeners.
+            const sanitizedExtensions = extensionsPage.map((ext: any) => {
+                const copy: any = { ...ext };
+
+                // Remove full file contents to avoid huge payloads
+                if (copy.files) {
+                    copy.files = copy.files.map((f: any, i: number) => ({
+                        path: f.path || `file_${i}`,
+                        filetype: f.filetype,
+                        _contentRemoved: true,
+                        _originalSize: f.content
+                            ? typeof f.content === 'string'
+                                ? f.content.length
+                                : 0
+                            : 0,
+                    }));
+                }
+
+                // Keep only minimal manifest info needed for form display (popup, options, newtab)
+                // instead of the full manifest which can be very large
+                if (copy.manifest) {
+                    const m = copy.manifest;
+                    copy.manifest = {};
+
+                    // Popup detection (MV2 and MV3)
+                    if (m.action?.default_popup) {
+                        copy.manifest.action = { default_popup: m.action.default_popup };
+                    }
+                    if (m.browser_action?.default_popup) {
+                        copy.manifest.browser_action = {
+                            default_popup: m.browser_action.default_popup,
+                        };
+                    }
+                    if (m.page_action?.default_popup) {
+                        copy.manifest.page_action = { default_popup: m.page_action.default_popup };
+                    }
+
+                    // Options page detection
+                    if (m.options_page) {
+                        copy.manifest.options_page = m.options_page;
+                    }
+                    if (m.options_ui?.page) {
+                        copy.manifest.options_ui = { page: m.options_ui.page };
+                    }
+
+                    // New tab extension detection
+                    if (m.chrome_url_overrides?.newtab) {
+                        copy.manifest.chrome_url_overrides = {
+                            newtab: m.chrome_url_overrides.newtab,
+                        };
+                    }
+                }
+
+                // Truncate long CWS descriptions
+                if (
+                    copy.cws_info &&
+                    typeof copy.cws_info.description === 'string' &&
+                    copy.cws_info.description.length > 2000
+                ) {
+                    copy.cws_info = {
+                        ...copy.cws_info,
+                        description:
+                            copy.cws_info.description.substring(0, 2000) + '... [TRUNCATED]',
+                    };
+                }
+
+                // Strip large code snippets from event listeners
+                if (Array.isArray(copy.event_listeners)) {
+                    copy.event_listeners = copy.event_listeners.map((l: any) => ({
+                        api: l.api,
+                        file: l.file,
+                        line: l.line,
+                    }));
+                }
+
+                return copy;
+            });
+
+            // Compute global statistics efficiently using aggregation/counts
+            const total = await extensionsCollection.countDocuments();
+            const with_mv3 = await extensionsCollection.countDocuments({
+                mv3_extension_id: { $ne: null },
+            });
+            const failed = await extensionsCollection.countDocuments({ tags: 'migration-failed' });
+
+            // Average interestingness score (aggregation)
+            const avgResult = await extensionsCollection
+                .aggregate([
+                    { $match: { interestingness_score: { $type: 'number' } } },
+                    { $group: { _id: null, avg_score: { $avg: '$interestingness_score' } } },
+                ])
+                .toArray();
+
+            const avg_score = avgResult[0]?.avg_score || 0;
+
+            const with_mv2_only = total - with_mv3;
+            const totalPages = Math.max(1, Math.ceil(total / pageSize));
+
+            return {
+                extensions: sanitizedExtensions,
+                stats: {
+                    total,
+                    with_mv3,
+                    with_mv2_only,
+                    failed,
+                    avg_score,
+                },
+                page,
+                pageSize,
+                totalPages,
             };
         });
     }
@@ -766,6 +1193,53 @@ export class Database {
      */
     async deleteLLMFixAttempt(attemptId: string) {
         return this.deleteOne(Collections.LLM_FIX_ATTEMPTS, { id: attemptId });
+    }
+
+    /**
+     * Get all extension IDs that have been successfully migrated (have mv3_extension_id set)
+     * This is used for resume functionality to skip already-migrated extensions
+     * Returns both original extension IDs and mv3_extension_ids for comprehensive matching
+     * @returns Object containing:
+     *   - sourceIds: Set of original extension.id values
+     *   - mv3Ids: Set of mv3_extension_id values (used as folder names)
+     *   - mv3ToSourceMap: Map from mv3_extension_id to extension.id for reverse lookup
+     */
+    async getMigratedExtensionIds(): Promise<{
+        sourceIds: Set<string>;
+        mv3Ids: Set<string>;
+        mv3ToSourceMap: Map<string, string>;
+    }> {
+        return this.enqueueOperation(async () => {
+            if (!this.database) throw new Error('Database not initialized');
+
+            const sourceIds = new Set<string>();
+            const mv3Ids = new Set<string>();
+            const mv3ToSourceMap = new Map<string, string>();
+
+            // Query for extensions with mv3_extension_id
+            const docs = await this.database
+                .collection(Collections.EXTENSIONS)
+                .find(
+                    { mv3_extension_id: { $exists: true, $ne: null } },
+                    { projection: { id: 1, mv3_extension_id: 1 } }
+                )
+                .toArray();
+
+            // Process documents
+            for (const doc of docs) {
+                if (doc.id) {
+                    sourceIds.add(doc.id);
+                }
+                if (doc.mv3_extension_id) {
+                    mv3Ids.add(doc.mv3_extension_id);
+                    if (doc.id) {
+                        mv3ToSourceMap.set(doc.mv3_extension_id, doc.id);
+                    }
+                }
+            }
+
+            return { sourceIds, mv3Ids, mv3ToSourceMap };
+        });
     }
 
     /**

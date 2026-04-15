@@ -38,6 +38,12 @@ export class ExtensionFixer {
     private readonly maxContextTokens: number = 90000;
     private readonly tokensPerChar: number = 0.3; // Rough estimate: ~3-4 chars per token
 
+    // Memory management limits
+    private readonly maxFileCacheSize: number = 50; // Maximum number of files to cache for diffs
+    private readonly maxConversationMessages: number = 100; // Maximum conversation history length
+    private readonly maxToolCallHistory: number = 200; // Maximum tool call history length
+    private readonly maxFileDiffs: number = 100; // Maximum file diffs to keep
+
     // Tracking data for database storage
     private conversationHistory: LLMMessage[] = [];
     private toolCallHistory: LLMToolCall[] = [];
@@ -60,7 +66,7 @@ export class ExtensionFixer {
         this.conversationHistory = [];
         this.toolCallHistory = [];
         this.fileDiffs = [];
-        this.fileContentCache = new Map();
+        this.fileContentCache.clear();
         this.startedAt = Date.now();
         this.iterations = 0;
 
@@ -89,6 +95,7 @@ export class ExtensionFixer {
             const result = await this.interactiveFixLoop(initialMessages);
 
             // Build the complete fix attempt record
+            // IMPORTANT: Create copies of arrays since cleanup() will clear the originals
             const completedAt = Date.now();
             const fixAttempt: LLMFixAttempt = {
                 id: crypto.randomUUID(),
@@ -101,10 +108,10 @@ export class ExtensionFixer {
                 success: result.success,
                 message: result.message,
                 error: result.error,
-                files_modified: result.filesModified,
-                conversation: this.conversationHistory,
-                tool_calls: this.toolCallHistory,
-                file_diffs: this.fileDiffs,
+                files_modified: [...result.filesModified],
+                conversation: [...this.conversationHistory],
+                tool_calls: [...this.toolCallHistory],
+                file_diffs: [...this.fileDiffs],
                 iterations: this.iterations,
                 metadata: {
                     max_iterations: this.maxIterations,
@@ -133,6 +140,7 @@ export class ExtensionFixer {
             }
 
             // Build fix attempt even for errors
+            // IMPORTANT: Create copies of arrays since cleanup() will clear the originals
             const completedAt = Date.now();
             const fixAttempt: LLMFixAttempt = {
                 id: crypto.randomUUID(),
@@ -146,9 +154,9 @@ export class ExtensionFixer {
                 message: 'Failed to fix extension',
                 error: errorMessage,
                 files_modified: [],
-                conversation: this.conversationHistory,
-                tool_calls: this.toolCallHistory,
-                file_diffs: this.fileDiffs,
+                conversation: [...this.conversationHistory],
+                tool_calls: [...this.toolCallHistory],
+                file_diffs: [...this.fileDiffs],
                 iterations: this.iterations,
                 metadata: {
                     max_iterations: this.maxIterations,
@@ -163,6 +171,9 @@ export class ExtensionFixer {
                 error: errorMessage,
                 fixAttempt,
             };
+        } finally {
+            // Always cleanup to prevent memory leaks
+            this.cleanup();
         }
     }
 
@@ -395,6 +406,9 @@ Please analyze the issues and fix them. Start by listing the files you need to e
                 this.toolCallHistory.push(toolCallRecord);
             }
 
+            // Trim tool call history to prevent memory growth
+            this.trimToolCallHistory();
+
             // Add LLM response and tool results to conversation
             messages.push({ role: 'assistant', content: response });
             const toolResultsMessage = `Tool Results:\n\n${toolResults.join('\n\n---\n\n')}\n\nContinue analyzing or making fixes. When done, respond with DONE.`;
@@ -408,6 +422,9 @@ Please analyze the issues and fix them. Start by listing the files you need to e
                 content: toolResultsMessage,
                 timestamp: Date.now(),
             });
+
+            // Trim conversation history to prevent memory growth
+            this.trimConversationHistory();
         }
 
         // Max iterations reached
@@ -420,11 +437,21 @@ Please analyze the issues and fix them. Start by listing the files you need to e
     }
 
     /**
-     * Capture file content before modification for diff tracking
+     * Capture file content before modification for diff tracking.
+     * Implements cache eviction to prevent unbounded memory growth.
      */
     private async captureFileContentForDiff(filePath: string): Promise<void> {
         if (this.fileContentCache.has(filePath)) {
             return; // Already cached
+        }
+
+        // Evict oldest entries if cache is full (FIFO eviction)
+        if (this.fileContentCache.size >= this.maxFileCacheSize) {
+            const firstKey = this.fileContentCache.keys().next().value;
+            if (firstKey) {
+                this.fileContentCache.delete(firstKey);
+                logger.debug(null, `Evicted ${firstKey} from file content cache (size limit)`);
+            }
         }
 
         try {
@@ -440,13 +467,77 @@ Please analyze the issues and fix them. Start by listing the files you need to e
     }
 
     /**
-     * Record a file diff after modification
+     * Trim conversation history to prevent unbounded memory growth.
+     * Keeps system message and most recent messages.
+     */
+    private trimConversationHistory(): void {
+        if (this.conversationHistory.length <= this.maxConversationMessages) {
+            return;
+        }
+
+        // Keep first message (usually system) and recent messages
+        const toRemove = this.conversationHistory.length - this.maxConversationMessages;
+        this.conversationHistory.splice(1, toRemove);
+        logger.debug(
+            null,
+            `Trimmed ${toRemove} messages from conversation history (limit: ${this.maxConversationMessages})`
+        );
+    }
+
+    /**
+     * Trim tool call history to prevent unbounded memory growth.
+     * Keeps only the most recent tool calls.
+     */
+    private trimToolCallHistory(): void {
+        if (this.toolCallHistory.length <= this.maxToolCallHistory) {
+            return;
+        }
+
+        // Remove oldest entries, keeping most recent
+        const toRemove = this.toolCallHistory.length - this.maxToolCallHistory;
+        this.toolCallHistory.splice(0, toRemove);
+        logger.debug(
+            null,
+            `Trimmed ${toRemove} entries from tool call history (limit: ${this.maxToolCallHistory})`
+        );
+    }
+
+    /**
+     * Clean up all caches and resources after fix completes.
+     * Should be called in finally block.
+     * MEMORY OPTIMIZATION: Explicitly clear all arrays and maps to help GC
+     */
+    cleanup(): void {
+        // Clear arrays by setting length to 0 (faster than reassignment)
+        this.conversationHistory.length = 0;
+        this.toolCallHistory.length = 0;
+        this.fileDiffs.length = 0;
+
+        // Clear the file content cache
+        this.fileContentCache.clear();
+
+        // Reset iteration counter
+        this.iterations = 0;
+
+        logger.debug(null, 'ExtensionFixer cleanup completed');
+    }
+
+    /**
+     * Record a file diff after modification.
+     * Implements size limit to prevent unbounded memory growth.
      */
     private recordFileDiff(filePath: string, newContent: string): void {
         const beforeContent = this.fileContentCache.get(filePath) ?? null;
 
         // Only record if content actually changed
         if (beforeContent !== newContent) {
+            // MEMORY FIX: Limit the number of diffs we keep
+            if (this.fileDiffs.length >= this.maxFileDiffs) {
+                // Remove oldest diff
+                this.fileDiffs.shift();
+                logger.debug(null, `Evicted oldest file diff (limit: ${this.maxFileDiffs})`);
+            }
+
             this.fileDiffs.push({
                 filePath,
                 before: beforeContent,
@@ -600,29 +691,98 @@ Please analyze the issues and fix them. Start by listing the files you need to e
     private parseToolCalls(response: string): Array<{ name: string; params: any }> {
         const toolCalls: Array<{ name: string; params: any }> = [];
 
-        // Match TOOL_CALL: <name> and PARAMS: <json>
-        // Updated regex to handle newlines and complex JSON
-        const toolCallRegex =
-            /TOOL_CALL:\s*(\w+)\s*\n?\s*PARAMS:\s*(\{[\s\S]*?\}(?=\s*(?:TOOL_CALL:|DONE|$)))/gi;
-        let match;
+        // First, find all TOOL_CALL markers and their positions
+        const toolCallMarkerRegex = /TOOL_CALL:\s*(\w+)\s*\n?\s*PARAMS:\s*/gi;
+        const markers: Array<{ name: string; startIndex: number }> = [];
+        let markerMatch;
 
-        while ((match = toolCallRegex.exec(response)) !== null) {
-            const name = match[1];
-            const paramsJson = match[2].trim();
+        while ((markerMatch = toolCallMarkerRegex.exec(response)) !== null) {
+            markers.push({
+                name: markerMatch[1],
+                startIndex: markerMatch.index + markerMatch[0].length,
+            });
+        }
 
-            logger.info(null, `Parsing tool call: ${name}, params: ${paramsJson}`);
+        // For each marker, extract the JSON by properly matching braces
+        for (const marker of markers) {
+            const jsonStr = this.extractJsonObject(response, marker.startIndex);
+            if (jsonStr) {
+                logger.info(
+                    null,
+                    `Parsing tool call: ${marker.name}, params length: ${jsonStr.length}`
+                );
 
-            try {
-                const params = JSON.parse(paramsJson);
-                toolCalls.push({ name, params });
-            } catch (error) {
-                logger.error(null, `Failed to parse tool params: ${paramsJson}`, error);
+                try {
+                    const params = JSON.parse(jsonStr);
+                    toolCalls.push({ name: marker.name, params });
+                } catch (error) {
+                    logger.error(
+                        null,
+                        `Failed to parse tool params for ${marker.name}: ${jsonStr.substring(0, 200)}...`,
+                        error
+                    );
+                }
+            } else {
+                logger.warn(null, `Could not extract JSON for tool call: ${marker.name}`);
             }
         }
 
         logger.info(null, `Parsed ${toolCalls.length} tool call(s)`);
 
         return toolCalls;
+    }
+
+    /**
+     * Extract a complete JSON object from a string starting at the given index.
+     * Handles nested braces and strings properly.
+     */
+    private extractJsonObject(str: string, startIndex: number): string | null {
+        if (str[startIndex] !== '{') {
+            return null;
+        }
+
+        let depth = 0;
+        let inString = false;
+        let escapeNext = false;
+        let endIndex = startIndex;
+
+        for (let i = startIndex; i < str.length; i++) {
+            const char = str[i];
+
+            if (escapeNext) {
+                escapeNext = false;
+                continue;
+            }
+
+            if (char === '\\' && inString) {
+                escapeNext = true;
+                continue;
+            }
+
+            if (char === '"' && !escapeNext) {
+                inString = !inString;
+                continue;
+            }
+
+            if (!inString) {
+                if (char === '{') {
+                    depth++;
+                } else if (char === '}') {
+                    depth--;
+                    if (depth === 0) {
+                        endIndex = i;
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (depth !== 0) {
+            // Unbalanced braces
+            return null;
+        }
+
+        return str.substring(startIndex, endIndex + 1);
     }
 
     /**

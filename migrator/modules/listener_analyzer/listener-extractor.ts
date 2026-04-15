@@ -29,6 +29,12 @@ export function extractListeners(extension: Extension): EventListener[] {
     const v2BasePath = getV2BasePath(extension);
 
     for (const file of extension.files) {
+
+        if(file == null){
+            console.error(extension, "File is null");
+            break;
+        }
+
         // Only analyze files from the V2 version
         if (!isFileInV2Version(file.path, v2BasePath, extension)) {
             continue;

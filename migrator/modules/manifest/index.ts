@@ -42,6 +42,8 @@ export class MigrateManifest implements MigrationModule {
             // Add MANIFEST_MIGRATED tag to extension object
             extension = extensionUtils.addTag(extension, Tags.MANIFEST_MIGRATED);
 
+
+
             return extension;
         } catch (error) {
             logger.error(extension, 'Failed to migrate manifest', {
@@ -83,7 +85,7 @@ export class MigrateManifest implements MigrationModule {
      * Adds declarativeNetRequest configuration if rules.json exists
      */
     static addDeclarativeNetRequest(extension: Extension): void {
-        const hasRulesFile = extension.files.some((file) => file.path === 'rules.json');
+        const hasRulesFile = extension.files.some((file) => file!.path === 'rules.json');
         if (hasRulesFile) {
             // Merge with existing declarative_net_request if present
             const dnr = extension.manifest['declarative_net_request'] ?? { rule_resources: [] };
@@ -185,9 +187,15 @@ export class MigrateManifest implements MigrationModule {
 
                     // Replace the original file with the transformed one in the files array
                     if (transformedFile) {
-                        extension.files = extension.files.map((file) =>
-                            file.path === script ? transformedFile : file
-                        );
+                        // Explicitly null out old references
+                        extension.files = extension.files.map((file) => {
+                            if (file != null && file.path === transformedFile.path) {
+                                if (file.releaseMemory) file.releaseMemory();
+                                file = null; // Help GC
+                                return transformedFile;
+                            }
+                            return file;
+                        });
                     }
                 } else {
                     extension.manifest['background'] = {

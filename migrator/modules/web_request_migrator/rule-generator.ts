@@ -1,10 +1,10 @@
 import { Extension } from '../../types/extension';
-import { LazyFile } from '../../types/abstract_file';
+import { AbstractFile, createNewFile } from '../../types/abstract_file';
 import { ExtFileType } from '../../types/ext_file_types';
 import { Rule, RuleActionType, ResourceType, RuleCondition } from '../../types/dnr_rule_types';
 import { logger } from '../../utils/logger';
 import { WebRequestUsage } from './types';
-import { traverseAST } from './ast-utils';
+import { traverseAST } from '../../utils/ast-utils';
 
 let ruleIdCounter = 1;
 
@@ -224,24 +224,8 @@ function determineRuleAction(usage: WebRequestUsage, extension: Extension): any 
 /**
  * Create a rules.json file
  */
-export function createRulesFile(rules: Rule[]): LazyFile {
+export function createRulesFile(rules: Rule[]): AbstractFile {
     // Chrome expects rules.json to be a direct array, not an object with a "rules" property
     const content = JSON.stringify(rules, null, 2);
-
-    // Create a LazyFile-like object for the rules.json
-    const rulesFile = Object.create(LazyFile.prototype);
-    rulesFile.path = 'rules.json';
-    rulesFile.filetype = ExtFileType.OTHER;
-    rulesFile._rulesContent = content;
-
-    // Override methods to work with rules content
-    rulesFile.getContent = () => content;
-    rulesFile.getSize = () => Buffer.byteLength(content, 'utf8');
-    rulesFile.getBuffer = () => Buffer.from(content, 'utf8');
-    rulesFile.close = () => {
-        /* No-op for in-memory content */
-    };
-    rulesFile.getAST = () => undefined;
-
-    return rulesFile;
+    return createNewFile('rules.json', content, ExtFileType.OTHER);
 }

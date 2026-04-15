@@ -45,91 +45,128 @@ async fn main() -> Result<()> {
             .init();
     }
 
-    // Setup terminal
-    enable_raw_mode()?;
-    let mut stdout = io::stdout();
-    execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
-    let backend = CrosstermBackend::new(stdout);
-    let mut terminal = Terminal::new(backend)?;
-
-    // Create application
-    let (tx, rx) = mpsc::unbounded_channel();
-    let ws_sender: websocket::WebSocketSender = Arc::new(Mutex::new(None));
-    let mut app = App::new(tx.clone(), ws_sender.clone());
-
-    // Create extension downloader
-    let extension_downloader = Arc::new(Mutex::new(
-        ExtensionDownloader::new().expect("Failed to create extension downloader"),
-    ));
-
-    // Create chunked downloads state (for large extensions)
-    let chunked_downloads: Arc<Mutex<HashMap<String, ChunkedDownload>>> =
-        Arc::new(Mutex::new(HashMap::new()));
-
-    // Create browser manager
-    let browser_manager = create_shared_browser_manager();
-    let (browser_cmd_tx, browser_cmd_rx) = mpsc::unbounded_channel::<BrowserCommand>();
-
-    // Spawn browser manager task
-    let browser_event_tx = tx.clone();
-    let browser_manager_clone = browser_manager.clone();
-    tokio::spawn(async move {
-        if let Err(e) = run_browser_manager(browser_event_tx, browser_cmd_rx, browser_manager_clone).await {
-            tracing::error!("Browser manager error: {}", e);
+    // Setup terminal - fall back to headless mode if terminal is not available
+    let terminal_available = match enable_raw_mode() {
+        Ok(_) => true,
+        Err(e) => {
+            eprintln!("TUI not available, running in headless mode: {}", e);
+            false
         }
-    });
+    };
 
-    // Spawn WebSocket task
-    let event_tx = tx.clone();
-    let ws_sender_clone = ws_sender.clone();
-    tokio::spawn(async move {
-        if let Err(e) = websocket::run_websocket_client(event_tx, ws_sender_clone).await {
-            eprintln!("WebSocket error: {}", e);
-        }
-    });
+    if terminal_available {
+        let mut stdout = io::stdout();
+        execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
+        let backend = CrosstermBackend::new(stdout);
+        let mut terminal = Terminal::new(backend)?;
 
-    // Spawn input handler
-    let input_tx = tx;
-    tokio::spawn(async move {
-        loop {
-            if event::poll(std::time::Duration::from_millis(100)).unwrap() {
-                if let Event::Key(key) = event::read().unwrap() {
-                    if input_tx.send(AppEvent::Input(key)).is_err() {
-                        break;
+        // Create application
+        let (tx, rx) = mpsc::unbounded_channel();
+        let ws_sender: websocket::WebSocketSender = Arc::new(Mutex::new(None));
+        let mut app = App::new(tx.clone(), ws_sender.clone());
+
+        // Create extension downloader
+        let extension_downloader = Arc::new(Mutex::new(
+            ExtensionDownloader::new().expect("Failed to create extension downloader"),
+        ));
+
+        // Create chunked downloads state (for large extensions)
+        let chunked_downloads: Arc<Mutex<HashMap<String, ChunkedDownload>>> =
+            Arc::new(Mutex::new(HashMap::new()));
+
+        // Create browser manager
+        let browser_manager = create_shared_browser_manager();
+        let (browser_cmd_tx, browser_cmd_rx) = mpsc::unbounded_channel::<BrowserCommand>();
+
+        // Spawn browser manager task
+        let browser_event_tx = tx.clone();
+        let browser_manager_clone = browser_manager.clone();
+        tokio::spawn(async move {
+            if let Err(e) = run_browser_manager(browser_event_tx, browser_cmd_rx, browser_manager_clone).await {
+                tracing::error!("Browser manager error: {}", e);
+            }
+        });
+
+        // Spawn WebSocket task
+        let event_tx = tx.clone();
+        let ws_sender_clone = ws_sender.clone();
+        tokio::spawn(async move {
+            if let Err(e) = websocket::run_websocket_client(event_tx, ws_sender_clone).await {
+                eprintln!("WebSocket error: {}", e);
+            }
+        });
+
+        // Spawn input handler
+        let input_tx = tx;
+        tokio::spawn(async move {
+            loop {
+                if event::poll(std::time::Duration::from_millis(100)).unwrap() {
+                    if let Event::Key(key) = event::read().unwrap() {
+                        if input_tx.send(AppEvent::Input(key)).is_err() {
+                            break;
+                        }
                     }
                 }
             }
+        });
+
+        // Run app
+        let result = run_app(
+            &mut terminal,
+            &mut app,
+            rx,
+            ws_sender.clone(),
+            extension_downloader,
+            chunked_downloads,
+            browser_cmd_tx,
+        )
+        .await;
+
+        // Cleanup: close browsers before exiting
+        {
+            let mut manager = browser_manager.lock().await;
+            manager.close_all().await;
         }
-    });
 
-    // Run app
-    let result = run_app(
-        &mut terminal,
-        &mut app,
-        rx,
-        ws_sender.clone(),
-        extension_downloader,
-        chunked_downloads,
-        browser_cmd_tx,
-    )
-    .await;
+        // Restore terminal
+        disable_raw_mode()?;
+        execute!(
+            terminal.backend_mut(),
+            LeaveAlternateScreen,
+            DisableMouseCapture
+        )?;
+        terminal.show_cursor()?;
 
-    // Cleanup: close browsers before exiting
-    {
-        let mut manager = browser_manager.lock().await;
-        manager.close_all().await;
+        result
+    } else {
+        // Headless mode: run only websocket client and print events to stdout
+        let (tx, mut rx) = mpsc::unbounded_channel();
+        let ws_sender: websocket::WebSocketSender = Arc::new(Mutex::new(None));
+
+        // Spawn WebSocket task
+        let event_tx = tx.clone();
+        let ws_sender_clone = ws_sender.clone();
+        tokio::spawn(async move {
+            if let Err(e) = websocket::run_websocket_client(event_tx, ws_sender_clone).await {
+                eprintln!("WebSocket error: {}", e);
+            }
+        });
+
+        // Print events until Ctrl+C
+        loop {
+            tokio::select! {
+                Some(event) = rx.recv() => {
+                    println!("EVENT: {:?}", event);
+                }
+                _ = tokio::signal::ctrl_c() => {
+                    println!("Received Ctrl+C, shutting down");
+                    break;
+                }
+            }
+        }
+
+        Ok(())
     }
-
-    // Restore terminal
-    disable_raw_mode()?;
-    execute!(
-        terminal.backend_mut(),
-        LeaveAlternateScreen,
-        DisableMouseCapture
-    )?;
-    terminal.show_cursor()?;
-
-    result
 }
 
 async fn run_app(
@@ -177,6 +214,8 @@ async fn run_app(
                     }
                     AppEvent::WebSocketDisconnected => {
                         app.handle_websocket_disconnected();
+                        // Clear loading flag on disconnect to avoid spinner stuck on
+                        app.set_loading_extensions(false);
                     }
                     AppEvent::WebSocketMessage(msg) => {
                         app.handle_websocket_message(msg);
@@ -187,12 +226,27 @@ async fn run_app(
                     }
                     AppEvent::WebSocketError(err) => {
                         app.handle_websocket_error(err);
+                        // Clear loading flag on websocket error
+                        app.set_loading_extensions(false);
                     }
                     AppEvent::SendWebSocketMessage(msg) => {
+                        // If this is a getExtensions request, show loading indicator and start timeout
+                        if msg.contains("getExtensionsWithStats") || msg.contains("\"id\":\"get_extensions\"") {
+                            app.set_loading_extensions(true);
+                            // Spawn a timeout to clear loading flag after 10s as a fallback
+                            let tx_clone = app.tx.clone();
+                            tokio::spawn(async move {
+                                tokio::time::sleep(std::time::Duration::from_secs(10)).await;
+                                let _ = tx_clone.send(AppEvent::ClearExtensionsLoading);
+                            });
+                        }
                         // Send message through WebSocket
                         if let Some(sender) = ws_sender.lock().await.as_ref() {
                             let _ = sender.send(msg);
                         }
+                    }
+                    AppEvent::ClearExtensionsLoading => {
+                        app.set_loading_extensions(false);
                     }
                     AppEvent::ExtensionsLoaded(_) => {
                         // This is handled in handle_websocket_message, no action needed here
@@ -222,10 +276,23 @@ async fn run_app(
                         app.handle_llm_fix_started(ext_id);
                     }
                     AppEvent::LLMFixSuccess(ext_id, modified_files) => {
-                        app.handle_llm_fix_success(ext_id, modified_files);
+                        app.handle_llm_fix_success(ext_id.clone(), modified_files);
+                        // Invalidate cache and trigger re-download so the fixed extension is used
+                        let _ = app.tx.send(AppEvent::InvalidateExtensionCache(ext_id));
                     }
                     AppEvent::LLMFixError(ext_id, error) => {
                         app.handle_llm_fix_error(ext_id, error);
+                    }
+                    AppEvent::InvalidateExtensionCache(ext_id) => {
+                        // Invalidate the cached extension so it gets re-downloaded with the fixes
+                        let mut downloader = extension_downloader.lock().await;
+                        downloader.invalidate_cache(&ext_id);
+                        drop(downloader);
+                        
+                        // Trigger a fresh download if this is the currently selected extension
+                        if app.get_selected_extension_id() == Some(&ext_id) {
+                            let _ = app.tx.send(AppEvent::DownloadExtension(ext_id));
+                        }
                     }
 
                     // Extension download events

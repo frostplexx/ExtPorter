@@ -29,6 +29,13 @@ pub struct AppState {
     pub messages: Vec<Message>,
     pub extensions: Vec<Extension>,
     pub extension_stats: ExtensionStats,
+    pub current_page: usize,
+    pub page_size: usize,
+    pub total_pages: usize,
+    pub current_search: String,
+    pub current_sort: crate::tabs::explorer::SortBy,
+    pub current_random_seed: Option<String>,
+    pub loading_extensions: bool,
     pub message_scroll_offset: usize,
     pub connection_state_changed_at: Option<std::time::Instant>,
     pub selected_extension_id: Option<String>,
@@ -71,6 +78,13 @@ impl App {
             messages: Vec::new(),
             extensions: Vec::new(),
             extension_stats: ExtensionStats::default(),
+            current_page: 0,
+            page_size: 100,
+            total_pages: 1,
+            current_search: String::new(),
+            current_sort: crate::tabs::explorer::SortBy::InterestingnessDesc,
+            current_random_seed: None,
+            loading_extensions: false,
             message_scroll_offset: 0,
             connection_state_changed_at: Some(std::time::Instant::now()),
             selected_extension_id: None,
@@ -316,6 +330,11 @@ impl App {
         });
     }
 
+    /// Set the loading state for extensions fetch
+    pub fn set_loading_extensions(&mut self, v: bool) {
+        self.state.loading_extensions = v;
+    }
+
     pub fn handle_websocket_disconnected(&mut self) {
         self.state.ws_connection_state = ConnectionState::Disconnected;
         self.state.ws_connected = false;
@@ -340,18 +359,36 @@ impl App {
                             match serde_json::from_value::<ExtensionsWithStats>(result.clone()) {
                                 Ok(data) => {
                                     let count = data.extensions.len();
-                                    self.state.extensions = data.extensions;
-                                    self.state.extension_stats = data.stats;
 
-                                    // Add a message about loaded extensions
+                                    // Determine page info (defaults)
+                                    let page = data.page.unwrap_or(0);
+                                    let page_size = data.page_size.unwrap_or(100);
+                                    let total_pages = data.total_pages.unwrap_or(1);
+
+                                    if page == 0 {
+                                        // First page => replace
+                                        self.state.extensions = data.extensions;
+                                    } else {
+                                        // Append subsequent pages
+                                        self.state.extensions.extend(data.extensions);
+                                    }
+
+                                    self.state.extension_stats = data.stats;
+                                    self.state.current_page = page;
+                                    self.state.page_size = page_size;
+                                    self.state.total_pages = total_pages;
+
+                                    // Add a message about loaded extensions/page
                                     if self.state.message_scroll_offset > 0 {
                                         self.state.message_scroll_offset += 1;
                                     }
 
                                     self.state.messages.push(Message {
                                         msg_type: MessageType::System,
-                                        content: format!("✓ Loaded {} extensions (MV3: {}, Failed: {}, Avg Score: {:.2})", 
+                                        content: format!("✓ Loaded {} extensions (page {}/{}, MV3: {}, Failed: {}, Avg Score: {:.2})", 
                                             count, 
+                                            page + 1,
+                                            total_pages,
                                             self.state.extension_stats.with_mv3,
                                             self.state.extension_stats.failed,
                                             self.state.extension_stats.avg_score
@@ -359,11 +396,16 @@ impl App {
                                         timestamp: chrono::Utc::now(),
                                     });
 
-                                    // Fetch reports
-                                    let get_reports_msg = r#"{"type":"db_query","id":"get_reports","method":"getAllReports","params":{}}"#;
-                                    let _ = self.tx.send(AppEvent::SendWebSocketMessage(
-                                        get_reports_msg.to_string(),
-                                    ));
+                                    // Clear loading flag after receiving a page
+                                    self.state.loading_extensions = false;
+
+                                    // Fetch reports only after first page
+                                    if page == 0 {
+                                        let get_reports_msg = r#"{"type":"db_query","id":"get_reports","method":"getAllReports","params":{}}"#;
+                                        let _ = self.tx.send(AppEvent::SendWebSocketMessage(
+                                            get_reports_msg.to_string(),
+                                        ));
+                                    }
 
                                     return;
                                 }
@@ -389,6 +431,8 @@ impl App {
                                         ),
                                         timestamp: chrono::Utc::now(),
                                     });
+                                    // Clear loading flag on parse error
+                                    self.state.loading_extensions = false;
                                     return;
                                 }
                             }
@@ -404,14 +448,35 @@ impl App {
                                 content: format!("Error loading extensions: {}", error),
                                 timestamp: chrono::Utc::now(),
                             });
+                            // Clear loading flag on server error response
+                            self.state.loading_extensions = false;
                             return;
                         }
                     }
                     if id == "get_reports" {
                         if let Some(result) = json_msg.get("result") {
                             match serde_json::from_value::<Vec<Report>>(result.clone()) {
-                                Ok(reports) => {
-                                    self.state.reports = reports;
+                                Ok(server_reports) => {
+                                    // Merge server reports with local reports
+                                    // Keep local reports (with "local_" prefix) that aren't yet on server
+                                    // This prevents race conditions where server sync overwrites
+                                    // optimistic local updates before they're persisted
+                                    let local_only: Vec<Report> = self
+                                        .state
+                                        .reports
+                                        .iter()
+                                        .filter(|r| {
+                                            r.id.starts_with("local_")
+                                                && !server_reports
+                                                    .iter()
+                                                    .any(|sr| sr.extension_id == r.extension_id)
+                                        })
+                                        .cloned()
+                                        .collect();
+
+                                    // Start with server reports, then add local-only ones
+                                    self.state.reports = server_reports;
+                                    self.state.reports.extend(local_only);
 
                                     if self.state.message_scroll_offset > 0 {
                                         self.state.message_scroll_offset += 1;
@@ -460,8 +525,9 @@ impl App {
                                 timestamp: chrono::Utc::now(),
                             });
 
-                            // Auto-load next untested extension
-                            let _ = self.tx.send(AppEvent::LoadNextUntestedExtension);
+                            // NOTE: We do NOT trigger LoadNextUntestedExtension here because
+                            // it's already triggered in submit_report() immediately after submission.
+                            // Triggering it again here would cause a double navigation (skip bug).
 
                             return;
                         }
@@ -531,10 +597,21 @@ impl App {
                 // If migration just stopped, auto-refresh extensions list
                 if was_running && !self.state.migration_running {
                     // Request updated extensions list from database
-                    let extensions_request = r#"{"type":"db_query","id":"get_extensions","method":"getExtensionsWithStats","params":{}}"#;
-                    let _ = self.tx.send(AppEvent::SendWebSocketMessage(
-                        extensions_request.to_string(),
-                    ));
+                    let mut params = serde_json::json!({ "page": 0, "pageSize": 100, "search": self.state.current_search, "sort": self.state.current_sort.to_param() });
+                    if let Some(ref s) = self.state.current_random_seed {
+                        params["seed"] = serde_json::json!(s);
+                    }
+                    let query = serde_json::json!({
+                        "type": "db_query",
+                        "id": "get_extensions",
+                        "method": "getExtensionsWithStats",
+                        "params": params
+                    });
+                    // Show loading indicator
+                    self.set_loading_extensions(true);
+                    let _ = self
+                        .tx
+                        .send(AppEvent::SendWebSocketMessage(query.to_string()));
 
                     // Add notification message
                     if self.state.message_scroll_offset > 0 {
@@ -1288,5 +1365,10 @@ impl App {
     /// Get current extension paths (for kitty tab opening)
     pub fn get_current_extension_paths(&self) -> Option<(PathBuf, PathBuf)> {
         self.state.current_extension_paths.clone()
+    }
+
+    /// Get currently selected extension ID
+    pub fn get_selected_extension_id(&self) -> Option<&String> {
+        self.state.selected_extension_id.as_ref()
     }
 }

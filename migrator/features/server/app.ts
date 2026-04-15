@@ -5,18 +5,29 @@ import { Database } from '../database/db_manager';
 import { llmManager, buildChatMessagesFromFile } from '../llm/index.js';
 import * as path from 'path';
 import * as fs from 'fs';
+import * as os from 'os';
 import * as crypto from 'crypto';
 import * as zlib from 'zlib';
-// eslint-disable-next-line @typescript-eslint/no-require-imports
 const tar = require('tar-stream');
+
+// Prevent noisy MaxListeners warnings and accidental memory leaks in tests/runtime
+// Increase default max listeners to a reasonable value for the server lifetime
+import { EventEmitter } from 'events';
+EventEmitter.defaultMaxListeners = Number(process.env.EVENT_LISTENER_LIMIT || 50);
 
 // Chunked download constants
 const CHUNK_SIZE = 1 * 1024 * 1024; // 1MB chunks
 const CHUNK_THRESHOLD = 10 * 1024 * 1024; // 10MB - chunk if larger
+const MAX_IMAGE_SIZE = 50 * 1024 * 1024; // 50MB max image size to prevent memory issues
+
+// Server-side limits to protect memory
+const MAX_FULL_EXTENSIONS = Number(process.env.MAX_FULL_EXTENSIONS || 2000); // max items when a full list is explicitly requested
+const MAX_PAGE_SIZE = Number(process.env.MAX_PAGE_SIZE || 1000); // maximum pageSize clients can request
 
 interface MigratorProcess {
     process: ChildProcess | null;
     clientId: string;
+    createdAt: number; // Track when the migrator was created
 }
 
 interface MigrationState {
@@ -26,6 +37,12 @@ interface MigrationState {
         current: number;
         total: number;
     };
+}
+
+// Track connection metadata for cleanup
+interface ConnectionMetadata {
+    connectedAt: number;
+    lastActivityAt: number;
 }
 
 export class MigrationServer {
@@ -44,6 +61,15 @@ export class MigrationServer {
     };
     private connectedClients: Set<WebSocket> = new Set();
     private llmInitialized: boolean = false;
+
+    // Memory management: connection timeouts and periodic cleanup
+    private readonly connectionTimeout = 5 * 60 * 1000; // 5 minutes inactivity timeout
+    private readonly maxConnectionAge = 60 * 60 * 1000; // 1 hour max connection age
+    private readonly maxMigratorAge = 30 * 60 * 1000; // 30 minutes max migrator age
+    private connectionTimers: Map<WebSocket, NodeJS.Timeout> = new Map();
+    private connectionMetadata: Map<WebSocket, ConnectionMetadata> = new Map();
+    private cleanupInterval: NodeJS.Timeout | null = null;
+    private readonly cleanupIntervalMs = 60 * 1000; // Run cleanup every minute
 
     constructor(globals: Globals) {
         this.globals = globals;
@@ -169,12 +195,54 @@ export class MigrationServer {
             this.llmInitialized = false;
         }
 
+        // Start periodic cleanup for memory management
+        this.cleanupInterval = setInterval(() => this.periodicCleanup(), this.cleanupIntervalMs);
+
+        // Ensure server is actually listening before returning (avoid race conditions in tests)
+        await new Promise<void>((resolve, reject) => {
+            try {
+                if (this.server.address()) {
+                    resolve();
+                    return;
+                }
+
+                const onListening = () => {
+                    this.server.removeListener('error', onError);
+                    resolve();
+                };
+                const onError = (err: any) => {
+                    this.server.removeListener('listening', onListening);
+                    reject(err);
+                };
+
+                this.server.once('listening', onListening);
+                this.server.once('error', onError);
+
+                // Safety timeout
+                setTimeout(() => {
+                    this.server.removeListener('listening', onListening);
+                    this.server.removeListener('error', onError);
+                    reject(new Error('WebSocket server did not start listening within timeout'));
+                }, 5000);
+            } catch (err) {
+                reject(err as any);
+            }
+        });
+
         // Handle new client connections
         this.server.on('connection', (ws: WebSocket) => {
             console.log('New client connected');
 
-            // Add to connected clients
+            // Add to connected clients and track metadata
             this.connectedClients.add(ws);
+            const now = Date.now();
+            this.connectionMetadata.set(ws, {
+                connectedAt: now,
+                lastActivityAt: now,
+            });
+
+            // Set initial connection timeout
+            this.resetConnectionTimeout(ws);
 
             // Send initial database status to new client only
             const initialDbStatus = this.getDatabaseStatus();
@@ -190,6 +258,15 @@ export class MigrationServer {
 
             // Handle incoming messages from client
             ws.on('message', (message: Buffer) => {
+                // Reset connection timeout on any activity
+                this.resetConnectionTimeout(ws);
+
+                // Update last activity timestamp
+                const metadata = this.connectionMetadata.get(ws);
+                if (metadata) {
+                    metadata.lastActivityAt = Date.now();
+                }
+
                 const command = message.toString().trim();
                 console.log(`Received command from client: "${command}"`);
 
@@ -286,12 +363,18 @@ export class MigrationServer {
             // Handle client disconnect
             ws.on('close', () => {
                 console.log('Client disconnected');
+                this.clearConnectionTimeout(ws);
                 this.connectedClients.delete(ws);
+                this.connectionMetadata.delete(ws);
             });
 
             // Handle errors
             ws.on('error', (error: Error) => {
                 console.error('WebSocket error:', error);
+                // Clean up on error as well
+                this.clearConnectionTimeout(ws);
+                this.connectedClients.delete(ws);
+                this.connectionMetadata.delete(ws);
             });
         });
 
@@ -337,9 +420,11 @@ export class MigrationServer {
 
         try {
             // Import migration dependencies dynamically to avoid circular dependencies
-            const { find_extensions } = await import('../../utils/find_extensions.js');
+            // Use iterator pattern to avoid loading all extensions into memory at once
+            const { find_extensions_iterator, count_extensions } = await import(
+                '../../utils/find_extensions.js'
+            );
             // logger is imported but not used in this scope - it's used elsewhere in the codebase
-            // eslint-disable-next-line @typescript-eslint/no-unused-vars
             const { logger } = await import('../../utils/logger.js');
             const { RenameAPIS } = await import('../../modules/api_renames/index.js');
             const { MigrateManifest } = await import('../../modules/manifest/index.js');
@@ -357,24 +442,57 @@ export class MigrationServer {
             );
             const { WriteMigrated } = await import('../../modules/write_extension/index.js');
             const { WriteQueue } = await import('../../modules/write_extension/write-queue.js');
-            const { extensionUtils } = await import('../../utils/extension_utils.js');
             const { MigrationError } = await import('../../types/migration_module.js');
             const path = await import('path');
 
             this.broadcastToClients(`Starting extension search in: ${this.globals.extensionsPath}`);
-            let extensions = find_extensions(this.globals.extensionsPath);
-            this.broadcastToClients(`Found ${extensions.length} extensions`);
 
-            // Filter out new-tab extensions if setting is enabled
-            const filterNewTab = process.env.FILTER_NEW_TAB_EXTENSIONS === 'true';
-            if (filterNewTab) {
-                const originalCount = extensions.length;
-                extensions = extensions.filter((extension) => !extension.isNewTabExtension);
-                const filteredCount = originalCount - extensions.length;
-                if (filteredCount > 0) {
-                    this.broadcastToClients(`Filtered out ${filteredCount} new-tab extensions`);
+            // Count extensions first (low memory operation) for progress tracking
+            const totalExtensions = count_extensions(this.globals.extensionsPath);
+            this.broadcastToClients(`Found ${totalExtensions} extensions`);
+
+            // ========== RESUME FUNCTIONALITY ==========
+            // Get already-migrated extension IDs from database and output folder
+            this.broadcastToClients(
+                'Checking for previously migrated extensions (resume support)...'
+            );
+
+            // 1. Get IDs from database (extensions that were successfully migrated and recorded)
+            const dbMigrated = await Database.shared.getMigratedExtensionIds();
+            this.broadcastToClients(`Found ${dbMigrated.sourceIds.size} extensions in database`);
+
+            // 2. Get IDs from output folder (extensions that were written to disk)
+            // These are mv3_extension_id values (folder names), we need to convert them to source IDs
+            const diskMv3Ids = await this.getAlreadyMigratedFromDisk(this.globals.outputDir);
+            this.broadcastToClients(`Found ${diskMv3Ids.size} extension folders on disk`);
+
+            // 3. Combine both sets - an extension is considered migrated if:
+            //    - Its source ID is in the database, OR
+            //    - Its mv3_extension_id (folder name) is found on disk
+            // We track by SOURCE ID since that's what we'll check against rawExtension.id
+            const alreadyMigratedIds = new Set<string>([...dbMigrated.sourceIds]);
+
+            // For disk-based extensions, use the mapping to convert mv3_extension_id -> source ID
+            // If no mapping exists, the folder might be from a previous run, so we also check
+            // if the folder name itself matches the source ID pattern (fallback)
+            for (const mv3Id of diskMv3Ids) {
+                const sourceId = dbMigrated.mv3ToSourceMap.get(mv3Id);
+                if (sourceId) {
+                    alreadyMigratedIds.add(sourceId);
+                } else {
+                    // If folder name matches the pattern of a source ID, add it directly
+                    // This handles the case where mv3_extension_id == extension.id (fallback case)
+                    alreadyMigratedIds.add(mv3Id);
                 }
             }
+
+            this.broadcastToClients(
+                `Total already migrated: ${alreadyMigratedIds.size} extensions (will be skipped)`
+            );
+            // ==========================================
+
+            // Filter setting for new-tab extensions
+            const filterNewTab = process.env.FILTER_NEW_TAB_EXTENSIONS === 'true';
 
             // Migration modules
             const migrationModules = [
@@ -390,110 +508,180 @@ export class MigrationServer {
             ];
 
             const BATCH_SIZE = parseInt(process.env.MIGRATION_BATCH_SIZE || '10');
-            const totalExtensions = extensions.length;
             this.migrationState.progress.total = totalExtensions;
             let writeIndex = 0;
+            let processedCount = 0;
+            let filteredCount = 0;
+            let skippedCount = 0; // Track extensions skipped due to resume
 
+            const remainingExtensions = totalExtensions - alreadyMigratedIds.size;
             this.broadcastToClients(
-                `Processing ${totalExtensions} extensions in batches of ${BATCH_SIZE}`
+                `Processing ${totalExtensions} extensions (${alreadyMigratedIds.size} already done, ${remainingExtensions} remaining)`
             );
 
-            // Process extensions in batches
-            for (let batchStart = 0; batchStart < totalExtensions; batchStart += BATCH_SIZE) {
+            // Use iterator to process extensions one at a time - never hold all in memory
+            // MEMORY FIX: Pass alreadyMigratedIds to skip extensions BEFORE creating Extension objects
+            const extensionIterator = find_extensions_iterator(this.globals.extensionsPath, {
+                skipIds: alreadyMigratedIds,
+                onSkip: () => {
+                    skippedCount++;
+                    processedCount++;
+
+                    // Log progress periodically for skipped extensions
+                    if (skippedCount % 500 === 0) {
+                        this.broadcastToClients(
+                            `Skipped ${skippedCount} already-migrated extensions...`
+                        );
+                        if (global.gc) global.gc();
+                    }
+
+                    // Update progress to reflect total processed (including skipped)
+                    this.migrationState.progress.current = writeIndex + skippedCount;
+                },
+            });
+
+            // Import memory utilities once outside the loop for memory pressure checks
+            const memUtils = await import('../../utils/garbage.js');
+
+            for (const rawExtension of extensionIterator) {
                 // Check if migration was stopped
                 if (!this.migrationState.isRunning) {
                     this.broadcastToClients('Migration stopped by user');
                     break;
                 }
 
-                const batchEnd = Math.min(batchStart + BATCH_SIZE, totalExtensions);
-                const batchNumber = Math.floor(batchStart / BATCH_SIZE) + 1;
-                const totalBatches = Math.ceil(totalExtensions / BATCH_SIZE);
+                // ========== MEMORY PRESSURE CHECK ==========
+                // Check memory before processing each extension to prevent OOM
+                const memInfo = memUtils.getMemoryInfo();
+                if (memInfo.heapUsedGB > 12) {
+                    // Memory pressure: force GC and wait a bit
+                    memUtils.forceGarbageCollection();
+                    await new Promise((resolve) => setTimeout(resolve, 100));
 
-                this.broadcastToClients(
-                    `Processing batch ${batchNumber}/${totalBatches}: extensions ${batchStart + 1}-${batchEnd}`
-                );
-
-                // Process each extension in the current batch
-                for (let i = batchStart; i < batchEnd; i++) {
-                    // Check if migration was stopped
-                    if (!this.migrationState.isRunning) {
-                        this.broadcastToClients('Migration stopped by user');
-                        break;
+                    // Re-check after GC
+                    const afterGC = memUtils.getMemoryInfo();
+                    if (afterGC.heapUsedGB > 14) {
+                        // Still high - warn and potentially pause
+                        this.broadcastToClients(
+                            `Warning: High memory usage (${afterGC.heapUsedGB.toFixed(1)}GB). Processing continues but may be slower.`
+                        );
+                        // Give more time for async operations to complete
+                        await new Promise((resolve) => setTimeout(resolve, 500));
                     }
+                }
+                // ==========================================
 
-                    let extension = extensions[i];
-                    let migrationSuccessful = true;
-
-                    // Run through migration pipeline (excluding WriteMigrated for now)
-                    const migrationOnly = migrationModules.slice(0, -1);
-                    for (const migrateFunction of migrationOnly) {
-                        const migrated = await migrateFunction(extension);
-                        if (migrated && !(migrated instanceof MigrationError)) {
-                            extension = migrated;
-                        } else {
-                            migrationSuccessful = false;
-                            break;
-                        }
-                    }
-
-                    // Write the migrated extension to disk
-                    if (migrationSuccessful) {
-                        try {
-                            const useNewTabSubfolder = process.env.NEW_TAB_SUBFOLDER === 'true';
-                            const isNewTab = extension.isNewTabExtension || false;
-                            const extensionId = extension.mv3_extension_id || extension.id;
-
-                            let outputPath: string;
-                            if (useNewTabSubfolder && isNewTab) {
-                                outputPath = path.join(
-                                    this.globals.outputDir,
-                                    'new_tab_extensions',
-                                    extensionId
-                                );
-                            } else {
-                                outputPath = path.join(this.globals.outputDir, extensionId);
-                            }
-
-                            await WriteQueue.shared.writeExtensionSync(extension, outputPath);
-
-                            // Insert migrated extension to database
-                            const Database = (await import('../database/db_manager.js')).Database;
-                            const dbExtension = {
-                                ...extension,
-                                manifest_v3_path: outputPath,
-                                files: [],
-                            };
-
-                            await Database.shared.insertMigratedExtension(dbExtension);
-                            writeIndex++;
-                            this.migrationState.progress.current = writeIndex;
-
-                            if (writeIndex % 5 === 0) {
-                                this.broadcastToClients(
-                                    `Progress: ${writeIndex}/${totalExtensions} extensions migrated`
-                                );
-                            }
-                        } catch (writeError) {
-                            migrationSuccessful = false;
-                            this.broadcastToClients(
-                                `Error writing extension ${extension.name}: ${writeError instanceof Error ? writeError.message : String(writeError)}`
-                            );
-                        }
-                    }
-
-                    // Clear extension from memory
-                    extensionUtils.closeExtensionFiles(extension);
-                    extensions[i] = null as any;
+                // Filter out new-tab extensions if setting is enabled
+                if (filterNewTab && rawExtension.isNewTabExtension) {
+                    filteredCount++;
+                    // MEMORY FIX: Clean up filtered extension before continuing
+                    memUtils.clearExtensionMemory(rawExtension);
+                    continue;
                 }
 
-                await WriteQueue.shared.flush();
-                this.broadcastToClients(`Completed batch ${batchNumber}/${totalBatches}`);
+                // NOTE: Skip logic for already-migrated extensions has been moved to the iterator
+                // Extensions in alreadyMigratedIds are now skipped BEFORE creating the Extension object
+                // This prevents OOM by avoiding expensive file discovery and CWS parsing for skipped extensions
+
+                let extension = rawExtension;
+                let migrationSuccessful = true;
+
+                // Run through migration pipeline (excluding WriteMigrated for now)
+                const migrationOnly = migrationModules.slice(0, -1);
+                for (const migrateFunction of migrationOnly) {
+                    const migrated = await migrateFunction(extension);
+                    if (migrated && !(migrated instanceof MigrationError)) {
+                        extension = migrated;
+                    } else {
+                        migrationSuccessful = false;
+                        break;
+                    }
+                }
+
+                processedCount++;
+                if (processedCount % 10 === 0 && global.gc) {
+                    global.gc(); // Force GC every 10 extensions
+
+                    const used = process.memoryUsage();
+                    logger.info(
+                        null,
+                        `GC after ${processedCount} extensions: ${Math.round(used.heapUsed / 1024 / 1024)}MB`
+                    );
+                }
+
+                // Write the migrated extension to disk
+                if (migrationSuccessful) {
+                    try {
+                        const useNewTabSubfolder = process.env.NEW_TAB_SUBFOLDER === 'true';
+                        const isNewTab = extension.isNewTabExtension || false;
+                        const extensionId = extension.mv3_extension_id || extension.id;
+
+                        let outputPath: string;
+                        if (useNewTabSubfolder && isNewTab) {
+                            outputPath = path.join(
+                                this.globals.outputDir,
+                                'new_tab_extensions',
+                                extensionId
+                            );
+                        } else {
+                            outputPath = path.join(this.globals.outputDir, extensionId);
+                        }
+
+                        await WriteQueue.shared.writeExtensionSync(extension, outputPath);
+
+                        // Insert migrated extension to database
+                        const dbExtension = {
+                            ...extension,
+                            manifest_v3_path: outputPath,
+                            files: [],
+                        };
+
+                        await Database.shared.insertMigratedExtension(dbExtension);
+                        writeIndex++;
+                        this.migrationState.progress.current = writeIndex + skippedCount;
+
+                        if (writeIndex % 5 === 0) {
+                            this.broadcastToClients(
+                                `Progress: ${writeIndex} new + ${skippedCount} skipped = ${writeIndex + skippedCount}/${totalExtensions} extensions`
+                            );
+                        }
+                    } catch (writeError) {
+                        migrationSuccessful = false;
+                        this.broadcastToClients(
+                            `Error writing extension ${extension.name}: ${writeError instanceof Error ? writeError.message : String(writeError)}`
+                        );
+                    }
+                }
+
+                // Clear extension from memory thoroughly (memUtils imported once outside loop)
+                memUtils.clearExtensionMemory(extension);
+
+                // Trigger GC periodically during migration
+                if (processedCount % 10 === 0 && memUtils.shouldTriggerGC(16)) {
+                    memUtils.forceGarbageCollection();
+                }
+
+                // Flush write queue periodically
+                if (processedCount % BATCH_SIZE === 0) {
+                    await WriteQueue.shared.flush();
+                    this.broadcastToClients(
+                        `Processed ${processedCount}/${totalExtensions} extensions`
+                    );
+                }
             }
 
+            // Final flush
+            await WriteQueue.shared.flush();
+
+            if (filteredCount > 0) {
+                this.broadcastToClients(`Filtered out ${filteredCount} new-tab extensions`);
+            }
+
+            // Final summary with resume stats
             this.broadcastToClients(
-                `Migration completed! Successfully migrated ${writeIndex} extensions`
+                `Migration completed! Newly migrated: ${writeIndex}, Skipped (already done): ${skippedCount}, Total: ${writeIndex + skippedCount}`
             );
+
             this.migrationState.isRunning = false;
             this.migrationState.status = 'completed';
             this.broadcastToClients('MIGRATION_STATUS:stopped');
@@ -506,6 +694,71 @@ export class MigrationServer {
         } finally {
             // Restore console to original state
             restoreConsole();
+        }
+    }
+
+    /**
+     * Scans the output directory to find extension IDs that have already been written to disk.
+     * This supports resume functionality by identifying extensions that don't need re-migration.
+     *
+     * An extension folder is considered valid if it contains a manifest.json file.
+     * This handles both regular extensions and new_tab_extensions subfolder structure.
+     *
+     * @param outputDir The output directory path
+     * @returns Set of extension IDs found on disk
+     */
+    private async getAlreadyMigratedFromDisk(outputDir: string): Promise<Set<string>> {
+        const migratedIds = new Set<string>();
+
+        try {
+            // Check if output directory exists
+            if (!fs.existsSync(outputDir)) {
+                return migratedIds;
+            }
+
+            const entries = fs.readdirSync(outputDir, { withFileTypes: true });
+
+            for (const entry of entries) {
+                if (!entry.isDirectory()) continue;
+
+                const dirPath = path.join(outputDir, entry.name);
+
+                // Handle new_tab_extensions subfolder
+                if (entry.name === 'new_tab_extensions') {
+                    const subEntries = fs.readdirSync(dirPath, { withFileTypes: true });
+                    for (const subEntry of subEntries) {
+                        if (subEntry.isDirectory()) {
+                            const subDirPath = path.join(dirPath, subEntry.name);
+                            if (this.isValidMigratedExtension(subDirPath)) {
+                                migratedIds.add(subEntry.name);
+                            }
+                        }
+                    }
+                } else {
+                    // Regular extension folder
+                    if (this.isValidMigratedExtension(dirPath)) {
+                        migratedIds.add(entry.name);
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('Error scanning output directory for migrated extensions:', error);
+        }
+
+        return migratedIds;
+    }
+
+    /**
+     * Checks if a directory is a valid migrated extension by verifying it has a manifest.json
+     * @param dirPath The directory path to check
+     * @returns true if it's a valid migrated extension
+     */
+    private isValidMigratedExtension(dirPath: string): boolean {
+        try {
+            const manifestPath = path.join(dirPath, 'manifest.json');
+            return fs.existsSync(manifestPath);
+        } catch {
+            return false;
         }
     }
 
@@ -531,6 +784,7 @@ export class MigrationServer {
         this.activeMigrators.set(clientId, {
             process: migratorProcess,
             clientId,
+            createdAt: Date.now(),
         });
 
         ws.send(`Starting migration for extension: ${extensionId}`);
@@ -621,8 +875,42 @@ export class MigrationServer {
                     break;
 
                 case 'getExtensionsWithStats':
-                    // Fetch all extensions with pre-calculated statistics and sorting
-                    result = await Database.shared.getExtensionsWithStats();
+                    {
+                        // Support paginated responses to avoid very large payloads.
+                        // Clients can pass `page` and `pageSize` to fetch a specific page.
+                        // For backward compatibility, clients may request the full list by sending `params.full === true`.
+                        let page = Number(params?.page ?? 0);
+                        let pageSize = Number(params?.pageSize ?? 100);
+                        const search = typeof params?.search === 'string' ? params.search : null;
+                        const sort = typeof params?.sort === 'string' ? params.sort : null;
+                        const seed = typeof params?.seed === 'string' ? params.seed : null;
+
+                        // Clamp pageSize to protect memory
+                        if (isNaN(pageSize) || pageSize <= 0) pageSize = 100;
+                        pageSize = Math.min(pageSize, MAX_PAGE_SIZE);
+                        if (isNaN(page) || page < 0) page = 0;
+
+                        if (params?.full === true) {
+                            // Explicit request for full list (use with caution). Enforce hard limit.
+                            const totalCount = await Database.shared.countDocuments('extensions');
+                            if (totalCount > MAX_FULL_EXTENSIONS) {
+                                throw new Error(
+                                    `Refusing to return full list (${totalCount} items). Use pagination (page/pageSize) instead.`
+                                );
+                            }
+
+                            result = await Database.shared.getExtensionsWithStats();
+                        } else {
+                            // Default: return a single page with metadata and optional search, sort and seed
+                            result = await Database.shared.getExtensionsPageWithStats(
+                                page,
+                                pageSize,
+                                search,
+                                sort,
+                                seed
+                            );
+                        }
+                    }
                     break;
 
                 case 'findExtension':
@@ -657,7 +945,7 @@ export class MigrationServer {
                     result = await Database.shared.getLogs(params.limit || 50);
                     break;
 
-                case 'createReport':
+                case 'createReport': {
                     // Create a new report with all fields from params
                     const report = {
                         id: params.id || `report_${Date.now()}_${params.extension_id}`,
@@ -670,6 +958,7 @@ export class MigrationServer {
                     };
                     result = await Database.shared.insertReport(report);
                     break;
+                }
 
                 case 'getAllReports':
                     result = await Database.shared.getAllReports();
@@ -733,7 +1022,8 @@ export class MigrationServer {
             }
 
             // Import DualChromeTester dynamically
-            const { DualChromeTester } = await import('../../../ext_tester/dual_chrome_tester.js');
+            const DualChromeTesterModulePath = '../../../' + 'ext_tester/dual_chrome_tester.js';
+            const { DualChromeTester } = await import(DualChromeTesterModulePath);
             const fs = await import('fs');
             const path = await import('path');
 
@@ -815,7 +1105,8 @@ export class MigrationServer {
     private async handleCloseBrowsers(ws: WebSocket): Promise<void> {
         try {
             // Import DualChromeTester dynamically
-            const { DualChromeTester } = await import('../../../ext_tester/dual_chrome_tester.js');
+            const DualChromeTesterModulePath = '../../../' + 'ext_tester/dual_chrome_tester.js';
+            const { DualChromeTester } = await import(DualChromeTesterModulePath);
 
             await DualChromeTester.shared.closeAll();
 
@@ -1115,32 +1406,52 @@ export class MigrationServer {
                 return;
             }
 
-            console.log(`[Download] Creating tar.gz archives...`);
+            console.log(`[Download] Creating tar.gz archives (streaming to temp files)...`);
 
-            // Create tar.gz archives for both directories
-            const mv2Archive = await this.createTarGz(mv2Dir);
-            const mv3Archive = await this.createTarGz(mv3Dir);
+            // Create tar.gz archives for both directories in parallel
+            const [mv2TempPath, mv3TempPath] = await Promise.all([
+                this.createTarGzToFile(mv2Dir),
+                this.createTarGzToFile(mv3Dir),
+            ]);
 
-            console.log(
-                `[Download] Archive sizes - MV2: ${mv2Archive.length}, MV3: ${mv3Archive.length}`
-            );
+            const mv2Stat = await fs.promises.stat(mv2TempPath);
+            const mv3Stat = await fs.promises.stat(mv3TempPath);
 
-            // Build binary payload:
-            // [4 bytes: mv2_size][mv2_tar.gz][4 bytes: mv3_size][mv3_tar.gz]
+            const mv2Size = Number(mv2Stat.size);
+            const mv3Size = Number(mv3Stat.size);
+
+            console.log(`[Download] Archive sizes (files) - MV2: ${mv2Size}, MV3: ${mv3Size}`);
+
+            // Build header: 8 bytes size header (mv2_size, mv3_size)
             const sizeHeader = Buffer.alloc(8);
-            sizeHeader.writeUInt32BE(mv2Archive.length, 0);
-            sizeHeader.writeUInt32BE(mv3Archive.length, 4);
+            sizeHeader.writeUInt32BE(mv2Size, 0);
+            sizeHeader.writeUInt32BE(mv3Size, 4);
 
-            const payload = Buffer.concat([sizeHeader, mv2Archive, mv3Archive]);
+            const totalSize = 8 + mv2Size + mv3Size;
 
-            // Check if we need chunked transfer
-            if (payload.length > CHUNK_THRESHOLD) {
+            // If totalSize exceeds chunk threshold, stream using chunked transfer
+            if (totalSize > CHUNK_THRESHOLD) {
                 console.log(
-                    `[Download] Large extension (${payload.length} bytes), using chunked transfer`
+                    `[Download] Large extension (${totalSize} bytes), using chunked transfer (streamed)`
                 );
-                await this.sendChunkedExtension(ws, extensionId, payload, serverHash);
+
+                // Stream temp files into a single payload by reading them in chunks and sending chunk messages
+                await this.sendChunkedFiles(
+                    ws,
+                    extensionId,
+                    mv2TempPath,
+                    mv3TempPath,
+                    mv2Size,
+                    mv3Size,
+                    serverHash
+                );
             } else {
-                // Small extension - send as single message
+                // Small extension - read files into memory safely and send as single message
+                const mv2Buffer = await fs.promises.readFile(mv2TempPath);
+                const mv3Buffer = await fs.promises.readFile(mv3TempPath);
+
+                const payload = Buffer.concat([sizeHeader, mv2Buffer, mv3Buffer]);
+
                 // Format: "DOWNLOAD_EXTENSION_START:{ext_id}:{size}:{hash}\n" + binary payload
                 const textHeader = Buffer.from(
                     `DOWNLOAD_EXTENSION_START:${extensionId}:${payload.length}:${serverHash}\n`
@@ -1149,8 +1460,20 @@ export class MigrationServer {
                 ws.send(fullMessage);
 
                 console.log(
-                    `[Download] Sent ${fullMessage.length} bytes for extension ${ext.name} (header: ${textHeader.length}, payload: ${payload.length})`
+                    `[Download] Sent ${fullMessage.length} bytes for extension ${ext.name}`
                 );
+            }
+
+            // Cleanup temp files
+            try {
+                await fs.promises.unlink(mv2TempPath);
+            } catch {
+                // Ignore unlink errors
+            }
+            try {
+                await fs.promises.unlink(mv3TempPath);
+            } catch {
+                // Ignore unlink errors
             }
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : String(error);
@@ -1159,7 +1482,7 @@ export class MigrationServer {
         }
     }
 
-    // Send extension using chunked transfer for large files
+    // Send extension using chunked transfer for large in-memory payloads (legacy)
     private async sendChunkedExtension(
         ws: WebSocket,
         extensionId: string,
@@ -1199,11 +1522,6 @@ export class MigrationServer {
             if (i % 5 === 0 || i === totalChunks - 1) {
                 console.log(`[Download] Sent chunk ${i + 1}/${totalChunks}`);
             }
-
-            // Small delay to avoid overwhelming the connection
-            if (i < totalChunks - 1) {
-                await new Promise((resolve) => setTimeout(resolve, 10));
-            }
         }
 
         // Send end message as binary (so it goes to binary handler on client)
@@ -1213,24 +1531,128 @@ export class MigrationServer {
         console.log(`[Download] Chunked transfer complete for ${extensionId}`);
     }
 
+    // Stream two tar.gz files from disk using chunked messages to avoid large memory usage
+    private async sendChunkedFiles(
+        ws: WebSocket,
+        extensionId: string,
+        mv2Path: string,
+        mv3Path: string,
+        mv2Size: number,
+        mv3Size: number,
+        dirHash: string
+    ): Promise<void> {
+        const totalSize = 8 + mv2Size + mv3Size; // header + two files
+
+        // Build the 8-byte header: [4B mv2_size][4B mv3_size] in big-endian
+        const sizeHeader = Buffer.alloc(8);
+        sizeHeader.writeUInt32BE(mv2Size, 0);
+        sizeHeader.writeUInt32BE(mv3Size, 4);
+
+        // Prepare MD5 of the full payload (header + files) by streaming
+        const md5 = crypto.createHash('md5');
+        md5.update(sizeHeader); // Include header in hash
+        await new Promise<void>((resolve, reject) => {
+            const stream1 = fs.createReadStream(mv2Path);
+            stream1.on('data', (chunk: any) => md5.update(chunk));
+            stream1.on('end', () => {
+                const stream2 = fs.createReadStream(mv3Path);
+                stream2.on('data', (chunk: any) => md5.update(chunk));
+                stream2.on('end', () => resolve());
+                stream2.on('error', reject);
+            });
+            stream1.on('error', reject);
+        });
+
+        const payloadHash = md5.digest('hex');
+
+        // Count chunks: we'll send the header prepended to the first chunk of mv2,
+        // then continue with remaining mv2 chunks, then all mv3 chunks.
+        // Since we prepend 8 bytes to the first chunk, we need to calculate based on actual data sent.
+        // Each file is read with highWaterMark: CHUNK_SIZE, so:
+        // - mv2 produces ceil(mv2Size / CHUNK_SIZE) chunks
+        // - mv3 produces ceil(mv3Size / CHUNK_SIZE) chunks
+        // The header is prepended to the first mv2 chunk, so total chunk count stays the same.
+        const mv2Chunks = Math.ceil(mv2Size / CHUNK_SIZE) || 1; // At least 1 chunk even if empty
+        const mv3Chunks = Math.ceil(mv3Size / CHUNK_SIZE) || 1;
+        const totalChunks = mv2Chunks + mv3Chunks;
+
+        console.log(
+            `[Download] Starting streamed chunked transfer: ${totalChunks} chunks, ${totalSize} bytes, hash: ${payloadHash}`
+        );
+
+        // Send start message
+        const startMessage = Buffer.from(
+            `DOWNLOAD_EXTENSION_CHUNK_START:${extensionId}:${totalSize}:${totalChunks}:${payloadHash}:${dirHash}\n`
+        );
+        ws.send(startMessage, { binary: true });
+
+        let chunkIndex = 0;
+        let isFirstChunk = true;
+
+        // Helper to stream a file in chunks
+        const streamFileAsChunks = (filePath: string, prependData?: Buffer) =>
+            new Promise<void>((resolve, reject) => {
+                const stream = fs.createReadStream(filePath, { highWaterMark: CHUNK_SIZE });
+                stream.on('data', (chunk: any) => {
+                    let dataToSend = chunk;
+                    // Prepend header to the very first chunk
+                    if (prependData && isFirstChunk) {
+                        dataToSend = Buffer.concat([prependData, chunk]);
+                        isFirstChunk = false;
+                    }
+                    const chunkHeader = Buffer.from(
+                        `DOWNLOAD_EXTENSION_CHUNK:${extensionId}:${chunkIndex}:${dataToSend.length}\n`
+                    );
+                    ws.send(Buffer.concat([chunkHeader, dataToSend]), { binary: true });
+                    chunkIndex++;
+                });
+                stream.on('end', resolve);
+                stream.on('error', reject);
+            });
+
+        // Stream mv2 file with header prepended to first chunk
+        await streamFileAsChunks(mv2Path, sizeHeader);
+        // Stream mv3 file
+        await streamFileAsChunks(mv3Path);
+
+        // Send end message
+        const endMessage = Buffer.from(`DOWNLOAD_EXTENSION_CHUNK_END:${extensionId}\n`);
+        ws.send(endMessage, { binary: true });
+
+        console.log(`[Download] Streamed chunked transfer complete for ${extensionId}`);
+    }
+
     // Calculate MD5 hash of extension directories for caching
     private async calculateExtensionHash(mv2Dir: string, mv3Dir: string): Promise<string> {
         const hash = crypto.createHash('md5');
 
-        const addDirToHash = async (dir: string, prefix: string) => {
+        const getDirHashData = async (dir: string, prefix: string): Promise<string[]> => {
             const files = await this.listFilesRecursive(dir);
+            const results: string[] = [];
             for (const file of files.sort()) {
                 try {
                     const stat = await fs.promises.stat(path.join(dir, file));
-                    hash.update(`${prefix}:${file}:${stat.size}:${Math.floor(stat.mtimeMs)}\n`);
+                    results.push(`${prefix}:${file}:${stat.size}:${Math.floor(stat.mtimeMs)}\n`);
                 } catch {
                     // Skip files that can't be stat'd
                 }
             }
+            return results;
         };
 
-        await addDirToHash(mv2Dir, 'mv2');
-        await addDirToHash(mv3Dir, 'mv3');
+        // Run both directory scans in parallel
+        const [mv2Data, mv3Data] = await Promise.all([
+            getDirHashData(mv2Dir, 'mv2'),
+            getDirHashData(mv3Dir, 'mv3'),
+        ]);
+
+        // Update hash with results (order matters for consistency)
+        for (const line of mv2Data) {
+            hash.update(line);
+        }
+        for (const line of mv3Data) {
+            hash.update(line);
+        }
 
         return hash.digest('hex');
     }
@@ -1256,29 +1678,72 @@ export class MigrationServer {
         return files;
     }
 
-    // Create a tar.gz archive from a directory
+    // Create a tar.gz archive from a directory (returns Buffer) - kept for small directories
     private async createTarGz(dirPath: string): Promise<Buffer> {
-        return new Promise(async (resolve, reject) => {
-            try {
-                const pack = tar.pack();
-                const chunks: Buffer[] = [];
+        // For small dirs only; otherwise prefer createTarGzToFile
+        return new Promise((resolve, reject) => {
+            const pack = tar.pack();
+            const chunks: Buffer[] = [];
 
-                // Pipe through gzip
-                const gzip = zlib.createGzip();
+            // Pipe through gzip
+            const gzip = zlib.createGzip();
 
-                gzip.on('data', (chunk: Buffer) => chunks.push(chunk));
-                gzip.on('end', () => resolve(Buffer.concat(chunks)));
-                gzip.on('error', reject);
+            gzip.on('data', (chunk: Buffer) => chunks.push(chunk));
+            gzip.on('end', () => resolve(Buffer.concat(chunks)));
+            gzip.on('error', reject);
 
-                pack.pipe(gzip);
+            pack.pipe(gzip);
 
-                // Add all files to tar
-                await this.addDirectoryToTar(pack, dirPath, '');
+            // Add all files to tar asynchronously and finalize
+            (async () => {
+                try {
+                    await this.addDirectoryToTar(pack, dirPath, '');
+                    pack.finalize();
+                } catch (error) {
+                    // Ensure we reject only once
+                    try {
+                        reject(error);
+                    } catch {
+                        // no-op
+                    }
+                }
+            })();
+        });
+    }
 
-                pack.finalize();
-            } catch (error) {
-                reject(error);
-            }
+    // Create a tar.gz file on disk for large directories to avoid building large buffers in memory
+    private async createTarGzToFile(dirPath: string): Promise<string> {
+        const tmpPath = path.join(
+            os.tmpdir(),
+            `extporter_${Date.now()}_${Math.random().toString(36).slice(2)}.tar.gz`
+        );
+
+        return new Promise((resolve, reject) => {
+            const pack = tar.pack();
+            const gzip = zlib.createGzip();
+            const outStream = fs.createWriteStream(tmpPath);
+
+            outStream.on('finish', () => resolve(tmpPath));
+            outStream.on('error', (err) => reject(err));
+            gzip.on('error', (err) => reject(err));
+
+            pack.pipe(gzip).pipe(outStream);
+
+            (async () => {
+                try {
+                    // Add files to tar (reads files into memory per-file)
+                    await this.addDirectoryToTar(pack, dirPath, '');
+
+                    pack.finalize();
+                } catch (error) {
+                    // Ensure we reject only once
+                    try {
+                        reject(error);
+                    } catch {
+                        // no-op
+                    }
+                }
+            })();
         });
     }
 
@@ -1466,7 +1931,7 @@ export class MigrationServer {
                 timeout: 15000,
             };
 
-            // Download image
+            // Download image with size limit
             const imageData = await new Promise<Buffer>((resolve, reject) => {
                 const request = protocol.get(highResUrl, options, (response) => {
                     // Follow redirects
@@ -1482,8 +1947,35 @@ export class MigrationServer {
                         return;
                     }
 
+                    // MEMORY FIX: Check content-length header if available
+                    const contentLength = parseInt(response.headers['content-length'] || '0', 10);
+                    if (contentLength > MAX_IMAGE_SIZE) {
+                        request.destroy();
+                        reject(
+                            new Error(
+                                `Image too large: ${contentLength} bytes (max: ${MAX_IMAGE_SIZE})`
+                            )
+                        );
+                        return;
+                    }
+
                     const chunks: Buffer[] = [];
-                    response.on('data', (chunk) => chunks.push(chunk));
+                    let totalSize = 0;
+
+                    response.on('data', (chunk) => {
+                        totalSize += chunk.length;
+                        // MEMORY FIX: Check size during download
+                        if (totalSize > MAX_IMAGE_SIZE) {
+                            request.destroy();
+                            reject(
+                                new Error(
+                                    `Image too large: exceeded ${MAX_IMAGE_SIZE} bytes during download`
+                                )
+                            );
+                            return;
+                        }
+                        chunks.push(chunk);
+                    });
                     response.on('end', () => resolve(Buffer.concat(chunks)));
                     response.on('error', reject);
                 });
@@ -1535,15 +2027,208 @@ export class MigrationServer {
         return url;
     }
 
+    // ==================== Memory Management Methods ====================
+
+    /**
+     * Reset the inactivity timeout for a WebSocket connection
+     */
+    private resetConnectionTimeout(ws: WebSocket): void {
+        this.clearConnectionTimeout(ws);
+        const timer = setTimeout(() => {
+            console.log('Closing inactive WebSocket connection due to timeout');
+            try {
+                ws.close(1000, 'Inactivity timeout');
+            } catch {
+                // Connection might already be closed
+            }
+            this.connectedClients.delete(ws);
+            this.connectionTimers.delete(ws);
+        }, this.connectionTimeout);
+        this.connectionTimers.set(ws, timer);
+    }
+
+    /**
+     * Clear the inactivity timeout for a WebSocket connection
+     */
+    private clearConnectionTimeout(ws: WebSocket): void {
+        const timer = this.connectionTimers.get(ws);
+        if (timer) {
+            clearTimeout(timer);
+            this.connectionTimers.delete(ws);
+        }
+    }
+
+    /**
+     * Periodic cleanup of stale resources to prevent memory leaks
+     * MEMORY OPTIMIZATION: Now includes age-based cleanup for long-running connections
+     */
+    private async periodicCleanup(): Promise<void> {
+        // Import garbage collection utilities dynamically to avoid circular deps
+        const { logMemoryUsage, shouldTriggerGC, forceGarbageCollection } = await import(
+            '../../utils/garbage.js'
+        );
+
+        const now = Date.now();
+        let deadConnections = 0;
+        let agedOutConnections = 0;
+        let staleMigrators = 0;
+        let agedOutMigrators = 0;
+
+        // Clean up dead connections and connections that exceeded max age
+        for (const client of this.connectedClients) {
+            let shouldRemove = false;
+            let reason = '';
+
+            if (client.readyState !== WebSocket.OPEN) {
+                shouldRemove = true;
+                reason = 'dead';
+                deadConnections++;
+            } else {
+                // Check for aged out connections
+                const metadata = this.connectionMetadata.get(client);
+                if (metadata) {
+                    const connectionAge = now - metadata.connectedAt;
+                    const inactiveTime = now - metadata.lastActivityAt;
+
+                    if (connectionAge > this.maxConnectionAge) {
+                        shouldRemove = true;
+                        reason = 'max age exceeded';
+                        agedOutConnections++;
+                    } else if (inactiveTime > this.connectionTimeout * 2) {
+                        // Double-check for connections that might have missed the timeout
+                        shouldRemove = true;
+                        reason = 'inactive too long';
+                        agedOutConnections++;
+                    }
+                }
+            }
+
+            if (shouldRemove) {
+                try {
+                    if (client.readyState === WebSocket.OPEN) {
+                        client.close(1000, `Connection closed: ${reason}`);
+                    }
+                } catch {
+                    // Ignore close errors
+                }
+                this.connectedClients.delete(client);
+                this.clearConnectionTimeout(client);
+                this.connectionMetadata.delete(client);
+            }
+        }
+
+        // Clean up stale migrators (processes that have exited or exceeded max age)
+        for (const [clientId, migrator] of this.activeMigrators) {
+            let shouldRemove = false;
+
+            if (migrator.process && migrator.process.killed) {
+                shouldRemove = true;
+                staleMigrators++;
+            } else if (migrator.createdAt && now - migrator.createdAt > this.maxMigratorAge) {
+                // Migrator exceeded max age - kill it and cleanup listeners
+                if (migrator.process && !migrator.process.killed) {
+                    try {
+                        // Remove event listeners to prevent memory leaks
+                        migrator.process.stdout?.removeAllListeners();
+                        migrator.process.stderr?.removeAllListeners();
+                        migrator.process.removeAllListeners();
+                        migrator.process.kill('SIGTERM');
+                    } catch {
+                        // Ignore kill errors
+                    }
+                }
+                shouldRemove = true;
+                agedOutMigrators++;
+            }
+
+            if (shouldRemove) {
+                // Ensure listeners are cleaned up for any remaining process reference
+                if (migrator.process) {
+                    try {
+                        migrator.process.stdout?.removeAllListeners();
+                        migrator.process.stderr?.removeAllListeners();
+                        migrator.process.removeAllListeners();
+                    } catch {
+                        // Ignore cleanup errors
+                    }
+                }
+                this.activeMigrators.delete(clientId);
+            }
+        }
+
+        // Clean up orphaned metadata entries (defensive cleanup)
+        for (const client of this.connectionMetadata.keys()) {
+            if (!this.connectedClients.has(client)) {
+                this.connectionMetadata.delete(client);
+            }
+        }
+        for (const client of this.connectionTimers.keys()) {
+            if (!this.connectedClients.has(client)) {
+                const timer = this.connectionTimers.get(client);
+                if (timer) clearTimeout(timer);
+                this.connectionTimers.delete(client);
+            }
+        }
+
+        // Log cleanup stats if anything was cleaned
+        const totalCleaned =
+            deadConnections + agedOutConnections + staleMigrators + agedOutMigrators;
+        if (totalCleaned > 0) {
+            console.log(
+                `[Cleanup] Removed: ${deadConnections} dead connections, ${agedOutConnections} aged connections, ` +
+                    `${staleMigrators} stale migrators, ${agedOutMigrators} aged migrators. ` +
+                    `Active: ${this.connectedClients.size} clients, ${this.activeMigrators.size} migrators`
+            );
+        }
+
+        // Check memory and trigger GC if needed
+        if (shouldTriggerGC(16)) {
+            // Trigger at 16GB
+            logMemoryUsage('periodic-cleanup-before-gc');
+            forceGarbageCollection();
+            logMemoryUsage('periodic-cleanup-after-gc');
+        }
+    }
+
     // Close the server gracefully
     async close(): Promise<void> {
-        // Stop all active migrators
+        // Stop periodic cleanup
+        if (this.cleanupInterval) {
+            clearInterval(this.cleanupInterval);
+            this.cleanupInterval = null;
+        }
+
+        // Clear all connection timeouts
+        for (const timer of this.connectionTimers.values()) {
+            clearTimeout(timer);
+        }
+        this.connectionTimers.clear();
+
+        // Flush any pending write operations
+        try {
+            const { WriteQueue } = await import('../../modules/write_extension/write-queue.js');
+            await WriteQueue.shared.flush();
+        } catch (err) {
+            console.error('[close] Failed to flush write queue:', err);
+        }
+
+        // Stop all active migrators and clean up their listeners
         for (const migrator of this.activeMigrators.values()) {
             if (migrator.process) {
-                migrator.process.kill('SIGTERM');
+                try {
+                    migrator.process.stdout?.removeAllListeners();
+                    migrator.process.stderr?.removeAllListeners();
+                    migrator.process.removeAllListeners();
+                    migrator.process.kill('SIGTERM');
+                } catch {
+                    // Ignore cleanup errors
+                }
             }
         }
         this.activeMigrators.clear();
+
+        // Clear connected clients
+        this.connectedClients.clear();
 
         // Cleanup LLM manager and SSH tunnel
         if (this.llmInitialized) {

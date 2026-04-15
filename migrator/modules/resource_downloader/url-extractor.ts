@@ -2,6 +2,7 @@ import { Extension } from '../../types/extension';
 import { ExtFileType } from '../../types/ext_file_types';
 import { RemoteResource, URL_PATTERNS } from './types';
 import { generateLocalPath } from './path-generator';
+import { logger } from '../../utils/logger';
 
 /**
  * Finds all remote resources in an extension
@@ -14,6 +15,11 @@ export function findRemoteResources(extension: Extension): RemoteResource[] {
 
     // Search in all files
     extension.files.forEach((file) => {
+
+        if (!file) {
+            logger.error(extension, "File is null");
+            return;
+        }
         if (
             file.filetype === ExtFileType.JS ||
             file.filetype === ExtFileType.CSS ||

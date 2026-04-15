@@ -64,6 +64,9 @@ export class MigrateCSP implements MigrationModule {
                 // Add CSP_VALUE_MODIFIED tag to extension object
                 extension = extensionUtils.addTag(extension, Tags.CSP_VALUE_MODIFIED);
 
+            // NOTE: Do NOT call releaseMemory() or close() here!
+            // Files are written asynchronously by WriteQueue and closed by Writer.writeFiles()
+
                 return extension;
             }
         } catch (error) {

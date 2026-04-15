@@ -1,0 +1,13 @@
+# Optimized Heap Analyzer Dependencies
+# Install with: pip install -r scripts/heap_analyzer_requirements.txt
+
+# Core performance dependencies
+numpy>=1.21.0       # Vectorized operations for fast node processing
+ijson>=3.1.0        # Streaming JSON parser for large files
+lz4>=4.0.0          # Fast compression for binary caching
+tqdm>=4.64.0        # Progress bars and performance tracking
+
+# Optional dependencies for specific use cases
+# scipy>=1.7.0      # Advanced statistical analysis (uncomment if needed)
+# psutil>=5.8.0     # Memory usage monitoring (uncomment if needed)
+# matplotlib>=3.5.0 # Plotting growth trends (uncomment if needed)
