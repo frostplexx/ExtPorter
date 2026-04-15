@@ -1766,5 +1766,275 @@ function openInNewWindow() {
                 }
             });
         });
+
+        describe('onMessage async sendResponse — return true injection', () => {
+            it('should inject return true when sendResponse is called inside a nested callback', async () => {
+                const extension = createTestExtension('on-message-callback', [
+                    {
+                        name: 'background.js',
+                        content: `
+chrome.runtime.onMessage.addListener(function(message, sender, sendResponse) {
+    chrome.storage.local.get(['key'], function(result) {
+        sendResponse({ data: result.key });
+    });
+});
+`,
+                    },
+                ]);
+
+                const result = await RenameAPIS.migrate(extension);
+
+                expect(result).not.toBeInstanceOf(MigrationError);
+                if (!(result instanceof MigrationError)) {
+                    const file = result.files.find((f) => f!.path === 'background.js');
+                    expect(file).toBeDefined();
+                    if (file) {
+                        const content = file.getContent();
+                        expect(content).toContain('return true');
+                    }
+                }
+
+                extension.files.forEach((file) => { if (file) { file.close(); } });
+                if (!(result instanceof MigrationError)) {
+                    result.files.forEach((file) => { if (file) { file.close(); } });
+                }
+            });
+
+            it('should inject return true when sendResponse is called inside a promise .then()', async () => {
+                const extension = createTestExtension('on-message-promise', [
+                    {
+                        name: 'background.js',
+                        content: `
+chrome.runtime.onMessage.addListener(function(message, sender, sendResponse) {
+    fetch('https://example.com/api').then(function(response) {
+        return response.json();
+    }).then(function(data) {
+        sendResponse(data);
+    });
+});
+`,
+                    },
+                ]);
+
+                const result = await RenameAPIS.migrate(extension);
+
+                expect(result).not.toBeInstanceOf(MigrationError);
+                if (!(result instanceof MigrationError)) {
+                    const file = result.files.find((f) => f!.path === 'background.js');
+                    expect(file).toBeDefined();
+                    if (file) {
+                        const content = file.getContent();
+                        expect(content).toContain('return true');
+                    }
+                }
+
+                extension.files.forEach((file) => { if (file) { file.close(); } });
+                if (!(result instanceof MigrationError)) {
+                    result.files.forEach((file) => { if (file) { file.close(); } });
+                }
+            });
+
+            it('should inject return true when sendResponse is called inside an arrow function callback', async () => {
+                const extension = createTestExtension('on-message-arrow', [
+                    {
+                        name: 'background.js',
+                        content: `
+chrome.runtime.onMessage.addListener(function(message, sender, sendResponse) {
+    setTimeout(() => {
+        sendResponse({ status: 'ok' });
+    }, 100);
+});
+`,
+                    },
+                ]);
+
+                const result = await RenameAPIS.migrate(extension);
+
+                expect(result).not.toBeInstanceOf(MigrationError);
+                if (!(result instanceof MigrationError)) {
+                    const file = result.files.find((f) => f!.path === 'background.js');
+                    expect(file).toBeDefined();
+                    if (file) {
+                        const content = file.getContent();
+                        expect(content).toContain('return true');
+                    }
+                }
+
+                extension.files.forEach((file) => { if (file) { file.close(); } });
+                if (!(result instanceof MigrationError)) {
+                    result.files.forEach((file) => { if (file) { file.close(); } });
+                }
+            });
+
+            it('should NOT inject return true when sendResponse is called synchronously at the top level', async () => {
+                const extension = createTestExtension('on-message-sync', [
+                    {
+                        name: 'background.js',
+                        content: `
+chrome.runtime.onMessage.addListener(function(message, sender, sendResponse) {
+    var reply = processMessage(message);
+    sendResponse(reply);
+});
+`,
+                    },
+                ]);
+
+                const result = await RenameAPIS.migrate(extension);
+
+                expect(result).not.toBeInstanceOf(MigrationError);
+                if (!(result instanceof MigrationError)) {
+                    const file = result.files.find((f) => f!.path === 'background.js');
+                    expect(file).toBeDefined();
+                    if (file) {
+                        const content = file.getContent();
+                        expect(content).not.toContain('return true');
+                    }
+                }
+
+                extension.files.forEach((file) => { if (file) { file.close(); } });
+                if (!(result instanceof MigrationError)) {
+                    result.files.forEach((file) => { if (file) { file.close(); } });
+                }
+            });
+
+            it('should NOT inject return true when the listener already has return true', async () => {
+                const extension = createTestExtension('on-message-already-true', [
+                    {
+                        name: 'background.js',
+                        content: `
+chrome.runtime.onMessage.addListener(function(message, sender, sendResponse) {
+    chrome.storage.local.get(['key'], function(result) {
+        sendResponse({ data: result.key });
+    });
+    return true;
+});
+`,
+                    },
+                ]);
+
+                const result = await RenameAPIS.migrate(extension);
+
+                expect(result).not.toBeInstanceOf(MigrationError);
+                if (!(result instanceof MigrationError)) {
+                    const file = result.files.find((f) => f!.path === 'background.js');
+                    expect(file).toBeDefined();
+                    if (file) {
+                        const content = file.getContent();
+                        // Should appear exactly once, not duplicated
+                        const count = (content.match(/return true/g) || []).length;
+                        expect(count).toBe(1);
+                    }
+                }
+
+                extension.files.forEach((file) => { if (file) { file.close(); } });
+                if (!(result instanceof MigrationError)) {
+                    result.files.forEach((file) => { if (file) { file.close(); } });
+                }
+            });
+
+            it('should NOT inject return true when the listener returns false (intentionally synchronous)', async () => {
+                const extension = createTestExtension('on-message-return-false', [
+                    {
+                        name: 'background.js',
+                        content: `
+chrome.runtime.onMessage.addListener(function(message, sender, sendResponse) {
+    if (message.type !== 'ping') return false;
+    chrome.storage.local.get(['key'], function(result) {
+        sendResponse(result.key);
+    });
+});
+`,
+                    },
+                ]);
+
+                const result = await RenameAPIS.migrate(extension);
+
+                expect(result).not.toBeInstanceOf(MigrationError);
+                if (!(result instanceof MigrationError)) {
+                    const file = result.files.find((f) => f!.path === 'background.js');
+                    expect(file).toBeDefined();
+                    if (file) {
+                        const content = file.getContent();
+                        expect(content).not.toContain('return true');
+                    }
+                }
+
+                extension.files.forEach((file) => { if (file) { file.close(); } });
+                if (!(result instanceof MigrationError)) {
+                    result.files.forEach((file) => { if (file) { file.close(); } });
+                }
+            });
+
+            it('should handle multiple onMessage listeners independently', async () => {
+                const extension = createTestExtension('on-message-multiple', [
+                    {
+                        name: 'background.js',
+                        content: `
+chrome.runtime.onMessage.addListener(function(message, sender, sendResponse) {
+    chrome.storage.local.get(['key'], function(result) {
+        sendResponse(result);
+    });
+});
+
+chrome.runtime.onMessage.addListener(function(msg, sndr, respond) {
+    respond({ ok: true });
+});
+`,
+                    },
+                ]);
+
+                const result = await RenameAPIS.migrate(extension);
+
+                expect(result).not.toBeInstanceOf(MigrationError);
+                if (!(result instanceof MigrationError)) {
+                    const file = result.files.find((f) => f!.path === 'background.js');
+                    expect(file).toBeDefined();
+                    if (file) {
+                        const content = file.getContent();
+                        // First listener is async — gets return true
+                        // Second listener is sync — no return true
+                        const count = (content.match(/return true/g) || []).length;
+                        expect(count).toBe(1);
+                    }
+                }
+
+                extension.files.forEach((file) => { if (file) { file.close(); } });
+                if (!(result instanceof MigrationError)) {
+                    result.files.forEach((file) => { if (file) { file.close(); } });
+                }
+            });
+
+            it('should also handle chrome.extension.onMessage.addListener', async () => {
+                const extension = createTestExtension('on-message-extension', [
+                    {
+                        name: 'background.js',
+                        content: `
+chrome.extension.onMessage.addListener(function(message, sender, sendResponse) {
+    chrome.storage.local.get(['setting'], function(items) {
+        sendResponse(items.setting);
+    });
+});
+`,
+                    },
+                ]);
+
+                const result = await RenameAPIS.migrate(extension);
+
+                expect(result).not.toBeInstanceOf(MigrationError);
+                if (!(result instanceof MigrationError)) {
+                    const file = result.files.find((f) => f!.path === 'background.js');
+                    expect(file).toBeDefined();
+                    if (file) {
+                        const content = file.getContent();
+                        expect(content).toContain('return true');
+                    }
+                }
+
+                extension.files.forEach((file) => { if (file) { file.close(); } });
+                if (!(result instanceof MigrationError)) {
+                    result.files.forEach((file) => { if (file) { file.close(); } });
+                }
+            });
+        });
     });
 });
