@@ -1,6 +1,7 @@
 import * as ESTree from 'estree';
 import { ContextMenuTransform } from './special_cases/context_menu';
 import { WindowOpenTransform } from './special_cases/window_open';
+import { OnMessageTransform } from './special_cases/on_message';
 import { SpecialTransform } from '../../types/special_transform';
 
 /**
@@ -11,7 +12,11 @@ import { SpecialTransform } from '../../types/special_transform';
  * @returns True if a transformation was applied, false otherwise
  */
 export function applySpecialTransforms(node: ESTree.Node): boolean {
-    const special_cases: (typeof SpecialTransform)[] = [ContextMenuTransform, WindowOpenTransform];
+    const special_cases: (typeof SpecialTransform)[] = [
+        ContextMenuTransform,
+        WindowOpenTransform,
+        OnMessageTransform,
+    ];
 
     for (const special_case of special_cases) {
         if (special_case.try_transform(node)) {
