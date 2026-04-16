@@ -6,6 +6,7 @@ migrator/node_modules
 ext_analyzer/target
 chrome/
 target/
+chrome/
 coverage
 tmp
 .DS_Store
