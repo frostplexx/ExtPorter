@@ -15,7 +15,7 @@
 
 ExtPorter is a framework for automatically migrating
 Google Chrome extensions from Manifest V2 to Manifest V3.
-This project was developed as part of a bachelor thesis to address the challenges
+It addresses the challenges
 of Chrome extension migration in the face of Google's deprecation of Manifest V2.
 
 ## Features

@@ -82,7 +82,7 @@ export class LazyFile implements AbstractFile {
                 }
             }
         } catch (error) {
-            // Log parsing errors for thesis experiment
+            // Log parsing errors for analysis
             lstatSync(this._absolutePath);
             logger.error(null, this.path, String(error));
 
