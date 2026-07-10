@@ -48,6 +48,9 @@ node_modules
 dist
 .env
 
+# Heap cache (contains secrets from heap dumps)
+.heap_cache/
+
 # Rust build artifacts
 ext_analyzer/target
 
