@@ -53,6 +53,7 @@
             sshpass
             docker
             docker-compose
+                        python3
 
             cargo
             rustc
