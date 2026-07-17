@@ -1,32 +1,13 @@
 #!/usr/bin/env python3
 """
-Compute migration success rate broken down by extension complexity.
+Compute migration success rate broken down by change complexity.
 
-Joins manual testing reports (overall_working) with extension complexity
-metrics (interestingness_score, change classification tags) and prints
-success rate per tier.
+Joins manual testing reports (overall_working) with extension tags to
+classify each extension as trivial / semi-trivial / non-trivial, then
+prints success rate per tier.
 
 Usage:
-    python success_by_complexity.py [--uri URI] [--db DB]
-        [--mode {score,change-type}]
-        [--exclude-mv2-broken]
-
-Modes:
-    score        – Bucket by interestingness_score (numeric complexity score):
-                    0-10   simple
-                    10-25  medium-low
-                    25-50  medium
-                    50-100 high
-                    100+   very high
-    change-type  – Bucket by change classification (trivial / semi-trivial /
-                   non-trivial) using the same tag-based logic as
-                   change_distribution.py.
-
-MV2-broken filtering:
-    Extensions that didn't work in MV2 (works_in_mv2=false) have
-    overall_working set to "could_not_test" by the TUI and are already
-    excluded from the working/failed counts.  --exclude-mv2-broken adds
-    an extra explicit check for safety.
+    python success_by_complexity.py [--uri URI] [--db DB] [--exclude-mv2-broken]
 
 Requirements:
     pip install pymongo python-dotenv
@@ -37,7 +18,6 @@ import os
 import sys
 from collections import Counter
 from pathlib import Path
-from typing import Dict, List, Tuple
 
 try:
     from dotenv import load_dotenv
@@ -54,219 +34,124 @@ except ImportError:
 DEFAULT_URI = "mongodb://admin:password@localhost:27017/migrator?authSource=admin"
 DEFAULT_DB = "migrator"
 
-# ── Complexity score buckets ────────────────────────────────────────────────
-SCORE_BUCKETS: List[Tuple[float, float, str]] = [
-    (0, 10, "simple"),
-    (10, 25, "medium-low"),
-    (25, 50, "medium"),
-    (50, 100, "high"),
-    (100, float("inf"), "very high"),
-]
-
-# ── Change-type classification (mirrors change_distribution.py) ─────────────
+# Change-type classification (mirrors change_distribution.py)
 TRIVIAL_TAGS = {"MANIFEST_MIGRATED", "CSP_VALUE_MODIFIED"}
 SEMI_TRIVIAL_TAGS = {"API_RENAMES_APPLIED", "BRIDGE_INJECTED"}
 NON_TRIVIAL_TAGS = {"DECLARATIVE_NET_REQUEST_MIGRATED", "OFFSCREEN_DOCUMENT_ADDED"}
+TIER_ORDER = ["trivial", "semi-trivial", "non-trivial", "unclassified"]
 
 
-def classify_change_type(tags: list) -> str:
-    """Classify extension by the highest complexity tier of changes applied."""
-    tag_set = set(tags or [])
-    if tag_set & NON_TRIVIAL_TAGS:
+def classify(tags: list) -> str:
+    """Highest complexity tier based on which migration tags are present."""
+    s = set(tags or [])
+    if s & NON_TRIVIAL_TAGS:
         return "non-trivial"
-    if tag_set & SEMI_TRIVIAL_TAGS:
+    if s & SEMI_TRIVIAL_TAGS:
         return "semi-trivial"
-    if tag_set & TRIVIAL_TAGS:
+    if s & TRIVIAL_TAGS:
         return "trivial"
     return "unclassified"
-
-
-def bucket_score(score: float) -> str:
-    """Assign a complexity bucket label for a given interestingness_score."""
-    for lo, hi, label in SCORE_BUCKETS:
-        if lo <= score < hi:
-            return label
-    return "unknown"
 
 
 def main():
     if load_dotenv:
         script_dir = Path(__file__).parent
-        for env_path in [script_dir / ".env", script_dir.parent / ".env"]:
-            if env_path.exists():
-                load_dotenv(env_path)
+        for p in [script_dir / ".env", script_dir.parent / ".env"]:
+            if p.exists():
+                load_dotenv(p)
                 break
 
     parser = argparse.ArgumentParser(
-        description="Compute migration success rate by extension complexity."
+        description="Migration success rate by change complexity."
     )
-    parser.add_argument(
-        "--uri", type=str, default=os.environ.get("MONGODB_URI", DEFAULT_URI)
-    )
-    parser.add_argument("--db", type=str, default=os.environ.get("DB_NAME", DEFAULT_DB))
-    parser.add_argument(
-        "--mode",
-        type=str,
-        default="score",
-        choices=["score", "change-type"],
-        help="Complexity metric to use (default: score)",
-    )
-    parser.add_argument(
-        "--exclude-mv2-broken",
-        action="store_true",
-        help="Exclude extensions that didn't work in MV2 (works_in_mv2=false)",
-    )
+    parser.add_argument("--uri", type=str,
+                        default=os.environ.get("MONGODB_URI", DEFAULT_URI))
+    parser.add_argument("--db", type=str,
+                        default=os.environ.get("DB_NAME", DEFAULT_DB))
+    parser.add_argument("--exclude-mv2-broken", action="store_true",
+                        help="Skip reports where works_in_mv2 is false")
     args = parser.parse_args()
 
     try:
         client = MongoClient(args.uri, serverSelectionTimeoutMS=5000)
         client.admin.command("ping")
-        print("Connected to MongoDB")
     except Exception as e:
         print(f"Error: {e}")
         sys.exit(1)
 
     db = client[args.db]
-    reports_col = db["reports"]
-    extensions_col = db["extensions"]
 
-    # ── 1. Fetch all tested reports ──────────────────────────────────────
-    reports = list(reports_col.find({"tested": True}))
-    print(f"Total tested reports: {len(reports)}")
-
+    # 1. Reports
+    reports = list(db["reports"].find({"tested": True}))
     if not reports:
         print("No tested reports found.")
         client.close()
         return
 
-    # ── 2. Load matching extensions ──────────────────────────────────────
+    # 2. Extensions
     ext_ids = [r["extension_id"] for r in reports if r.get("extension_id")]
-    extensions = list(
-        extensions_col.find(
-            {"id": {"$in": ext_ids}},
-            {
-                "id": 1,
-                "interestingness_score": 1,
-                "tags": 1,
-                "name": 1,
-            },
-        )
-    )
-    ext_map = {e["id"]: e for e in extensions}
-    print(f"Matching extensions:   {len(ext_map)}")
-
-    # ── 3. Classify each report ──────────────────────────────────────────
-    bucket_total: Dict[str, int] = Counter()
-    bucket_working: Dict[str, int] = Counter()
-    total_working = 0
-    total_failed = 0
-    could_not_test = 0
-    excluded_mv2_broken = 0
-
-    for r in reports:
-        ext_id = r.get("extension_id")
-        ext = ext_map.get(ext_id)
-
-        # Optionally skip extensions that were already broken in MV2
-        if args.exclude_mv2_broken and r.get("works_in_mv2") is False:
-            excluded_mv2_broken += 1
-            continue
-
-        overall = r.get("overall_working")
-
-        if overall == "could_not_test":
-            could_not_test += 1
-            continue
-        elif overall == "yes":
-            total_working += 1
-        elif overall == "no":
-            total_failed += 1
-        else:
-            could_not_test += 1
-            continue
-
-        # Determine bucket
-        if args.mode == "score":
-            score = (ext or {}).get("interestingness_score") or 0
-            bucket = bucket_score(score)
-        else:
-            tags = (ext or {}).get("tags") or []
-            bucket = classify_change_type(tags)
-
-        bucket_total[bucket] += 1
-        if overall == "yes":
-            bucket_working[bucket] += 1
+    ext_map = {}
+    for e in db["extensions"].find({"id": {"$in": ext_ids}}, {"id": 1, "tags": 1}):
+        ext_map[e["id"]] = e
 
     client.close()
 
-    # ── 4. Print results ─────────────────────────────────────────────────
-    all_tested = total_working + total_failed
-    overall_rate = (total_working / all_tested * 100) if all_tested else 0.0
+    print(f"Reports: {len(reports)}  |  Extensions: {len(ext_map)}")
 
-    print(f"\n{'=' * 70}")
-    print(f"SUCCESS RATE BY COMPLEXITY  (mode: {args.mode})")
-    print(f"{'=' * 70}")
+    # 3. Classify
+    counts: dict = {t: {"total": 0, "working": 0} for t in TIER_ORDER}
+    could_not_test = 0
+    excluded_mv2 = 0
 
-    if args.mode == "score":
-        print("Score buckets:  0-10 simple | 10-25 medium-low | 25-50 medium |"
-              " 50-100 high | 100+ very high")
-    else:
-        print("Change types: trivial < semi-trivial < non-trivial")
+    for r in reports:
+        if args.exclude_mv2_broken and r.get("works_in_mv2") is False:
+            excluded_mv2 += 1
+            continue
 
+        ow = r.get("overall_working")
+        if ow == "could_not_test" or ow not in ("yes", "no"):
+            could_not_test += 1
+            continue
+
+        ext = ext_map.get(r.get("extension_id"))
+        tier = classify(ext.get("tags") if ext else None)
+
+        counts[tier]["total"] += 1
+        if ow == "yes":
+            counts[tier]["working"] += 1
+
+    # 4. Print
+    total = sum(c["total"] for c in counts.values())
+    working = sum(c["working"] for c in counts.values())
+    failed = total - working
+
+    print(f"\n{'=' * 55}")
+    print("SUCCESS RATE BY CHANGE COMPLEXITY")
+    print(f"{'=' * 55}")
     if args.exclude_mv2_broken:
-        print(f"Excluded MV2-broken: {excluded_mv2_broken}")
-
-    print(f"Tested: {all_tested}  |  Working: {total_working}  |  "
-          f"Failed: {total_failed}  |  Could not test: {could_not_test}")
-    print(f"Overall success rate: {overall_rate:.1f}%")
+        print(f"Excluded MV2-broken: {excluded_mv2}")
+    print(f"Tested: {total}  |  Working: {working}  |  "
+          f"Failed: {failed}  |  Could not test: {could_not_test}")
+    rate = (working / total * 100) if total else 0.0
+    print(f"Overall success rate: {rate:.1f}%")
     print()
 
-    # Header
-    bucket_order = (
-        ["simple", "medium-low", "medium", "high", "very high", "unclassified"]
-        if args.mode == "score"
-        else ["trivial", "semi-trivial", "non-trivial", "unclassified"]
-    )
+    print(f"{'Complexity':<18s} {'Total':>7s} {'Working':>8s} "
+          f"{'Failed':>7s} {'Rate':>7s}")
+    print("-" * 52)
 
-    print(f"{'Complexity':<20s} {'Total':>8s} {'Working':>8s} {'Failed':>8s} {'Rate':>8s}")
-    print("-" * 55)
-
-    for bucket in bucket_order:
-        total = bucket_total.get(bucket, 0)
-        if total == 0:
+    for tier in TIER_ORDER:
+        c = counts[tier]
+        if c["total"] == 0:
             continue
-        working = bucket_working.get(bucket, 0)
-        failed = total - working
-        rate = working / total * 100
-        bar = "█" * max(1, round(rate / 4))
-        print(f"{bucket:<20s} {total:>8d} {working:>8d} {failed:>8d} "
-              f"{rate:>6.1f}%  {bar}")
+        w = c["working"]
+        f = c["total"] - w
+        r = w / c["total"] * 100
+        bar = "█" * max(1, round(r / 4))
+        print(f"{tier:<18s} {c['total']:>7d} {w:>8d} {f:>7d} {r:>6.1f}%  {bar}")
 
-    print("-" * 55)
-    print(f"{'TOTAL':<20s} {all_tested:>8d} {total_working:>8d} "
-          f"{total_failed:>8d} {overall_rate:>6.1f}%")
-
-    # Score mode: show median/mean per bucket
-    if args.mode == "score" and extensions:
-        print(f"\n{'─' * 55}")
-        print("Score distribution per bucket:")
-        bucket_scores: Dict[str, list] = {}
-        for ext in extensions:
-            s = ext.get("interestingness_score") or 0
-            b = bucket_score(s)
-            bucket_scores.setdefault(b, []).append(s)
-
-        print(f"{'Bucket':<20s} {'Count':>6s} {'Mean':>8s} {'Median':>8s} {'Min':>6s} {'Max':>6s}")
-        print("-" * 55)
-        for b in bucket_order:
-            scores = bucket_scores.get(b, [])
-            if not scores:
-                continue
-            scores.sort()
-            mean = sum(scores) / len(scores)
-            median = scores[len(scores) // 2]
-            print(f"{b:<20s} {len(scores):>6d} {mean:>7.1f} {median:>7.1f} "
-                  f"{scores[0]:>5.0f} {scores[-1]:>5.0f}")
+    print("-" * 52)
+    print(f"{'TOTAL':<18s} {total:>7d} {working:>8d} {failed:>7d} {rate:>6.1f}%")
 
 
 if __name__ == "__main__":
