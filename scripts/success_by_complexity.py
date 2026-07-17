@@ -9,14 +9,24 @@ success rate per tier.
 Usage:
     python success_by_complexity.py [--uri URI] [--db DB]
         [--mode {score,change-type}]
+        [--exclude-mv2-broken]
 
 Modes:
-    score        – Bucket by interestingness_score (numeric complexity score).
-                   Thresholds: 0-10 simple, 10-25 medium-low, 25-50 medium,
-                   50-100 high, 100+ very high.
+    score        – Bucket by interestingness_score (numeric complexity score):
+                    0-10   simple
+                    10-25  medium-low
+                    25-50  medium
+                    50-100 high
+                    100+   very high
     change-type  – Bucket by change classification (trivial / semi-trivial /
                    non-trivial) using the same tag-based logic as
                    change_distribution.py.
+
+MV2-broken filtering:
+    Extensions that didn't work in MV2 (works_in_mv2=false) have
+    overall_working set to "could_not_test" by the TUI and are already
+    excluded from the working/failed counts.  --exclude-mv2-broken adds
+    an extra explicit check for safety.
 
 Requirements:
     pip install pymongo python-dotenv
@@ -101,6 +111,11 @@ def main():
         choices=["score", "change-type"],
         help="Complexity metric to use (default: score)",
     )
+    parser.add_argument(
+        "--exclude-mv2-broken",
+        action="store_true",
+        help="Exclude extensions that didn't work in MV2 (works_in_mv2=false)",
+    )
     args = parser.parse_args()
 
     try:
@@ -146,10 +161,16 @@ def main():
     total_working = 0
     total_failed = 0
     could_not_test = 0
+    excluded_mv2_broken = 0
 
     for r in reports:
         ext_id = r.get("extension_id")
         ext = ext_map.get(ext_id)
+
+        # Optionally skip extensions that were already broken in MV2
+        if args.exclude_mv2_broken and r.get("works_in_mv2") is False:
+            excluded_mv2_broken += 1
+            continue
 
         overall = r.get("overall_working")
 
@@ -185,6 +206,16 @@ def main():
     print(f"\n{'=' * 70}")
     print(f"SUCCESS RATE BY COMPLEXITY  (mode: {args.mode})")
     print(f"{'=' * 70}")
+
+    if args.mode == "score":
+        print("Score buckets:  0-10 simple | 10-25 medium-low | 25-50 medium |"
+              " 50-100 high | 100+ very high")
+    else:
+        print("Change types: trivial < semi-trivial < non-trivial")
+
+    if args.exclude_mv2_broken:
+        print(f"Excluded MV2-broken: {excluded_mv2_broken}")
+
     print(f"Tested: {all_tested}  |  Working: {total_working}  |  "
           f"Failed: {total_failed}  |  Could not test: {could_not_test}")
     print(f"Overall success rate: {overall_rate:.1f}%")
