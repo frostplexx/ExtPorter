@@ -1,6 +1,8 @@
 *logs/*
 migrator/output/*
 tests/
+extensions/
+extensions.tag.gz
 migrator/extensions
 migrator/node_modules
 ext_analyzer/target
