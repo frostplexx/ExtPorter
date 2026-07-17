@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """
-Reproduce thesis Table 5.1: migration outcomes by interestingness terciles.
+Reproduce thesis Table 5.1: migration outcomes by interestingness.
 
-Groups extensions by interestingness_score (Top 100, Random 100, Bottom 100),
-then classifies each tested report as Working / Not Working / Not Testable.
+Only considers extensions that have at least one report.
+- Top 100:    highest interestingness_score among those with reports
+- Bottom 100: lowest interestingness_score among those with reports
+- Random:     random sample from all extensions with reports
 
 Usage:
     python thesis_table.py [--uri URI] [--db DB]
@@ -22,7 +24,7 @@ except ImportError:
     load_dotenv = None
 
 try:
-    from pymongo import MongoClient, ASCENDING
+    from pymongo import MongoClient
 except ImportError:
     print("Error: pymongo is not installed. Run: pip install pymongo")
     sys.exit(1)
@@ -58,81 +60,86 @@ def main():
 
     db = client[args.db]
 
-    # 1. Load all extensions with interestingness_score
-    all_exts = list(
-        db["extensions"].find(
-            {"interestingness_score": {"$exists": True}},
-            {"id": 1, "interestingness_score": 1},
-        )
-    )
-    all_exts.sort(key=lambda e: e.get("interestingness_score", 0))
+    # 1. Load all reports and collect unique extension_ids
+    reports = list(db["reports"].find({}, {"extension_id": 1, "overall_working": 1, "tested_date": 1}))
+    print(f"Total reports: {len(reports)}")
 
-    if len(all_exts) < 500:
-        print(f"Only {len(all_exts)} extensions with scores, need ≥500")
-        client.close()
-        return
-
-    # 2. Partition: bottom 100, random 300 (from middle), top 100
-    bottom = all_exts[:100]
-    top = all_exts[-100:]
-    middle = all_exts[100:-100]
-    sampled = random.sample(middle, min(300, len(middle)))
-
-    groups = {
-        "Bottom 100": {e["id"] for e in bottom},
-        "Random":     {e["id"] for e in sampled},
-        "Top 100":    {e["id"] for e in top},
-    }
-
-    # 3. Fetch reports for these extensions
-    all_ids = set()
-    for g in groups.values():
-        all_ids |= g
-
-    reports = list(db["reports"].find({"extension_id": {"$in": list(all_ids)}}))
+    # Group reports by extension_id, keep latest per extension
     ext_reports: dict[str, list] = {}
     for r in reports:
         eid = r.get("extension_id")
         if eid:
             ext_reports.setdefault(eid, []).append(r)
 
+    print(f"Extensions with reports: {len(ext_reports)}")
+
+    # 2. Load interestingness_score for those extensions
+    scored = {}
+    for e in db["extensions"].find(
+        {"id": {"$in": list(ext_reports.keys())}},
+        {"id": 1, "interestingness_score": 1},
+    ):
+        sid = e["id"]
+        score = e.get("interestingness_score")
+        if score is not None:
+            scored[sid] = score
+
+    print(f"Extensions with score + report: {len(scored)}")
     client.close()
 
-    # 4. Classify per group
-    outcomes = ["Working", "Not Working", "Not Testable"]
-    result = {g: Counter() for g in groups}
+    # 3. Sort by score, partition
+    sorted_ids = sorted(scored.keys(), key=lambda eid: scored[eid])
+    n = len(sorted_ids)
+    top_n = 100
+    bottom_n = 100
+    random_n = 300
 
+    if n < top_n + bottom_n + random_n:
+        print(f"Only {n} extensions — need at least {top_n + bottom_n + random_n}")
+        return
+
+    bottom_ids = set(sorted_ids[:bottom_n])
+    top_ids = set(sorted_ids[-top_n:])
+    middle_ids = [eid for eid in sorted_ids if eid not in bottom_ids and eid not in top_ids]
+    random_ids = set(random.sample(middle_ids, random_n))
+
+    groups = {
+        "Bottom 100": bottom_ids,
+        "Random":     random_ids,
+        "Top 100":    top_ids,
+    }
+
+    # 4. Classify per group (use latest report per extension)
+    def classify(eid: str) -> str:
+        reps = ext_reports.get(eid, [])
+        if not reps:
+            return "Not Testable"
+        latest = max(reps, key=lambda r: r.get("tested_date", ""))
+        ow = latest.get("overall_working")
+        if ow == "yes":
+            return "Working"
+        elif ow == "no":
+            return "Not Working"
+        else:
+            return "Not Testable"
+
+    result = {g: Counter() for g in groups}
     for label, ids in groups.items():
         for eid in ids:
-            reps = ext_reports.get(eid, [])
-            if not reps:
-                result[label]["Not Testable"] += 1
-                continue
-            # Use the latest report per extension
-            latest = max(reps, key=lambda r: r.get("tested_date", ""))
-            ow = latest.get("overall_working")
-            if ow == "yes":
-                result[label]["Working"] += 1
-            elif ow == "no":
-                result[label]["Not Working"] += 1
-            else:
-                result[label]["Not Testable"] += 1
+            result[label][classify(eid)] += 1
 
     # 5. Print table
     print()
     print(f"{'Outcome':<20s} {'Top 100':>8s} {'Random':>8s} {'Bottom 100':>8s}")
     print("-" * 48)
-    for o in outcomes:
-        top_v = result["Top 100"].get(o, 0)
-        rand_v = result["Random"].get(o, 0)
-        bot_v = result["Bottom 100"].get(o, 0)
-        print(f"{o:<20s} {top_v:>8d} {rand_v:>8d} {bot_v:>8d}")
+    for o in ["Working", "Not Working", "Not Testable"]:
+        vals = [result[g].get(o, 0) for g in ["Top 100", "Random", "Bottom 100"]]
+        print(f"{o:<20s} {vals[0]:>8d} {vals[1]:>8d} {vals[2]:>8d}")
     print("-" * 48)
-    total_t = sum(result["Top 100"].values())
-    total_r = sum(result["Random"].values())
-    total_b = sum(result["Bottom 100"].values())
-    print(f"{'Total':<20s} {total_t:>8d} {total_r:>8d} {total_b:>8d}")
+    totals = [sum(result[g].values()) for g in ["Top 100", "Random", "Bottom 100"]]
+    print(f"{'Total':<20s} {totals[0]:>8d} {totals[1]:>8d} {totals[2]:>8d}")
     print()
+    print(f"(Random sample drawn from {len(middle_ids)} middle-scored extensions)")
 
 
 if __name__ == "__main__":
