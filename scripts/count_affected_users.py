@@ -5,17 +5,22 @@ Count total affected users across all MV2 extensions in the database.
 Sums up cws_info.details.userCount for extensions with manifest_version 2.
 
 Usage:
-    python count_affected_users.py [--uri URI] [--db DB] [--status {all,success,failed,partial}]
+    python count_affected_users.py [--uri URI] [--db DB]
+        [--status {all,success,failed,partial}]
+        [--report-status {all,working,failed,untested}]
 
 Examples:
     # All migrated extensions (default)
     python count_affected_users.py
 
-    # Only successfully migrated
+    # Only successfully migrated (by migration tags)
     python count_affected_users.py --status success
 
-    # Only failed migrations
-    python count_affected_users.py --status failed
+    # Only where manual report says it works
+    python count_affected_users.py --report-status working
+
+    # Combine both filters
+    python count_affected_users.py --status success --report-status working
 
 Requirements:
     pip install pymongo python-dotenv
@@ -96,7 +101,14 @@ def main():
         type=str,
         default="all",
         choices=["all", "success", "failed", "partial"],
-        help="Filter by migration status (default: all)",
+        help="Filter by migration tag status (default: all)",
+    )
+    parser.add_argument(
+        "--report-status",
+        type=str,
+        default="all",
+        choices=["all", "working", "failed", "untested"],
+        help="Filter by manual testing report status (default: all)",
     )
     args = parser.parse_args()
 
@@ -140,14 +152,55 @@ def main():
         ]
     }
 
-    # Apply status filter
+    # Build filter list
+    filters = [base_filter]
+
+    # Apply migration status filter
     status_filter = build_status_filter(args.status)
-    query_filter = (
-        {"$and": [base_filter, status_filter]} if status_filter else base_filter
-    )
+    if status_filter:
+        filters.append(status_filter)
+
+    # Apply report status filter (look up reports collection)
+    report_filter = None
+    if args.report_status != "all":
+        reports_col = db["reports"]
+
+        if args.report_status == "working":
+            report_query = {"tested": True, "overall_working": "yes"}
+        elif args.report_status == "failed":
+            report_query = {"tested": True, "overall_working": "no"}
+        elif args.report_status == "untested":
+            report_query = {
+                "$or": [
+                    {"tested": {"$ne": True}},
+                    {"overall_working": {"$in": ["could_not_test", None]}},
+                ]
+            }
+
+        matching_reports = list(
+            reports_col.find(report_query, {"extension_id": 1, "overall_working": 1})
+        )
+        ext_ids = [
+            r["extension_id"]
+            for r in matching_reports
+            if r.get("extension_id")
+        ]
+        print(
+            f"Report filter ({args.report_status}): {len(matching_reports)} reports, {len(ext_ids)} unique extension IDs"
+        )
+
+        if not ext_ids:
+            print("No extensions match report filter — nothing to count.")
+            client.close()
+            return
+
+        filters.append({"id": {"$in": ext_ids}})
+
+    # Combine all filters
+    query_filter = filters[0] if len(filters) == 1 else {"$and": filters}
 
     matching = col.count_documents(query_filter)
-    print(f"Status filter: {args.status} -> {matching} matching extensions")
+    print(f"Matched extensions in DB: {matching}")
 
     cursor = col.find(
         query_filter,
@@ -178,7 +231,8 @@ def main():
 
     top.sort(reverse=True)
 
-    label = f"Extensions ({args.status})"
+    report_suffix = f", report={args.report_status}" if args.report_status != "all" else ""
+    label = f"Extensions (status={args.status}{report_suffix})"
     print(f"\n{label:40s} {total_exts:>12,}")
     print(f"  with user count:       {with_count:>12,}")
     print(f"  without user count:    {without_count:>12,}")
