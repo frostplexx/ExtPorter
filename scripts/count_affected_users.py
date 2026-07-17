@@ -37,9 +37,10 @@ def parse_user_count(user_count_str):
     """Parse user count string to integer. E.g. '2,000,000+ users' -> 2000000"""
     if not user_count_str:
         return None
-    cleaned = re.sub(
-        r"[,\s+]", "", user_count_str.lower().replace("users", "").replace("user", "")
-    )
+    # Strip everything except digits and commas, then remove commas
+    cleaned = re.sub(r"[^\d,]", "", user_count_str).replace(",", "")
+    if not cleaned:
+        return None
     try:
         return int(cleaned)
     except ValueError:
