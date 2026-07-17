@@ -5,7 +5,17 @@ Count total affected users across all MV2 extensions in the database.
 Sums up cws_info.details.userCount for extensions with manifest_version 2.
 
 Usage:
-    python count_affected_users.py [--uri URI] [--db DB]
+    python count_affected_users.py [--uri URI] [--db DB] [--status {all,success,failed,partial}]
+
+Examples:
+    # All migrated extensions (default)
+    python count_affected_users.py
+
+    # Only successfully migrated
+    python count_affected_users.py --status success
+
+    # Only failed migrations
+    python count_affected_users.py --status failed
 
 Requirements:
     pip install pymongo python-dotenv
@@ -47,6 +57,25 @@ def parse_user_count(user_count_str):
         return None
 
 
+def build_status_filter(status: str) -> dict:
+    """Build MongoDB query filter for the given migration status."""
+    if status == "all":
+        return {}
+    if status == "success":
+        # Must have MANIFEST_MIGRATED and no failure/partial tags
+        return {
+            "$and": [
+                {"tags": "MANIFEST_MIGRATED"},
+                {"tags": {"$nin": ["MIGRATION_FAILED", "PARTIAL_MIGRATION"]}},
+            ]
+        }
+    if status == "failed":
+        return {"tags": "MIGRATION_FAILED"}
+    if status == "partial":
+        return {"tags": "PARTIAL_MIGRATION"}
+    return {}
+
+
 def main():
     if load_dotenv:
         script_dir = Path(__file__).parent
@@ -62,6 +91,13 @@ def main():
         "--uri", type=str, default=os.environ.get("MONGODB_URI", DEFAULT_URI)
     )
     parser.add_argument("--db", type=str, default=os.environ.get("DB_NAME", DEFAULT_DB))
+    parser.add_argument(
+        "--status",
+        type=str,
+        default="all",
+        choices=["all", "success", "failed", "partial"],
+        help="Filter by migration status (default: all)",
+    )
     args = parser.parse_args()
 
     try:
@@ -96,15 +132,25 @@ def main():
     # manifest field may have been updated to v3. So we query all extensions
     # that have an mv3_extension_id (meaning they were migrated from MV2),
     # or whose manifest_version is still 2.
-    # Try both: original MV2 (manifest_version=2) and migrated (has mv3_extension_id).
+    base_filter = {
+        "$or": [
+            {"manifest.manifest_version": 2},
+            {"manifest.manifest_version": "2"},
+            {"mv3_extension_id": {"$ne": None}},
+        ]
+    }
+
+    # Apply status filter
+    status_filter = build_status_filter(args.status)
+    query_filter = (
+        {"$and": [base_filter, status_filter]} if status_filter else base_filter
+    )
+
+    matching = col.count_documents(query_filter)
+    print(f"Status filter: {args.status} -> {matching} matching extensions")
+
     cursor = col.find(
-        {
-            "$or": [
-                {"manifest.manifest_version": 2},
-                {"manifest.manifest_version": "2"},
-                {"mv3_extension_id": {"$ne": None}},
-            ]
-        },
+        query_filter,
         {"name": 1, "id": 1, "cws_info.details.userCount": 1},
     )
 
@@ -132,7 +178,8 @@ def main():
 
     top.sort(reverse=True)
 
-    print(f"\nMV2 extensions:          {total_exts:>12,}")
+    label = f"Extensions ({args.status})"
+    print(f"\n{label:40s} {total_exts:>12,}")
     print(f"  with user count:       {with_count:>12,}")
     print(f"  without user count:    {without_count:>12,}")
     print(f"\nTotal affected users:    {total_users:>12,}")
