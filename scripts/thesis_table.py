@@ -67,16 +67,16 @@ def main():
     )
     all_exts.sort(key=lambda e: e.get("interestingness_score", 0))
 
-    if len(all_exts) < 300:
-        print(f"Only {len(all_exts)} extensions with scores, need ≥300")
+    if len(all_exts) < 500:
+        print(f"Only {len(all_exts)} extensions with scores, need ≥500")
         client.close()
         return
 
-    # 2. Partition: bottom 100, random 100 (from middle), top 100
+    # 2. Partition: bottom 100, random 300 (from middle), top 100
     bottom = all_exts[:100]
     top = all_exts[-100:]
     middle = all_exts[100:-100]
-    sampled = random.sample(middle, min(100, len(middle)))
+    sampled = random.sample(middle, min(300, len(middle)))
 
     groups = {
         "Bottom 100": {e["id"] for e in bottom},
