@@ -55,6 +55,5 @@ dist
 ext_analyzer/target
 
 # Generated files
-*.csv
 *.heapsnapshot
 __pycache__
