@@ -1,0 +1,6 @@
+,Amount,Percentage
+Working w/o broken in MV2 ,102,20.4%
+Broken w/o broken in MV2 ,111,22.2%
+Could not Test w/o broken in MV2 ,199,39.8%
+Broken in MV2,88,17.6%
+Sum,500,82.4%

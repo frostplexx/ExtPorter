@@ -1,0 +1,5 @@
+,,Percentage compared to all extensions,,
+Nr DIsagreeing where it broke in Gemma,21,30.00%,,
+Nr Disagreeing where its working in Gemma but not Sonnet,3,4.29%,,
+"Nr Disagreeing where its ""Could Not Test"" in Gemma but not Sonnet",1,1.43%,,
+Sum,25,35.71%,,
