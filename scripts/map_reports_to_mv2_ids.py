@@ -155,15 +155,9 @@ def resolve(rows: List[Dict[str, str]], by_id: Dict[str, Dict]) -> List[Dict[str
 
 
 def write_csv(results: List[Dict[str, object]], path: str, with_names: bool) -> None:
-    fields = ["csv_extension_id", "mv2_id", "mv3_id", "matched_by"]
+    fields = ["mv2_id", "matched_by"]
     if with_names:
-        fields += [
-            "dataset_name",
-            "dataset_version",
-            "csv_name",
-            "csv_version",
-            "manifest_v2_path",
-        ]
+        fields += ["dataset_name", "dataset_version"]
 
     with open(path, "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=fields, extrasaction="ignore")
@@ -199,7 +193,7 @@ def main() -> None:
     parser.add_argument(
         "--names",
         action="store_true",
-        help="Also write name/version columns from both the CSV and the dataset",
+        help="Also write the dataset's real name/version columns",
     )
     parser.add_argument(
         "--diff-only",
