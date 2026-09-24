@@ -1,0 +1,62 @@
+{
+  "fgammopmbkkafkclbikopphkeeilajba": {
+    "name": "New Tab Page - Blank",
+    "status": "pass",
+    "notes": "",
+    "tested_at": "2026-09-04T09:56:38"
+  },
+  "kmjccehdojphpoalkojfmfndbmpmkkod": {
+    "name": "Reload All Tabs",
+    "status": "fail",
+    "notes": "f",
+    "tested_at": "2026-09-04T10:41:55"
+  },
+  "pdhcplbcmmaghpboidnooibhfdnpfipm": {
+    "name": "Tabliner",
+    "status": "fail",
+    "notes": "",
+    "tested_at": "2026-09-04T10:50:24"
+  },
+  "lgaankgifdhicdelppjoccifpgmoealk": {
+    "name": "My Zmanim Monsey",
+    "status": "pass",
+    "notes": "",
+    "tested_at": "2026-09-04T10:52:52"
+  },
+  "pffkklpbehjpoaeegghbdjfikinmndnd": {
+    "name": "Pangolin Fake Detector",
+    "status": "fail",
+    "notes": "",
+    "tested_at": "2026-09-04T11:52:21"
+  },
+  "hnckgnbicnmpdppjnbchkokjinfhfpla": {
+    "name": "__MSG_name__",
+    "status": "fail",
+    "notes": "",
+    "tested_at": "2026-09-04T12:16:26"
+  },
+  "ijanbjhbpglkhncjadppmcnooicdkljd": {
+    "name": "__MSG_extensionName__",
+    "status": "fail",
+    "notes": "",
+    "tested_at": "2026-09-04T12:36:52"
+  },
+  "nmecppbaggcpblcfdidlokfnfpljikgj": {
+    "name": "Refresh my site!",
+    "status": "fail",
+    "notes": "",
+    "tested_at": "2026-09-04T12:50:14"
+  },
+  "kndnfbmjopkenghimanimafaijmhibac": {
+    "name": "CleanLink",
+    "status": "fail",
+    "notes": "",
+    "tested_at": "2026-09-04T13:00:16"
+  },
+  "knecnendkbbdmncklbhlgcppjpajaipd": {
+    "name": "PDF to FB2 Converter",
+    "status": "pass",
+    "notes": "",
+    "tested_at": "2026-09-04T13:10:31"
+  }
+}
