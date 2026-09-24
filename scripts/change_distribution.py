@@ -3,7 +3,7 @@
 Compute the distribution of trivial, semi-trivial, and non-trivial migration
 changes across all migrated MV2 extensions and export the results to CSV.
 
-Definitions (based on the bachelor thesis):
+Definitions:
   Trivial       – Only manifest.json updates (manifest_version bump, permissions
                   restructuring, CSP adjustments).  No code changes.
   Semi-Trivial  – Code changes that follow well-defined mechanical patterns:

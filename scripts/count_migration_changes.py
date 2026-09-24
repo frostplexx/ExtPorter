@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Reproduce thesis Table 5.3: migration change categories among verified extensions.
+Count migration change categories among verified extensions.
 
 Counts extensions (with at least one report) that required each type of
 migration change, based on pipeline tags and feature analysis.

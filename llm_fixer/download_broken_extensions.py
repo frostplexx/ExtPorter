@@ -1,21 +1,34 @@
 #!/usr/bin/env python3
 """
-Download 100 random migrated extensions from the MongoDB database.
+Download migrated extensions from the MongoDB database.
+
+This script can operate in two modes:
+1. Random mode: Fetches random migrated extensions using a seeded random sort
+2. ID list mode: Downloads specific extensions by ID from a file
 
 This script:
 1. Connects to the MongoDB database (via SSH tunnel)
-2. Fetches 100 random migrated extensions using a seeded random sort
+2. Fetches extensions (either random or from ID list)
 3. Downloads both MV2 and MV3 versions from remote server using SCP
 4. Creates a manifest file with details about the downloaded extensions
 
 Usage:
-    python download_random_extensions.py [output_dir] [--uri URI] [--seed SEED] [--count COUNT] [--compress] --ssh-host HOST
+    # Default: download the broken-MV3 extensions listed in ./ids into
+    # ./downloaded_extensions/<id>/{mv2,mv3}/ from the remote server.
+    python download_broken_extensions.py
+
+    # ID list mode (explicit)
+    python download_broken_extensions.py [output_dir] --ids-file ./ids --ssh-host HOST
+
+    # Random mode (opt out of the ids default with an empty --ids-file)
+    python download_broken_extensions.py [output_dir] --ids-file "" --count COUNT --ssh-host HOST
 
 Arguments:
     output_dir: Output directory for downloaded extensions (default: ./downloaded_extensions)
     --uri: MongoDB URI (default: mongodb://admin:password@localhost:27017/migrator?authSource=admin)
     --seed: Random seed for reproducible selection (default: generated from timestamp)
     --count: Number of extensions to download (default: 100)
+    --ids-file: Path to file with extension IDs (one per line). Uses ID list mode instead of random.
     --compress: Create tar.gz archives instead of copying directories (recommended for remote)
     --ssh-host: SSH host for downloading files (e.g., user@host.com)
     --ssh-port: SSH port (default: 22)
@@ -28,17 +41,19 @@ Requirements:
 import argparse
 import json
 import os
+import shlex
 import shutil
+import socket
 import subprocess
 import sys
 import tarfile
 import tempfile
-import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Callable, Dict, List, Optional, Tuple
+from urllib.parse import urlsplit, urlunsplit
 import hashlib
 
 try:
@@ -51,7 +66,13 @@ except ImportError:
 DEFAULT_URI = "mongodb://admin:password@localhost:27017/migrator?authSource=admin"
 DEFAULT_DB = "migrator"
 EXTENSIONS_COLLECTION = "extensions"
-REPORTS_COLLECTION = "reports"
+
+# Defaults for the broken-MV3 download workflow: by default this reads the local
+# ./ids list and pulls each extension's MV2 + broken MV3 from the remote server
+# into ./downloaded_extensions/<id>/{mv2,mv3}/ (see migrate_extensions.py).
+DEFAULT_IDS_FILE = "./ids"
+DEFAULT_SSH_HOST = os.environ.get("EXT_SSH_HOST", "")
+DEFAULT_SSH_PORT = 54321
 
 
 def connect_to_db(uri: str) -> MongoClient:
@@ -67,35 +88,76 @@ def connect_to_db(uri: str) -> MongoClient:
         sys.exit(1)
 
 
+def mongo_hostport(uri: str) -> Tuple[str, int]:
+    """Extract (host, port) from a mongodb URI (defaults: localhost:27017)."""
+    netloc = urlsplit(uri).netloc.rsplit("@", 1)[-1]
+    host, _, port = netloc.partition(":")
+    return host or "localhost", int(port) if port else 27017
+
+
+def rewrite_mongo_uri(uri: str, host: str, port: int) -> str:
+    """Return `uri` with its host:port replaced (credentials/path preserved)."""
+    parts = urlsplit(uri)
+    netloc = parts.netloc
+    userinfo = f"{netloc.rsplit('@', 1)[0]}@" if "@" in netloc else ""
+    return urlunsplit(
+        (parts.scheme, f"{userinfo}{host}:{port}", parts.path, parts.query, parts.fragment)
+    )
+
+
+def find_free_port() -> int:
+    """Pick an unused local TCP port for the SSH tunnel."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind(("127.0.0.1", 0))
+        return s.getsockname()[1]
+
+
 def generate_seed() -> str:
     """Generate a random seed based on current timestamp."""
     timestamp = str(datetime.now().timestamp())
     return hashlib.sha256(timestamp.encode()).hexdigest()[:16]
 
 
-def get_all_tested_extensions(client: MongoClient, db_name: str) -> List[Dict]:
-    """Fetch all extensions that have at least one tested report."""
+def get_extensions_by_ids(
+    client: MongoClient, db_name: str, extension_ids: List[str]
+) -> List[Dict]:
+    """
+    Fetch specific extensions from the database by their IDs.
+
+    Args:
+        client: MongoDB client
+        db_name: Database name
+        extension_ids: List of extension IDs to fetch
+
+    Returns: List of extension documents
+    """
     db = client[db_name]
-    reports_col = db[REPORTS_COLLECTION]
-    extensions_col = db[EXTENSIONS_COLLECTION]
+    collection = db[EXTENSIONS_COLLECTION]
 
-    # Get unique extension IDs from tested reports
-    tested_ids = reports_col.distinct("extension_id", {"tested": True})
-    print(f"Found {len(tested_ids)} extensions with tested reports")
+    print(f"Fetching {len(extension_ids)} extensions by ID...")
 
-    if not tested_ids:
-        print("✗ No tested extensions found")
+    # Fetch extensions with the specified IDs
+    extensions = list(collection.find({"id": {"$in": extension_ids}}))
+
+    if len(extensions) == 0:
+        print("✗ No extensions found with the specified IDs")
         sys.exit(1)
 
-    # Fetch extension documents that also have both MV2 and MV3 paths
-    extensions = list(extensions_col.find({
-        "id": {"$in": tested_ids},
-        "manifest_v2_path": {"$exists": True, "$ne": None},
-        "manifest_v3_path": {"$exists": True, "$ne": None},
-    }))
+    print(f"✓ Found {len(extensions)} extensions in database")
 
-    print(f"Found {len(extensions)} tested extensions with MV2 and MV3 paths")
-    return extensions
+    # Preserve the order from extension_ids
+    extensions_by_id = {ext["id"]: ext for ext in extensions}
+    ordered_extensions = [
+        extensions_by_id[ext_id] for ext_id in extension_ids if ext_id in extensions_by_id
+    ]
+
+    # Report any missing IDs
+    found_ids = set(ext["id"] for ext in extensions)
+    missing_ids = set(extension_ids) - found_ids
+    if missing_ids:
+        print(f"⚠ {len(missing_ids)} IDs not found in database: {', '.join(list(missing_ids)[:5])}{'...' if len(missing_ids) > 5 else ''}")
+
+    return ordered_extensions
 
 
 def get_random_extensions(
@@ -157,10 +219,20 @@ def get_random_extensions(
     return ordered_extensions
 
 
+def apply_path_maps(path: str, path_maps: Optional[List[Tuple[str, str]]]) -> str:
+    """Rewrite `path` using the first (from_prefix -> to_prefix) mapping that matches."""
+    if not path_maps:
+        return path
+    for from_prefix, to_prefix in path_maps:
+        if path.startswith(from_prefix):
+            return to_prefix + path[len(from_prefix):]
+    return path
+
+
 def validate_extension_paths(
     extension: Dict,
     remote_mode: bool = False,
-    path_map: Optional[List[Tuple[str, str]]] = None
+    path_maps: Optional[List[Tuple[str, str]]] = None
 ) -> Tuple[Optional[str], Optional[str]]:
     """
     Validate and extract MV2 and MV3 directory paths from an extension.
@@ -168,7 +240,9 @@ def validate_extension_paths(
     Args:
         extension: Extension document from database
         remote_mode: If True, skip local file existence checks (for remote downloads)
-        path_map: Optional list of (from_prefix, to_prefix) pairs for path translation
+        path_maps: Optional list of (from_prefix, to_prefix) prefix translations.
+                   MV2 and MV3 paths often live under different roots (e.g.
+                   /app/extensions and /app/output), so several can be supplied.
 
     Returns: (mv2_dir, mv3_dir) or (None, None) if paths are invalid
     """
@@ -189,16 +263,9 @@ def validate_extension_paths(
     else:
         mv3_dir = mv3_path
 
-    # Apply path mappings (first match wins for each path)
-    if path_map:
-        for from_prefix, to_prefix in path_map:
-            if mv2_dir.startswith(from_prefix):
-                mv2_dir = to_prefix + mv2_dir[len(from_prefix):]
-                break
-        for from_prefix, to_prefix in path_map:
-            if mv3_dir.startswith(from_prefix):
-                mv3_dir = to_prefix + mv3_dir[len(from_prefix):]
-                break
+    # Apply path mappings (e.g. /app/extensions -> ..., /app/output -> ...).
+    mv2_dir = apply_path_maps(mv2_dir, path_maps)
+    mv3_dir = apply_path_maps(mv3_dir, path_maps)
 
     # In remote mode, we can't check if paths exist locally
     if remote_mode:
@@ -227,20 +294,6 @@ def create_tarball(source_dir: str, output_path: str) -> None:
         tar.add(source_dir, arcname=os.path.basename(source_dir))
 
 
-def _fix_permissions(path: str) -> None:
-    """Recursively ensure a directory and its contents are user-readable/writable."""
-    try:
-        for root, dirs, files in os.walk(path):
-            os.chmod(root, 0o755)
-            for f in files:
-                try:
-                    os.chmod(os.path.join(root, f), 0o644)
-                except OSError:
-                    pass
-    except OSError:
-        pass
-
-
 def download_via_scp(
     remote_path: str,
     local_path: str,
@@ -248,7 +301,8 @@ def download_via_scp(
     ssh_port: int = 22,
     ssh_options: str = "",
     compress_remote: bool = False,
-    control_path: Optional[str] = None
+    control_path: Optional[str] = None,
+    log: Callable[[str], None] = print,
 ) -> bool:
     """
     Download a directory from remote server using SCP.
@@ -261,6 +315,7 @@ def download_via_scp(
         ssh_options: Additional SSH options
         compress_remote: If True, create tar.gz on remote first, then download
         control_path: SSH ControlMaster socket path for connection reuse
+        log: where to emit progress/error lines (default: print)
 
     Returns: True if successful, False otherwise
     """
@@ -271,8 +326,6 @@ def download_via_scp(
             base_ssh_opts.extend(["-o", f"ControlPath={control_path}", "-o", "ControlMaster=auto"])
         if ssh_options:
             base_ssh_opts.extend(ssh_options.split())
-
-        SCP_TIMEOUT = 300  # seconds per transfer
 
         if compress_remote:
             # Create tar.gz on remote server, download it, then extract
@@ -286,9 +339,9 @@ def download_via_scp(
                 f"tar -czf {temp_remote_tar} -C {remote_dir} {remote_name}"
             ]
 
-            result = subprocess.run(tar_cmd, capture_output=True, text=True, timeout=SCP_TIMEOUT)
+            result = subprocess.run(tar_cmd, capture_output=True, text=True)
             if result.returncode != 0:
-                print(f"    Error creating remote tar: {result.stderr}")
+                log(f"    Error creating remote tar: {result.stderr}")
                 return False
 
             # Download the tar
@@ -298,9 +351,9 @@ def download_via_scp(
                 local_tar
             ]
 
-            result = subprocess.run(scp_cmd, capture_output=True, text=True, timeout=SCP_TIMEOUT)
+            result = subprocess.run(scp_cmd, capture_output=True, text=True)
             if result.returncode != 0:
-                print(f"    Error downloading tar: {result.stderr}")
+                log(f"    Error downloading tar: {result.stderr}")
                 return False
 
             # Extract locally to temp location
@@ -325,37 +378,51 @@ def download_via_scp(
                 ssh_host,
                 f"rm -f {temp_remote_tar}"
             ]
-            subprocess.run(cleanup_cmd, capture_output=True, timeout=30)
+            subprocess.run(cleanup_cmd, capture_output=True)
 
         else:
-            # Direct SCP copy (recursive).
-            # Remove any leftover local directory first — a previous partial download
-            # may have set restrictive permissions that block SCP from writing into it.
-            if os.path.exists(local_path):
-                _fix_permissions(local_path)
-                shutil.rmtree(local_path, ignore_errors=True)
-            os.makedirs(os.path.dirname(local_path), exist_ok=True)
+            # Stream the directory as a single gzipped tar over SSH and extract
+            # locally. This is dramatically faster than `scp -r` for directories
+            # with many small files (one SSH round-trip instead of one per file),
+            # and still leaves a plain directory at local_path.
+            remote_dir = os.path.dirname(remote_path)
+            remote_name = os.path.basename(remote_path)
+            local_parent = os.path.dirname(local_path)
+            os.makedirs(local_parent, exist_ok=True)
 
-            scp_cmd = ["scp", "-r"] + ["-P" if opt == "-p" else opt for opt in base_ssh_opts] + [
-                f"{ssh_host}:{remote_path}",
-                local_path
+            # Clear any stale/partial copy so the extracted tree is clean.
+            if os.path.exists(local_path):
+                shutil.rmtree(local_path)
+
+            ssh_cmd = ["ssh"] + base_ssh_opts + [
+                ssh_host,
+                f"tar -C {shlex.quote(remote_dir)} -czf - {shlex.quote(remote_name)}",
             ]
 
-            result = subprocess.run(scp_cmd, capture_output=True, text=True, timeout=SCP_TIMEOUT)
-            if result.returncode != 0:
-                print(f"    Error during SCP: {result.stderr}")
+            proc = subprocess.Popen(ssh_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            try:
+                with tarfile.open(fileobj=proc.stdout, mode="r|gz") as tar:
+                    tar.extractall(local_parent, filter="data")
+            finally:
+                if proc.stdout:
+                    proc.stdout.close()
+            stderr = proc.stderr.read().decode(errors="replace") if proc.stderr else ""
+            if proc.wait() != 0:
+                log(f"    Error streaming tar over SSH: {stderr.strip()}")
                 return False
 
-            # Ensure downloaded files are readable/removable by the current user
-            _fix_permissions(local_path)
+            # tar restores the directory under its original basename; rename it
+            # to the requested local_path (e.g. .../mv3) if they differ.
+            extracted = os.path.join(local_parent, remote_name)
+            if extracted != local_path:
+                if os.path.exists(local_path):
+                    shutil.rmtree(local_path)
+                os.rename(extracted, local_path)
 
         return True
 
-    except subprocess.TimeoutExpired:
-        print(f"    Timed out after {SCP_TIMEOUT}s")
-        return False
     except Exception as e:
-        print(f"    Exception during download: {e}")
+        log(f"    Exception during download: {e}")
         return False
 
 
@@ -389,10 +456,16 @@ def get_directory_size_remote(
 class SSHConnectionManager:
     """Manages a persistent SSH connection using ControlMaster."""
 
-    def __init__(self, ssh_host: str, ssh_port: int = 22, ssh_options: str = ""):
+    def __init__(self, ssh_host: str, ssh_port: int = 22, ssh_options: str = "",
+                 tunnel: Optional[Tuple[int, str, int]] = None):
+        """
+        tunnel: optional (local_port, remote_host, remote_port) to forward over
+        the master connection (ssh -L), e.g. for reaching a remote MongoDB.
+        """
         self.ssh_host = ssh_host
         self.ssh_port = ssh_port
         self.ssh_options = ssh_options
+        self.tunnel = tunnel
         self.control_path = None
 
     def __enter__(self):
@@ -415,6 +488,12 @@ class SSHConnectionManager:
             "-o", "ServerAliveInterval=60",  # Keep connection alive
             "-p", str(self.ssh_port),
         ]
+
+        # Forward a local port to the remote DB (e.g. MongoDB) over this tunnel.
+        if self.tunnel:
+            local_port, remote_host, remote_port = self.tunnel
+            cmd.extend(["-L", f"{local_port}:{remote_host}:{remote_port}"])
+            print(f"  (tunnelling localhost:{local_port} -> {remote_host}:{remote_port})")
 
         if self.ssh_options:
             cmd.extend(self.ssh_options.split())
@@ -485,6 +564,30 @@ class SSHConnectionManager:
         return self.control_path
 
 
+def build_metadata(extension: Dict, mv2_size: int, mv3_size: int) -> Dict:
+    """Assemble the per-extension manifest entry."""
+    cws = extension.get("cws_info")
+    return {
+        "id": extension.get("id"),
+        "name": extension.get("name", "Unknown"),
+        "version": extension.get("version"),
+        "mv2_extension_id": extension.get("mv2_extension_id"),
+        "mv3_extension_id": extension.get("mv3_extension_id"),
+        "interestingness_score": extension.get("interestingness_score"),
+        "tags": extension.get("tags", []),
+        "mv2_size_bytes": mv2_size,
+        "mv3_size_bytes": mv3_size,
+        "total_size_bytes": mv2_size + mv3_size,
+        "cws_info": {
+            "user_count": cws.get("details", {}).get("userCount"),
+            "rating": cws.get("details", {}).get("rating"),
+            "developer": cws.get("details", {}).get("developer"),
+        }
+        if cws
+        else None,
+    }
+
+
 def copy_extension(
     extension: Dict,
     output_dir: Path,
@@ -493,8 +596,10 @@ def copy_extension(
     ssh_port: int = 22,
     ssh_options: str = "",
     control_path: Optional[str] = None,
-    path_map: Optional[Tuple[str, str]] = None,
-    mv3_only: bool = False
+    path_maps: Optional[List[Tuple[str, str]]] = None,
+    mv3_only: bool = False,
+    force: bool = False,
+    log: Callable[[str], None] = print,
 ) -> Optional[Dict]:
     """
     Copy or download an extension's MV2 and MV3 versions to the output directory.
@@ -507,7 +612,7 @@ def copy_extension(
         ssh_port: SSH port
         ssh_options: Additional SSH options
         control_path: SSH ControlMaster socket path for connection reuse
-        path_map: Optional tuple of (from_prefix, to_prefix) for path translation
+        path_maps: Optional list of (from_prefix, to_prefix) prefix translations
         mv3_only: If True, only download MV3 (skip MV2)
 
     Returns: metadata dict if successful, None if failed
@@ -516,20 +621,34 @@ def copy_extension(
     ext_name = extension.get("name", "Unknown")
 
     remote_mode = ssh_host is not None
-    mv2_dir, mv3_dir = validate_extension_paths(extension, remote_mode=remote_mode, path_map=path_map)
+    mv2_dir, mv3_dir = validate_extension_paths(extension, remote_mode=remote_mode, path_maps=path_maps)
 
     # For mv3_only mode, only check mv3_dir
     if mv3_only:
         if not mv3_dir:
-            print(f"  ✗ Skipping {ext_name} ({ext_id}): missing MV3 path")
+            log(f"  ✗ Skipping {ext_name} ({ext_id}): missing MV3 path")
             return None
     else:
         if not mv2_dir or not mv3_dir:
-            print(f"  ✗ Skipping {ext_name} ({ext_id}): invalid or missing paths")
+            log(f"  ✗ Skipping {ext_name} ({ext_id}): invalid or missing paths")
             return None
 
-    # Create extension directory
+    # Resume support: figure out what a complete download looks like on disk.
     ext_output_dir = output_dir / ext_id
+    if compress:
+        expected = ([] if mv3_only else [ext_output_dir / "mv2.tar.gz"]) + [ext_output_dir / "mv3.tar.gz"]
+    else:
+        expected = ([] if mv3_only else [ext_output_dir / "mv2"]) + [ext_output_dir / "mv3"]
+
+    if not force and all(p.exists() for p in expected):
+        sizes = {sub: sum(f.stat().st_size for f in (ext_output_dir / sub).rglob("*") if f.is_file())
+                 for sub in (("mv3",) if mv3_only else ("mv2", "mv3"))}
+        log(f"  ⏭ {ext_name} already downloaded ({format_bytes(sum(sizes.values()))}) — skipping")
+        return build_metadata(extension, sizes.get("mv2", 0), sizes["mv3"])
+
+    # Re-downloading or partial leftover: start from a clean directory.
+    if ext_output_dir.exists():
+        shutil.rmtree(ext_output_dir)
     ext_output_dir.mkdir(parents=True, exist_ok=True)
 
     try:
@@ -537,13 +656,15 @@ def copy_extension(
             # Download from remote server
             mv3_output = ext_output_dir / "mv3"
 
+            log(f"  → Downloading {ext_name} via SCP...")
+
             # Download MV2 (unless mv3_only)
             mv2_size = 0
             if not mv3_only and mv2_dir:
                 mv2_output = ext_output_dir / "mv2"
                 if not download_via_scp(
                     mv2_dir, str(mv2_output), ssh_host, ssh_port, ssh_options,
-                    compress_remote=compress, control_path=control_path
+                    compress_remote=compress, control_path=control_path, log=log
                 ):
                     raise Exception("Failed to download MV2")
 
@@ -558,7 +679,7 @@ def copy_extension(
             # Download MV3
             if not download_via_scp(
                 mv3_dir, str(mv3_output), ssh_host, ssh_port, ssh_options,
-                compress_remote=compress, control_path=control_path
+                compress_remote=compress, control_path=control_path, log=log
             ):
                 raise Exception("Failed to download MV3")
 
@@ -577,6 +698,7 @@ def copy_extension(
 
             if compress:
                 # Create tar.gz archives
+                log(f"  → Compressing {ext_name}...")
 
                 # MV2 (unless mv3_only)
                 if not mv3_only and mv2_dir:
@@ -590,6 +712,7 @@ def copy_extension(
                 mv3_size = mv3_archive.stat().st_size
             else:
                 # Copy directories
+                log(f"  → Copying {ext_name}...")
 
                 # MV2 (unless mv3_only)
                 if not mv3_only and mv2_dir:
@@ -610,38 +733,15 @@ def copy_extension(
                     f.stat().st_size for f in mv3_output.rglob("*") if f.is_file()
                 )
 
-        # Create metadata for this extension
-        metadata = {
-            "id": ext_id,
-            "name": ext_name,
-            "version": extension.get("version"),
-            "mv2_extension_id": extension.get("mv2_extension_id"),
-            "mv3_extension_id": extension.get("mv3_extension_id"),
-            "interestingness_score": extension.get("interestingness_score"),
-            "tags": extension.get("tags", []),
-            "mv2_size_bytes": mv2_size,
-            "mv3_size_bytes": mv3_size,
-            "total_size_bytes": mv2_size + mv3_size,
-            "cws_info": {
-                "user_count": extension.get("cws_info", {})
-                .get("details", {})
-                .get("userCount"),
-                "rating": extension.get("cws_info", {}).get("details", {}).get("rating"),
-                "developer": extension.get("cws_info", {})
-                .get("details", {})
-                .get("developer"),
-            }
-            if extension.get("cws_info")
-            else None,
-        }
-
+        metadata = build_metadata(extension, mv2_size, mv3_size)
+        log(f"  ✓ {ext_name} ({format_bytes(mv2_size + mv3_size)})")
         return metadata
 
     except Exception as e:
-        print(f"  ✗ Error processing {ext_name}: {e}")
-        # Clean up partial copy (ignore permission errors from SCP-downloaded files)
+        log(f"  ✗ Error processing {ext_name}: {e}")
+        # Clean up partial copy
         if ext_output_dir.exists():
-            shutil.rmtree(ext_output_dir, ignore_errors=True)
+            shutil.rmtree(ext_output_dir)
         return None
 
 
@@ -657,20 +757,27 @@ def format_bytes(size: int) -> str:
 def create_manifest(
     output_dir: Path,
     extensions_metadata: List[Dict],
-    seed: str,
+    seed: Optional[str],
     count_requested: int,
     compress: bool,
+    ids_file: Optional[str] = None,
 ) -> None:
     """Create a manifest file with information about the downloaded extensions."""
     manifest = {
         "download_date": datetime.now().isoformat(),
-        "seed": seed,
+        "mode": "id_list" if ids_file else "random",
         "requested_count": count_requested,
         "downloaded_count": len(extensions_metadata),
         "compressed": compress,
         "total_size_bytes": sum(ext["total_size_bytes"] for ext in extensions_metadata),
         "extensions": extensions_metadata,
     }
+
+    # Add mode-specific fields
+    if ids_file:
+        manifest["ids_file"] = ids_file
+    else:
+        manifest["seed"] = seed
 
     manifest_path = output_dir / "manifest.json"
     with open(manifest_path, "w") as f:
@@ -718,14 +825,21 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Local mode (files on same machine as MongoDB)
-  python download_random_extensions.py ./extensions --count 100
+  # Random mode - Local (files on same machine as MongoDB)
+  python download_broken_extensions.py ./extensions --count 100
 
-  # Remote mode (download via SCP from remote server)
-  python download_random_extensions.py ./extensions --count 100 \\
+  # Random mode - Remote (download via SCP from remote server)
+  python download_broken_extensions.py ./extensions --count 100 \\
     --ssh-host user@research-server.example \\
     --ssh-port 54321 \\
     --ssh-options "-o PreferredAuthentications=password"
+
+  # ID list mode - Download specific extensions from ./ids file
+  python download_broken_extensions.py ./extensions --ids-file ./ids \\
+    --ssh-host user@research-server.example \\
+    --ssh-port 54321 \\
+    --ssh-options "-o PreferredAuthentications=password" \\
+    --compress
         """
     )
     parser.add_argument(
@@ -762,16 +876,28 @@ Examples:
         help="Create tar.gz archives instead of copying directories",
     )
     parser.add_argument(
+        "-j", "--jobs",
+        type=int,
+        default=6,
+        help="Number of extensions to download in parallel (default: 6)",
+    )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Re-download extensions even if already present (default: skip complete ones)",
+    )
+    parser.add_argument(
         "--ssh-host",
         type=str,
-        default=None,
-        help="SSH host for remote downloads (e.g., user@host.com). If not specified, assumes local files.",
+        default=DEFAULT_SSH_HOST,
+        help="SSH host for remote downloads, as user@host (default: $EXT_SSH_HOST, "
+             "empty to copy from local files instead).",
     )
     parser.add_argument(
         "--ssh-port",
         type=int,
-        default=22,
-        help="SSH port (default: 22)",
+        default=DEFAULT_SSH_PORT,
+        help=f"SSH port (default: {DEFAULT_SSH_PORT})",
     )
     parser.add_argument(
         "--ssh-options",
@@ -781,10 +907,12 @@ Examples:
     )
     parser.add_argument(
         "--path-map",
-        type=str,
         action="append",
         default=None,
-        help='Path prefix mapping for translating DB paths to filesystem paths (format: "from:to"). Can be specified multiple times for different prefixes.',
+        metavar="FROM:TO",
+        help='Path prefix mapping for translating DB paths to filesystem paths '
+             '(format: "from:to", e.g. "/app/extensions:/home/user/extensions"). '
+             'Repeatable — MV2 and MV3 often live under different roots.',
     )
     parser.add_argument(
         "--mv3-only",
@@ -792,42 +920,63 @@ Examples:
         help="Download only MV3 (migrated) versions, skip MV2 originals",
     )
     parser.add_argument(
-        "--all-tested",
-        action="store_true",
-        help="Download all extensions that have been tested (ignores --count and --seed)",
-    )
-    parser.add_argument(
-        "--workers",
-        type=int,
-        default=8,
-        help="Number of parallel download workers (default: 8)",
+        "--ids-file",
+        type=str,
+        default=DEFAULT_IDS_FILE,
+        help=f"Path to file containing extension IDs, one per line (default: {DEFAULT_IDS_FILE}). "
+             "Each listed extension's MV2 (original) and broken MV3 are downloaded. "
+             'Pass an empty string ("") to fall back to random selection.',
     )
 
     args = parser.parse_args()
 
-    # Parse path mappings (list of tuples)
-    path_map = None
-    if args.path_map:
-        path_map = []
-        for entry in args.path_map:
-            try:
-                from_path, to_path = entry.split(":", 1)
-                path_map.append((from_path, to_path))
-                print(f"Path mapping: {from_path} -> {to_path}")
-            except ValueError:
-                print(f"Error: Invalid path-map format '{entry}'. Use 'from:to' format.")
-                sys.exit(1)
+    # Treat empty strings as "not provided" so the defaults can be opted out of.
+    if args.ssh_host == "":
+        args.ssh_host = None
+    if not args.ids_file:
+        args.ids_file = None
+
+    # Parse path mappings (one or more "from:to" prefixes).
+    path_maps = []
+    for mapping in (args.path_map or []):
+        try:
+            from_path, to_path = mapping.split(":", 1)
+        except ValueError:
+            print(f"Error: Invalid path-map format '{mapping}'. Use 'from:to' format.")
+            sys.exit(1)
+        path_maps.append((from_path, to_path))
+        print(f"Path mapping: {from_path} -> {to_path}")
+    path_maps = path_maps or None
     output_dir = Path(args.output_dir)
 
-    # Generate seed if not provided
+    # Read extension IDs from file if specified
+    extension_ids = None
+    if args.ids_file:
+        ids_path = Path(args.ids_file)
+        if not ids_path.exists():
+            print(f"✗ Error: IDs file not found: {args.ids_file}")
+            sys.exit(1)
+
+        with open(ids_path, 'r') as f:
+            extension_ids = [line.strip() for line in f if line.strip()]
+
+        if not extension_ids:
+            print(f"✗ Error: No IDs found in file: {args.ids_file}")
+            sys.exit(1)
+
+    # Generate seed if not provided (only used for random mode)
     seed = args.seed if args.seed else generate_seed()
 
     print("=" * 60)
-    print("Extension Downloader")
+    if extension_ids:
+        print("Extension Downloader (ID List Mode)")
+    else:
+        print("Random Extension Downloader")
     print("=" * 60)
     print(f"Output directory: {output_dir}")
-    if args.all_tested:
-        print(f"Mode:            All tested extensions")
+    if extension_ids:
+        print(f"IDs file:        {args.ids_file}")
+        print(f"Count:           {len(extension_ids)} IDs from file")
     else:
         print(f"Count:           {args.count}")
         print(f"Seed:            {seed}")
@@ -843,14 +992,10 @@ Examples:
     # Create output directory
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    # Connect to database
-    client = connect_to_db(args.uri)
-
-    try:
-        # Fetch extensions
-        if args.all_tested:
-            print("\nFetching all tested extensions...")
-            extensions = get_all_tested_extensions(client, args.db)
+    def do_download(client: MongoClient, control_path: Optional[str]) -> None:
+        # Fetch extensions (either from ID list or random)
+        if extension_ids:
+            extensions = get_extensions_by_ids(client, args.db, extension_ids)
         else:
             print(f"\nFetching {args.count} random extensions...")
             extensions = get_random_extensions(client, args.db, args.count, seed)
@@ -859,16 +1004,14 @@ Examples:
             print("✗ No extensions found")
             sys.exit(1)
 
-        print(f"✓ Found {len(extensions)} extensions to download\n")
-
-        # Download extensions
         total = len(extensions)
-        print(f"Downloading extensions with {args.workers} parallel workers...")
-        extensions_metadata = []
-        counter_lock = threading.Lock()
-        completed = [0]
+        jobs = max(1, min(args.jobs, total))
+        print(f"✓ Found {total} extensions to download\n")
+        print(f"Downloading extensions ({jobs} at a time)...")
 
-        def download_one(extension, control_path=None):
+        def work(extension):
+            # Collect this task's output so concurrent downloads don't interleave.
+            lines: List[str] = []
             metadata = copy_extension(
                 extension,
                 output_dir,
@@ -877,50 +1020,63 @@ Examples:
                 ssh_port=args.ssh_port,
                 ssh_options=args.ssh_options,
                 control_path=control_path,
-                path_map=path_map,
+                path_maps=path_maps,
                 mv3_only=args.mv3_only,
+                force=args.force,
+                log=lines.append,
             )
-            with counter_lock:
-                completed[0] += 1
-                n = completed[0]
-            if metadata:
-                print(f"[{n}/{total}] ✓ {metadata['name']} ({format_bytes(metadata['total_size_bytes'])})")
-            else:
-                print(f"[{n}/{total}] ✗ {extension.get('name', extension.get('id', '?'))}")
-            return metadata
+            return metadata, lines
 
-        if args.ssh_host:
-            with SSHConnectionManager(args.ssh_host, args.ssh_port, args.ssh_options) as ssh_manager:
-                control_path = ssh_manager.get_control_path()
-                with ThreadPoolExecutor(max_workers=args.workers) as pool:
-                    futures = {pool.submit(download_one, ext, control_path): ext for ext in extensions}
-                    for future in as_completed(futures):
-                        metadata = future.result()
-                        if metadata:
-                            extensions_metadata.append(metadata)
-        else:
-            with ThreadPoolExecutor(max_workers=args.workers) as pool:
-                futures = {pool.submit(download_one, ext): ext for ext in extensions}
-                for future in as_completed(futures):
-                    metadata = future.result()
-                    if metadata:
-                        extensions_metadata.append(metadata)
+        extensions_metadata = []
+        with ThreadPoolExecutor(max_workers=jobs) as pool:
+            futures = [pool.submit(work, ext) for ext in extensions]
+            for done, fut in enumerate(as_completed(futures), 1):
+                metadata, lines = fut.result()
+                print(f"[{done}/{total}]")
+                for line in lines:
+                    print(line)
+                if metadata:
+                    extensions_metadata.append(metadata)
 
-        # Create manifest
+        count_requested = len(extension_ids) if extension_ids else args.count
         create_manifest(
-            output_dir, extensions_metadata, seed, len(extensions), args.compress
+            output_dir,
+            extensions_metadata,
+            seed if not extension_ids else None,
+            count_requested,
+            args.compress,
+            ids_file=args.ids_file,
         )
-
-        # Print summary
         print_summary(extensions_metadata, args.compress)
 
         if len(extensions_metadata) < len(extensions):
             failed_count = len(extensions) - len(extensions_metadata)
             print(f"\n⚠ {failed_count} extension(s) failed to download")
 
-    finally:
-        client.close()
-        print("\n✓ Connection closed")
+    if args.ssh_host:
+        # One SSH master connection serves both the MongoDB tunnel and the SCP
+        # transfers (password entered once). MongoDB lives on the remote host, so
+        # forward a local port to wherever --uri points and connect through it.
+        db_host, db_port = mongo_hostport(args.uri)
+        local_port = find_free_port()
+        with SSHConnectionManager(
+            args.ssh_host, args.ssh_port, args.ssh_options,
+            tunnel=(local_port, db_host, db_port),
+        ) as ssh_manager:
+            client = connect_to_db(rewrite_mongo_uri(args.uri, "127.0.0.1", local_port))
+            try:
+                do_download(client, ssh_manager.get_control_path())
+            finally:
+                client.close()
+                print("\n✓ Connection closed")
+    else:
+        # Local mode: MongoDB and the extension files are on this machine.
+        client = connect_to_db(args.uri)
+        try:
+            do_download(client, None)
+        finally:
+            client.close()
+            print("\n✓ Connection closed")
 
 
 if __name__ == "__main__":

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Reproduce thesis Table 5.1: migration outcomes by interestingness.
+Report migration outcomes by interestingness.
 
 Only considers extensions that have at least one report.
 - Top 100:    highest interestingness_score among those with reports
@@ -8,7 +8,7 @@ Only considers extensions that have at least one report.
 - Random:     random sample from all extensions with reports
 
 Usage:
-    python thesis_table.py [--uri URI] [--db DB]
+    python outcomes_by_interestingness.py [--uri URI] [--db DB]
 """
 
 import argparse
@@ -43,7 +43,7 @@ def main():
                 break
 
     parser = argparse.ArgumentParser(
-        description="Reproduce thesis Table 5.1: outcomes by interestingness."
+        description="Report migration outcomes by interestingness."
     )
     parser.add_argument("--uri", type=str,
                         default=os.environ.get("MONGODB_URI", DEFAULT_URI))
