@@ -4,9 +4,14 @@ Map the extensions listed in an experiment-results CSV back to their MV2 extensi
 using the ExtPorter server dataset.
 
 Every row's `extension_id` is resolved against the `extensions` collection by ID:
-first against `id` (the original MV2 ID), then against `mv3_extension_id` (the ID of
-the migrated build). The `matched_by` column says which one hit, so rows whose CSV ID
-was already the MV2 ID are distinguishable from rows that had to be reversed.
+first against `id`, then against `mv3_extension_id` (the ID of the migrated build).
+The `matched_by` column says which one hit.
+
+IMPORTANT: neither of those fields is the Chrome Web Store ID. getExtensionID() in
+migrator/utils/find_extensions.ts derives `Extension.id` as sha256(<extension dir>)
+mapped into a-z, so it looks like a CWS ID but is synthetic. The real CWS ID -- the one
+on chrome-stats and on the files -- is the extension's directory name, so `mv2_id` is
+taken from `manifest_v2_path`. Run with --check-ids to verify that derivation.
 
 Unlike name/version matching this is exact: the CSV's 500 IDs are unique, including the
 extensions that share a name and version (e.g. the 8 'Firebase Auth ... Sample' rows).
@@ -29,6 +34,7 @@ Requirements:
 
 import argparse
 import csv
+import hashlib
 import os
 import sys
 from typing import Dict, List, Optional
@@ -122,8 +128,27 @@ def fetch_by_ids(
     return by_id
 
 
+def synthetic_id(extension_dir: str) -> str:
+    """Reproduce getExtensionID() from migrator/utils/find_extensions.ts."""
+    digest = hashlib.sha256(extension_dir.encode()).hexdigest()[:32]
+    return "".join(chr(97 + (int(c, 16) % 26)) for c in digest)
+
+
+def cws_id_from_path(manifest_v2_path: str) -> str:
+    """The real Chrome Web Store ID: the name of the extension's directory.
+
+    `Extension.id` is NOT the CWS ID -- getExtensionID() in
+    migrator/utils/find_extensions.ts derives it as sha256(<dir path>) mapped into
+    a-z, so it merely looks like one. The CWS ID is the directory name itself.
+    """
+    path = (manifest_v2_path or "").rstrip("/")
+    if path.endswith("/manifest.json"):
+        path = path[: -len("/manifest.json")]
+    return os.path.basename(path)
+
+
 def resolve(rows: List[Dict[str, str]], by_id: Dict[str, Dict]) -> List[Dict[str, object]]:
-    """Resolve each CSV row to its MV2 ID, recording which field matched."""
+    """Resolve each CSV row to its MV2 (Chrome Web Store) ID, recording what matched."""
     results = []
     for row in rows:
         csv_id = row[ID_COLUMN]
@@ -141,7 +166,8 @@ def resolve(rows: List[Dict[str, str]], by_id: Dict[str, Dict]) -> List[Dict[str
         results.append(
             {
                 "csv_extension_id": csv_id,
-                "mv2_id": (doc or {}).get("id", ""),
+                "mv2_id": cws_id_from_path((doc or {}).get("manifest_v2_path", "")),
+                "internal_id": (doc or {}).get("id", "") or "",
                 "mv3_id": (doc or {}).get("mv3_extension_id", "") or "",
                 "matched_by": matched_by,
                 "dataset_name": (doc or {}).get("name", "") or "",
@@ -196,6 +222,12 @@ def main() -> None:
         help="Also write the dataset's real name/version columns",
     )
     parser.add_argument(
+        "--check-ids",
+        action="store_true",
+        help="Verify that each dataset `id` really is sha256(manifest_v2_path) mapped "
+        "into a-z, i.e. that mv2_id was taken from the right place",
+    )
+    parser.add_argument(
         "--diff-only",
         action="store_true",
         help="Only write rows whose CSV name or version differs from the dataset "
@@ -242,6 +274,25 @@ def main() -> None:
     print(f"Unresolved:                    {len(missing)}")
     print(f"Name differs from dataset:     {len(name_diff)}")
     print(f"Version differs from dataset:  {len(version_diff)}")
+
+    no_path = [r for r in resolved if not r["mv2_id"]]
+    if no_path:
+        print(f"Resolved but no CWS ID (no manifest_v2_path): {len(no_path)}")
+
+    if args.check_ids:
+        bad = [
+            r
+            for r in resolved
+            if r["mv2_id"]
+            and synthetic_id(by_id[r["csv_extension_id"]].get("manifest_v2_path", ""))
+            != r["internal_id"]
+        ]
+        print(
+            f"ID derivation check:           {len(resolved) - len(bad)}/{len(resolved)} "
+            f"dataset ids == sha256(manifest_v2_path)"
+        )
+        for r in bad[:10]:
+            print(f"  - mismatch for {r['mv2_id']} (internal {r['internal_id']})")
     if missing:
         print("\nFirst unresolved IDs:")
         for r in missing[:10]:
