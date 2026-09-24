@@ -16,7 +16,7 @@ nix develop          # provides tmux + python + pymongo
 
 ## 2. Download the extensions to fix
 
-By default this reads `./ids` and pulls each listed extension from the kuria
+By default this reads `./ids` and pulls each listed extension from the remote
 server into `./downloaded_extensions/`:
 
 ```sh
@@ -26,7 +26,7 @@ python download_broken_extensions.py
 This yields `downloaded_extensions/<ext_id>/mv2/` (original) and
 `downloaded_extensions/<ext_id>/mv3/` (the broken automated migration) — the
 layout `migrate_extensions.py` expects. Defaults (override as needed):
-`--ids-file ./ids`, `--ssh-host ra24mif@kuria.plai.ifi.lmu.de`,
+`--ids-file ./ids`, `--ssh-host $EXT_SSH_HOST`,
 `--ssh-port 54321`, directories (not `--compress`), both MV2 + MV3.
 
 Each extension is streamed as a single gzipped tar over SSH (much faster than
@@ -39,8 +39,8 @@ If you used the LMU path layout, pass both prefix maps (repeatable `--path-map`)
 
 ```sh
 python download_broken_extensions.py \
-  --path-map "/app/extensions:/home/gobbi/experiment/CODE" \
-  --path-map "/app/output:/home/ra24mif/migrated_extensions"
+  --path-map "/app/extensions:/home/<data-owner>/experiment/CODE" \
+  --path-map "/app/output:/home/<user>/migrated_extensions"
 ```
 
 ## 3. Run the migration + verification harness

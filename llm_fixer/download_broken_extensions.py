@@ -14,7 +14,7 @@ This script:
 
 Usage:
     # Default: download the broken-MV3 extensions listed in ./ids into
-    # ./downloaded_extensions/<id>/{mv2,mv3}/ from the kuria server.
+    # ./downloaded_extensions/<id>/{mv2,mv3}/ from the remote server.
     python download_broken_extensions.py
 
     # ID list mode (explicit)
@@ -68,10 +68,10 @@ DEFAULT_DB = "migrator"
 EXTENSIONS_COLLECTION = "extensions"
 
 # Defaults for the broken-MV3 download workflow: by default this reads the local
-# ./ids list and pulls each extension's MV2 + broken MV3 from the kuria server
+# ./ids list and pulls each extension's MV2 + broken MV3 from the remote server
 # into ./downloaded_extensions/<id>/{mv2,mv3}/ (see migrate_extensions.py).
 DEFAULT_IDS_FILE = "./ids"
-DEFAULT_SSH_HOST = "ra24mif@kuria.plai.ifi.lmu.de"
+DEFAULT_SSH_HOST = os.environ.get("EXT_SSH_HOST", "")
 DEFAULT_SSH_PORT = 54321
 
 
@@ -830,13 +830,13 @@ Examples:
 
   # Random mode - Remote (download via SCP from remote server)
   python download_broken_extensions.py ./extensions --count 100 \\
-    --ssh-host ra24mif@kuria.plai.ifi.lmu.de \\
+    --ssh-host user@research-server.example \\
     --ssh-port 54321 \\
     --ssh-options "-o PreferredAuthentications=password"
 
   # ID list mode - Download specific extensions from ./ids file
   python download_broken_extensions.py ./extensions --ids-file ./ids \\
-    --ssh-host ra24mif@kuria.plai.ifi.lmu.de \\
+    --ssh-host user@research-server.example \\
     --ssh-port 54321 \\
     --ssh-options "-o PreferredAuthentications=password" \\
     --compress
@@ -890,7 +890,8 @@ Examples:
         "--ssh-host",
         type=str,
         default=DEFAULT_SSH_HOST,
-        help=f"SSH host for remote downloads (default: {DEFAULT_SSH_HOST}). Pass an empty string to copy from local files instead.",
+        help="SSH host for remote downloads, as user@host (default: $EXT_SSH_HOST, "
+             "empty to copy from local files instead).",
     )
     parser.add_argument(
         "--ssh-port",

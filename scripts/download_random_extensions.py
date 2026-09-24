@@ -723,7 +723,7 @@ Examples:
 
   # Remote mode (download via SCP from remote server)
   python download_random_extensions.py ./extensions --count 100 \\
-    --ssh-host ra24mif@kuria.plai.ifi.lmu.de \\
+    --ssh-host user@research-server.example \\
     --ssh-port 54321 \\
     --ssh-options "-o PreferredAuthentications=password"
         """
